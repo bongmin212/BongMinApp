@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -6,16 +6,16 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import LoginForm from './components/Auth/LoginForm';
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
-import ProductList from './components/Products/ProductList';
-import PackageList from './components/Products/PackageList';
-import WarehouseList from './components/Products/WarehouseList';
-import CustomerList from './components/Customers/CustomerList';
-import OrderList from './components/Orders/OrderList';
+const ProductList = lazy(() => import('./components/Products/ProductList'));
+const PackageList = lazy(() => import('./components/Products/PackageList'));
+const WarehouseList = lazy(() => import('./components/Products/WarehouseList'));
+const CustomerList = lazy(() => import('./components/Customers/CustomerList'));
+const OrderList = lazy(() => import('./components/Orders/OrderList'));
 // removed EmployeeList and UserManagement per requirements
 import ActivityLogList from './components/ActivityLogs/ActivityLogList';
-import WarrantyList from './components/Orders/WarrantyList';
-import Dashboard from './components/Dashboard/Dashboard';
-import ExpenseList from './components/Expenses/ExpenseList';
+const WarrantyList = lazy(() => import('./components/Orders/WarrantyList'));
+const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));
+const ExpenseList = lazy(() => import('./components/Expenses/ExpenseList'));
 import { getSupabase } from './utils/supabaseClient';
 
 const AppContent: React.FC = () => {
@@ -63,7 +63,9 @@ const AppContent: React.FC = () => {
         <div className="layout">
           <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
           <div className="main-content">
-            {renderContent()}
+            <Suspense fallback={<div>Đang tải...</div>}>
+              {renderContent()}
+            </Suspense>
           </div>
         </div>
       </div>

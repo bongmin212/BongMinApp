@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { Product } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import ProductForm from './ProductForm';
@@ -12,6 +13,8 @@ const ProductList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,16 +70,33 @@ const ProductList: React.FC = () => {
   const loadProducts = async () => {
     const sb = getSupabase();
     if (!sb) return;
-    const { data } = await sb.from('products').select('*').order('created_at', { ascending: true });
-    const allProducts = (data || []).map((r: any) => ({
-      id: r.id,
-      code: r.code,
-      name: r.name,
-      description: r.description || '',
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    })) as Product[];
-    setProducts(allProducts);
+    try {
+      setLoading(true);
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
+      const q = (debouncedSearchTerm || '').trim();
+      let query = sb
+        .from('products')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: true })
+        .range(from, to);
+      if (q) {
+        query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
+      }
+      const { data, count } = await query;
+      const pageProducts = (data || []).map((r: any) => ({
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        description: r.description || '',
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      })) as Product[];
+      setProducts(pageProducts);
+      setTotal(count || 0);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Realtime subscribe
@@ -90,7 +110,12 @@ const ProductList: React.FC = () => {
       })
       .subscribe();
     return () => { try { channel.unsubscribe(); } catch {} };
-  }, []);
+  }, [page, limit, debouncedSearchTerm]);
+
+  // Load server-side when page/limit/search changes
+  useEffect(() => {
+    loadProducts();
+  }, [page, limit, debouncedSearchTerm]);
 
   const handleCreate = () => {
     setEditingProduct(null);
@@ -177,17 +202,9 @@ const ProductList: React.FC = () => {
     loadProducts();
   };
 
-  const filteredProducts = products.filter(product => {
-    const normalizedSearch = debouncedSearchTerm.toLowerCase();
-    return product.name.toLowerCase().includes(normalizedSearch) ||
-           (product.code || '').toLowerCase().includes(normalizedSearch);
-  });
-
-  const total = filteredProducts.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * limit;
-  const paginatedProducts = filteredProducts.slice(start, start + limit);
+  const paginatedProducts = products;
 
   const exportProductsXlsx = (items: Product[], filename: string) => {
     const rows = items.map((p, idx) => ({
@@ -204,6 +221,73 @@ const ProductList: React.FC = () => {
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Sản phẩm');
   };
 
+  const rowHeight = 56;
+  const useVirtual = paginatedProducts.length > 50;
+
+  const Row = React.memo(({ index, style }: ListChildComponentProps) => {
+    const product = paginatedProducts[index];
+    return (
+      <div style={{ ...style, display: 'grid', gridTemplateColumns: '36px 1fr 1fr 2fr 140px 180px', alignItems: 'center', borderBottom: '1px solid var(--border-color)', padding: '12px 16px' }}>
+        <div>
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(product.id)}
+            onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
+          />
+        </div>
+        <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+          {product.code || `SP${index + 1}`}
+        </div>
+        <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+          {product.name}
+        </div>
+        <div style={{ color: 'var(--text-secondary)' }} title={product.description || ''}>
+          <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal' }}>
+            {product.description || '-'}
+          </div>
+        </div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+          {new Date(product.createdAt).toLocaleDateString('vi-VN')}
+        </div>
+        <div>
+          <div className="d-flex" style={{ gap: 8 }}>
+            <button
+              onClick={() => handleCopyDescription(product)}
+              className="btn btn-light btn-sm"
+              style={{ transition: 'all 0.2s ease' }}
+              title="Copy mô tả"
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <IconClipboard />
+                <span className="ms-1">Copy</span>
+              </span>
+            </button>
+            <button
+              onClick={() => handleEdit(product)}
+              className="btn btn-secondary btn-sm"
+              style={{ transition: 'all 0.2s ease' }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <IconEdit />
+                <span className="ms-1">Sửa</span>
+              </span>
+            </button>
+            <button
+              onClick={() => handleDelete(product.id)}
+              className="btn btn-danger btn-sm"
+              style={{ transition: 'all 0.2s ease' }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <IconTrash />
+                <span className="ms-1">Xóa</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  });
+
   return (
     <div className="card">
       <div className="card-header">
@@ -214,7 +298,30 @@ const ProductList: React.FC = () => {
               <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
             )}
             <button className="btn btn-light" onClick={() => exportProductsXlsx(paginatedProducts, 'products_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => exportProductsXlsx(filteredProducts, 'products_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+            <button className="btn btn-light" onClick={async () => {
+              const sb = getSupabase();
+              if (!sb) return notify('Không thể xuất Excel', 'error');
+              const q = (debouncedSearchTerm || '').trim();
+              let query = sb
+                .from('products')
+                .select('*')
+                .order('created_at', { ascending: true })
+                .range(0, 999);
+              if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
+              const { data } = await query;
+              const rows = (data || []).map((r: any, idx: number) => ({
+                code: r.code || `SP${idx + 1}`,
+                name: r.name || '',
+                description: r.description || '',
+                createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : ''
+              }));
+              exportToXlsx(rows, [
+                { header: 'Mã SP', key: 'code', width: 16 },
+                { header: 'Tên', key: 'name', width: 28 },
+                { header: 'Mô tả', key: 'description', width: 60 },
+                { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+              ], 'products_filtered.xlsx', 'Sản phẩm');
+            }}>Xuất Excel (kết quả đã lọc ≤ 1000)</button>
             <button
               onClick={handleCreate}
               className="btn btn-primary"
@@ -261,90 +368,102 @@ const ProductList: React.FC = () => {
                 <th>Thao tác</th>
               </tr>
             </thead>
-            <tbody>
-              {paginatedProducts.map((product, index) => (
-                <tr 
-                  key={product.id}
-                  style={{ 
-                    animation: `fadeInUp 0.3s ease-out ${index * 0.1}s both`,
-                    animationFillMode: 'both'
-                  }}
-                >
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(product.id)}
-                      onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
-                    />
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                      {product.code || `SP${index + 1}`}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                      {product.name}
-                    </div>
-                  </td>
-                  <td style={{ color: 'var(--text-secondary)' }}>
-                    <div
-                      title={product.description || ''}
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical' as any,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'normal',
-                        maxWidth: 560
-                      }}
-                    >
-                      {product.description || '-'}
-                    </div>
-                  </td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                    {new Date(product.createdAt).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td>
-                    <div className="d-flex" style={{ gap: 8 }}>
-                      <button
-                        onClick={() => handleCopyDescription(product)}
-                        className="btn btn-light btn-sm"
-                        style={{ transition: 'all 0.2s ease' }}
-                        title="Copy mô tả"
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <IconClipboard />
-                          <span className="ms-1">Copy</span>
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="btn btn-secondary btn-sm"
-                        style={{ transition: 'all 0.2s ease' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <IconEdit />
-                          <span className="ms-1">Sửa</span>
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="btn btn-danger btn-sm"
-                        style={{ transition: 'all 0.2s ease' }}
-                      >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <IconTrash />
-                          <span className="ms-1">Xóa</span>
-                        </span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
           </table>
+          {useVirtual ? (
+            <div style={{ border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr 2fr 140px 180px', background: 'var(--bg-primary)' }}>
+                <List
+                  height={Math.min(480, paginatedProducts.length * rowHeight)}
+                  itemCount={paginatedProducts.length}
+                  itemSize={rowHeight}
+                  width={'100%'}
+                >
+                  {Row}
+                </List>
+              </div>
+            </div>
+          ) : (
+            <table className="table" style={{ marginTop: '-1px' }}>
+              <tbody>
+                {paginatedProducts.map((product, index) => (
+                  <tr key={product.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(product.id)}
+                        onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
+                      />
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                        {product.code || `SP${index + 1}`}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                        {product.name}
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      <div
+                        title={product.description || ''}
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical' as any,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'normal',
+                          maxWidth: 560
+                        }}
+                      >
+                        {product.description || '-'}
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                      {new Date(product.createdAt).toLocaleDateString('vi-VN')}
+                    </td>
+                    <td>
+                      <div className="d-flex" style={{ gap: 8 }}>
+                        <button
+                          onClick={() => handleCopyDescription(product)}
+                          className="btn btn-light btn-sm"
+                          style={{ transition: 'all 0.2s ease' }}
+                          title="Copy mô tả"
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <IconClipboard />
+                            <span className="ms-1">Copy</span>
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleEdit(product)}
+                          className="btn btn-secondary btn-sm"
+                          style={{ transition: 'all 0.2s ease' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <IconEdit />
+                            <span className="ms-1">Sửa</span>
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="btn btn-danger btn-sm"
+                          style={{ transition: 'all 0.2s ease' }}
+                        >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <IconTrash />
+                            <span className="ms-1">Xóa</span>
+                          </span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSupabase } from '../../utils/supabaseClient';
+import { IconLogo } from '../Icons';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -51,8 +52,12 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       <div className="modal">
         <div className="modal-content">
           <div className="text-center">
-            <div className="loading" style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>⏳</div>
-            <div>Đang tải...</div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 72, height: 72, borderRadius: 16, background: 'var(--bg-tertiary)', boxShadow: 'var(--shadow-md)', marginBottom: '1rem' }}>
+              <div className="animate-spin" style={{ animation: 'spin 1.2s linear infinite' }}>
+                <IconLogo size={40} className="text-primary" />
+              </div>
+            </div>
+            <div style={{ color: 'var(--text-secondary)' }}>Đang tải...</div>
           </div>
         </div>
       </div>

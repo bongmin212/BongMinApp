@@ -216,6 +216,15 @@ export const IconPlus = createIcon(
   </>
 );
 
+export const IconLogo = createIcon(
+  <>
+    <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
+    <path d="M12 6l4 2v4l-4 2-4-2V8l4-2z" />
+    <path d="M12 10l4-2" />
+    <path d="M12 10l-4-2" />
+  </>
+);
+
 export default {};
 
 
