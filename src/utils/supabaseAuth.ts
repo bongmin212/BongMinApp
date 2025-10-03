@@ -52,13 +52,15 @@ export async function signInWithEmailPassword(email: string, password: string): 
     console.warn('[SupabaseAuth] employees lookup/upsert failed, using fallback', e);
   }
 
-  // Fallback to Supabase identity
+  // Fallback to Supabase identity (prefer role from user/app metadata if present)
+  const metaRoleRaw: any = (data.session.user as any)?.app_metadata?.role ?? (data.session.user as any)?.user_metadata?.role;
+  const fallbackRole = normalizeRole(metaRoleRaw);
   const user: Employee = {
     id: data.session.user.id,
     code: 'NV001',
     username: data.session.user.email || email,
     passwordHash: '',
-    role: 'EMPLOYEE',
+    role: fallbackRole,
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -89,13 +91,15 @@ export async function getSessionUser(): Promise<{ ok: true; token: string; user:
     console.warn('[SupabaseAuth] getSessionUser employees lookup failed, using fallback', e);
   }
 
-  // Fallback
+  // Fallback (prefer role from user/app metadata if present)
+  const metaRoleRaw: any = (data.session.user as any)?.app_metadata?.role ?? (data.session.user as any)?.user_metadata?.role;
+  const fallbackRole = normalizeRole(metaRoleRaw);
   const user: Employee = {
     id: data.session.user.id,
     code: 'NV001',
     username: email || data.session.user.id,
     passwordHash: '',
-    role: 'EMPLOYEE',
+    role: fallbackRole,
     createdAt: new Date(),
     updatedAt: new Date()
   };
