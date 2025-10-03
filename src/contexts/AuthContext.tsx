@@ -4,6 +4,7 @@ import { Database } from '../utils/database';
 import { getSupabase } from '../utils/supabaseClient';
 import { getSessionUser, signInWithEmailPassword } from '../utils/supabaseAuth';
 import { hydrateAllFromSupabase } from '../utils/supabaseSync';
+import { subscribeRealtime } from '../utils/supabaseRealtime';
 
 interface AuthContextType {
   state: AuthState;
@@ -66,6 +67,7 @@ const initialState: AuthState = {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
+  const unsubRef = React.useRef<(() => void) | null>(null);
 
   // Check for existing session on app start (validate token exp, bind user)
   useEffect(() => {
@@ -78,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (res.ok) {
             dispatch({ type: 'LOAD_USER', payload: { user: res.user, token: res.token } });
             try { await hydrateAllFromSupabase(); } catch {}
+            try { if (unsubRef.current) { unsubRef.current(); } unsubRef.current = subscribeRealtime(); } catch {}
             return;
           }
           dispatch({ type: 'SET_LOADING', payload: false });
@@ -147,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {}
         dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
         try { await hydrateAllFromSupabase(); } catch {}
+        try { if (unsubRef.current) { unsubRef.current(); } unsubRef.current = subscribeRealtime(); } catch {}
         return true;
       }
 
@@ -210,6 +214,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (sb) {
       try { sb.auth.signOut(); } catch {}
     }
+    try { if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; } } catch {}
     if (state.user) {
       // Log activity
       Database.saveActivityLog({
