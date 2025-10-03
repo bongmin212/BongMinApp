@@ -59,7 +59,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
 
     try {
       if (product) {
-        // Update existing product with diff logging
+        // Update existing product directly in Supabase with diff logging
         const prevSnapshot = {
           code: product.code || '',
           name: product.name || '',
@@ -82,8 +82,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         });
 
         try {
-          const updated = Database.updateProduct(product.id, formData);
-          if (updated) {
+          const sb = getSupabase();
+          if (!sb) throw new Error('Supabase not configured');
+          const { error } = await sb
+            .from('products')
+            .update({
+              code: formData.code,
+              name: formData.name,
+              description: formData.description,
+              shared_inventory_pool: !!formData.sharedInventoryPool
+            })
+            .eq('id', product.id);
+          if (!error) {
             const detail = [`productId=${product.id}; productCode=${product.code}`, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
@@ -99,11 +109,21 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
           notify(errorMessage, 'error');
         }
       } else {
-        // Create new product
-        const created = Database.saveProduct({ ...formData, code: ensuredCode });
+        // Create new product directly in Supabase
+        const sb = getSupabase();
+        if (!sb) throw new Error('Supabase not configured');
+        const { error: insertError } = await sb
+          .from('products')
+          .insert({
+            code: ensuredCode,
+            name: formData.name,
+            description: formData.description,
+            shared_inventory_pool: !!formData.sharedInventoryPool
+          });
+        if (insertError) throw new Error(insertError.message || 'Không thể tạo sản phẩm');
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo sản phẩm', details: `productId=${created.id}; productCode=${created.code}; name=${created.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo sản phẩm', details: `productCode=${ensuredCode}; name=${formData.name}` });
         } catch {}
         notify('Thêm sản phẩm thành công', 'success');
         onSuccess();
