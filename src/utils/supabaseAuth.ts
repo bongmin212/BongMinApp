@@ -37,12 +37,12 @@ export async function signInWithEmailPassword(email: string, password: string): 
     return { ok: false, message: error?.message ?? 'Sign-in failed' };
   }
 
-  // Try to load employee row. If it fails, still succeed with Supabase identity
+  // Try to load employee row by Supabase user id for authoritative role
   try {
     let { data: row } = await sb
       .from('employees')
       .select('*')
-      .eq('username', email)
+      .eq('id', data.session.user.id)
       .single();
     // Do not auto-upsert as MANAGER; respect existing DB role. If not found, fall back below.
     if (row) {
@@ -79,7 +79,7 @@ export async function getSessionUser(): Promise<{ ok: true; token: string; user:
     let { data: row } = await sb
       .from('employees')
       .select('*')
-      .eq('username', email)
+      .eq('id', data.session.user.id)
       .single();
     // Do not auto-upsert; if no row, use fallback mapping below
     if (row) {
