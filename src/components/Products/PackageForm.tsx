@@ -136,13 +136,30 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         });
 
         try {
-        // Enforce defaultSlots rules before saving
-        const normalizedForm = {
-          ...formData,
-          defaultSlots: formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined
-        };
-        const updated = Database.updatePackage(pkg.id, normalizedForm);
-          if (updated) {
+          // Enforce defaultSlots rules before saving
+          const normalizedForm = {
+            ...formData,
+            defaultSlots: formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined
+          };
+          const sb = getSupabase();
+          if (!sb) throw new Error('Supabase not configured');
+          const { error } = await sb
+            .from('packages')
+            .update({
+              code: normalizedForm.code,
+              product_id: normalizedForm.productId,
+              name: normalizedForm.name,
+              warranty_period: normalizedForm.warrantyPeriod,
+              cost_price: normalizedForm.costPrice,
+              ctv_price: normalizedForm.ctvPrice,
+              retail_price: normalizedForm.retailPrice,
+              custom_fields: normalizedForm.customFields,
+              is_account_based: !!normalizedForm.isAccountBased,
+              account_columns: normalizedForm.accountColumns,
+              default_slots: normalizedForm.defaultSlots
+            })
+            .eq('id', pkg.id);
+          if (!error) {
             const base = [`packageId=${pkg.id}; packageCode=${pkg.code}`, `productId=${nextSnapshot.productId}`];
             const detail = [...base, ...changedEntries].join('; ');
             try {
@@ -165,10 +182,27 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
           code: ensuredCode,
           defaultSlots: formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined
         };
-        const created = Database.savePackage(normalizedForm as any);
+        const sb = getSupabase();
+        if (!sb) throw new Error('Supabase not configured');
+        const { error: insertError } = await sb
+          .from('packages')
+          .insert({
+            code: normalizedForm.code,
+            product_id: normalizedForm.productId,
+            name: normalizedForm.name,
+            warranty_period: normalizedForm.warrantyPeriod,
+            cost_price: normalizedForm.costPrice,
+            ctv_price: normalizedForm.ctvPrice,
+            retail_price: normalizedForm.retailPrice,
+            custom_fields: normalizedForm.customFields,
+            is_account_based: !!normalizedForm.isAccountBased,
+            account_columns: normalizedForm.accountColumns,
+            default_slots: normalizedForm.defaultSlots
+          });
+        if (insertError) throw new Error(insertError.message || 'Không thể tạo gói sản phẩm');
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo gói sản phẩm', details: `packageId=${created.id}; packageCode=${created.code}; productId=${created.productId}; name=${created.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo gói sản phẩm', details: `packageCode=${normalizedForm.code}; productId=${normalizedForm.productId}; name=${normalizedForm.name}` });
         } catch {}
         notify('Thêm gói sản phẩm thành công', 'success');
         onSuccess();

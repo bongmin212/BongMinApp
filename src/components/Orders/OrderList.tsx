@@ -19,6 +19,7 @@ const OrderList: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [warrantiesForOrder, setWarrantiesForOrder] = useState<Warranty[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<OrderStatus | ''>('');
@@ -105,11 +106,12 @@ const OrderList: React.FC = () => {
   const loadData = async () => {
     const sb = getSupabase();
     if (!sb) return;
-    const [ordersRes, customersRes, packagesRes, productsRes] = await Promise.all([
+    const [ordersRes, customersRes, packagesRes, productsRes, inventoryRes] = await Promise.all([
       sb.from('orders').select('*'),
       sb.from('customers').select('*'),
       sb.from('packages').select('*'),
-      sb.from('products').select('*')
+      sb.from('products').select('*'),
+      sb.from('inventory').select('*')
     ]);
     const allOrders = (ordersRes.data || []).map((r: any) => ({
       ...r,
@@ -122,6 +124,7 @@ const OrderList: React.FC = () => {
     setCustomers((customersRes.data || []) as Customer[]);
     setPackages((packagesRes.data || []) as ProductPackage[]);
     setProducts((productsRes.data || []) as Product[]);
+    setInventory((inventoryRes.data || []) as any[]);
   };
 
   // Realtime subscribe
@@ -195,11 +198,11 @@ const OrderList: React.FC = () => {
     const order = orders.find(o => o.id === id);
     if (!order) return;
     // Try classic link first
-    let invLinked = Database.getInventory().find((i: any) => i.linkedOrderId === id);
+    let invLinked = inventory.find((i: any) => i.linked_order_id === id);
     // Optionally try by inventoryItemId if present on order
     if (!invLinked && (order as any).inventoryItemId) {
-      const found = Database.getInventory().find((i: any) => i.id === (order as any).inventoryItemId);
-      if (found && (found.linkedOrderId === id || (found.isAccountBased && (found.profiles || []).some(p => p.assignedOrderId === id)))) {
+      const found = inventory.find((i: any) => i.id === (order as any).inventoryItemId);
+      if (found && (found.linked_order_id === id || (found.is_account_based && (found.profiles || []).some((p: any) => p.assignedOrderId === id)))) {
         invLinked = found;
       }
     }
@@ -216,9 +219,18 @@ const OrderList: React.FC = () => {
     setConfirmState({
       message: 'Trả slot về kho? (Đơn vẫn được giữ nguyên)',
       onConfirm: async () => {
-        Database.releaseInventoryItem(invLinked!.id);
-        // Preserve latest orderInfo after unlinking inventory
-        Database.updateOrder(order.id, { orderInfo: String((order as any).orderInfo || '') } as any);
+        // Release link in Supabase
+        const sb = getSupabase();
+        if (sb) {
+          if (invLinked.is_account_based) {
+            const nextProfiles = (Array.isArray(invLinked.profiles) ? invLinked.profiles : []).map((p: any) => (
+              p.assignedOrderId === order.id ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
+            ));
+            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', invLinked.id);
+          } else {
+            await sb.from('inventory').update({ status: 'AVAILABLE', linked_order_id: null }).eq('id', invLinked.id);
+          }
+        }
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Trả slot về kho', details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked!.id}; inventoryCode=${invLinked!.code}` });
@@ -826,21 +838,21 @@ const OrderList: React.FC = () => {
                   const inv = (() => {
                     // First try to find by inventoryItemId if it exists
                     if (viewingOrder.inventoryItemId) {
-                      const found = Database.getInventory().find(i => i.id === viewingOrder.inventoryItemId);
+                      const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
                       if (found) {
                         // Accept if classic link matches
-                        if (found.linkedOrderId === viewingOrder.id) return found;
+                        if (found.linked_order_id === viewingOrder.id) return found;
                         // For account-based items, accept if any profile is assigned to this order
-                        if (found.isAccountBased && (found.profiles || []).some(p => p.assignedOrderId === viewingOrder.id)) {
+                        if (found.is_account_based && (found.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id)) {
                           return found;
                         }
                       }
                     }
                     // Fallback 1: find by linkedOrderId (classic single-item link)
-                    const byLinked = Database.getInventory().find((i: any) => i.linkedOrderId === viewingOrder.id);
+                    const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder.id);
                     if (byLinked) return byLinked;
                     // Fallback 2: account-based items where a profile is assigned to this order
-                    return Database.getInventory().find((i: any) => i.isAccountBased && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
+                    return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
                   })();
                   if (!inv) return 'Không liên kết';
                   const code = inv.code ?? '';

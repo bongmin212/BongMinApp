@@ -24,12 +24,52 @@ const PackageList: React.FC = () => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const allPackages = Database.getPackages();
-    const allProducts = Database.getProducts();
+  const loadData = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const [pkRes, prRes] = await Promise.all([
+      sb.from('packages').select('*').order('created_at', { ascending: true }),
+      sb.from('products').select('*').order('created_at', { ascending: true })
+    ]);
+    const allPackages = (pkRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      productId: r.product_id,
+      name: r.name,
+      warrantyPeriod: r.warranty_period,
+      costPrice: r.cost_price,
+      ctvPrice: r.ctv_price,
+      retailPrice: r.retail_price,
+      customFields: r.custom_fields || [],
+      isAccountBased: !!r.is_account_based,
+      accountColumns: r.account_columns || [],
+      defaultSlots: r.default_slots,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as ProductPackage[];
+    const allProducts = (prRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      description: r.description || '',
+      sharedInventoryPool: !!r.shared_inventory_pool,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Product[];
     setPackages(allPackages);
     setProducts(allProducts);
   };
+
+  // Realtime subscribe packages
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const ch = sb
+      .channel('realtime:packages')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => loadData())
+      .subscribe();
+    return () => { try { ch.unsubscribe(); } catch {} };
+  }, []);
 
   const handleCreate = () => {
     setEditingPackage(null);
@@ -47,8 +87,10 @@ const PackageList: React.FC = () => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa gói sản phẩm này?',
       onConfirm: async () => {
-        const success = Database.deletePackage(id);
-        if (success) {
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể xóa gói sản phẩm', 'error');
+        const { error } = await sb.from('packages').delete().eq('id', id);
+        if (!error) {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa gói sản phẩm', details: `packageId=${id}` });
@@ -75,14 +117,20 @@ const PackageList: React.FC = () => {
     setConfirmState({
       message: `Xóa ${selectedIds.length} gói sản phẩm đã chọn?`,
       onConfirm: async () => {
-        selectedIds.forEach(id => Database.deletePackage(id));
-        try {
-          const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt gói', details: `ids=${selectedIds.join(',')}` });
-        } catch {}
-        setSelectedIds([]);
-        loadData();
-        notify('Đã xóa gói đã chọn', 'success');
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể xóa gói sản phẩm', 'error');
+        const { error } = await sb.from('packages').delete().in('id', selectedIds);
+        if (!error) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt gói', details: `ids=${selectedIds.join(',')}` });
+          } catch {}
+          setSelectedIds([]);
+          loadData();
+          notify('Đã xóa gói đã chọn', 'success');
+        } else {
+          notify('Không thể xóa gói sản phẩm', 'error');
+        }
       }
     });
   };

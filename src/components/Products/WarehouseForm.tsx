@@ -120,40 +120,53 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     }
 
     try {
+      const sb = getSupabase();
+      if (!sb) throw new Error('Supabase not configured');
       if (item) {
-        // Edit mode
-        const updates: any = {
-          code: formData.code,
-          productId: selectedProduct,
-          packageId: formData.packageId,
-          purchaseDate: formData.purchaseDate,
-          sourceNote: formData.sourceNote,
-          purchasePrice: formData.purchasePrice,
-          productInfo: formData.productInfo,
-          notes: formData.notes,
-          // account config comes from package; keep existing profiles as-is
-          accountData: formData.accountData
-        };
-        // Do not touch profiles/slots here
-        const updated = Database.updateInventoryItem(item.id, updates);
-        if (!updated) throw new Error('Không thể cập nhật kho');
-        // Propagate changes to linked orders
-        Database.refreshOrdersForInventory(item.id);
+        // Edit mode → update inventory row
+        const { error } = await sb
+          .from('inventory')
+          .update({
+            code: formData.code,
+            product_id: selectedProduct,
+            package_id: formData.packageId,
+            purchase_date: formData.purchaseDate.toISOString().split('T')[0],
+            source_note: formData.sourceNote,
+            purchase_price: formData.purchasePrice,
+            product_info: formData.productInfo,
+            notes: formData.notes,
+            account_data: formData.accountData
+          })
+          .eq('id', item.id);
+        if (error) throw new Error(error.message || 'Không thể cập nhật kho');
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Sửa kho', details: `inventoryId=${item.id}; code=${formData.code}` });
         } catch {}
         onSuccess();
       } else {
-        const created = Database.saveInventoryItem({
-          ...formData,
-          code: ensuredCode,
-          productId: selectedProduct,
-          // profiles auto-generated from package config if applicable
-        });
+        // Create inventory row
+        const { error: insertError } = await sb
+          .from('inventory')
+          .insert({
+            code: ensuredCode,
+            product_id: selectedProduct,
+            package_id: formData.packageId,
+            purchase_date: formData.purchaseDate.toISOString().split('T')[0],
+            source_note: formData.sourceNote,
+            purchase_price: formData.purchasePrice,
+            product_info: formData.productInfo,
+            notes: formData.notes,
+            // profiles/slots will be generated backend or managed separately
+            account_columns: selectedPkg?.accountColumns || null,
+            account_data: formData.accountData,
+            is_account_based: !!selectedPkg?.isAccountBased,
+            total_slots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : null
+          });
+        if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryId=${created.id}; inventoryCode=${created.code}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryCode=${ensuredCode}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
         } catch {}
         onSuccess();
       }

@@ -84,25 +84,43 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 						changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
 					}
 				});
-				Database.updateWarranty(warranty.id, nextSnapshot);
+				const sb = getSupabase();
+				if (!sb) throw new Error('Supabase not configured');
+				const { error } = await sb
+					.from('warranties')
+					.update({
+						code: form.code,
+						order_id: form.orderId,
+						reason: form.reason.trim(),
+						status: form.status,
+						replacement_inventory_id: form.replacementInventoryId || null,
+						new_order_info: form.newOrderInfo || null
+					})
+					.eq('id', warranty.id);
+				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, ...changedEntries].join('; ') });
 				} catch {}
 				notify('Cập nhật đơn bảo hành thành công', 'success');
 			} else {
-				const created = Database.saveWarranty({
-					code: form.code,
-					orderId: form.orderId,
-					reason: form.reason.trim(),
-					status: form.status,
-					createdBy: state.user?.id || 'system',
-					replacementInventoryId: form.replacementInventoryId,
-					newOrderInfo: form.newOrderInfo
-				});
+				const sb = getSupabase();
+				if (!sb) throw new Error('Supabase not configured');
+				const { error: insertError } = await sb
+					.from('warranties')
+					.insert({
+						code: form.code,
+						order_id: form.orderId,
+						reason: form.reason.trim(),
+						status: form.status,
+						created_by: state.user?.id || 'system',
+						replacement_inventory_id: form.replacementInventoryId || null,
+						new_order_info: form.newOrderInfo || null
+					});
+				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 				try {
 					const sb2 = getSupabase();
-					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyId=${created.id}; warrantyCode=${created.code}; orderId=${created.orderId}; status=${created.status}` });
+					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${form.orderId}; status=${form.status}` });
 				} catch {}
 				notify('Tạo đơn bảo hành thành công', 'success');
 			}
@@ -349,15 +367,18 @@ const WarrantyList: React.FC = () => {
   };
   const bulkSetStatus = (status: string) => {
     if (selectedIds.length === 0) return;
-    selectedIds.forEach(id => Database.updateWarranty(id, { status: status as any }));
     (async () => {
+      const sb = getSupabase();
+      if (!sb) return notify('Không thể cập nhật trạng thái', 'error');
+      const { error } = await sb.from('warranties').update({ status }).in('id', selectedIds);
+      if (error) return notify('Không thể cập nhật trạng thái', 'error');
       try {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật trạng thái bảo hành hàng loạt', details: `status=${status}; ids=${selectedIds.join(',')}` });
       } catch {}
+      load();
+      notify('Đã cập nhật trạng thái', 'success');
     })();
-    load();
-    notify('Đã cập nhật trạng thái', 'success');
   };
 
 const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
@@ -366,16 +387,22 @@ const handleDelete = (id: string) => {
 		setConfirmState({
 			message: 'Xóa đơn bảo hành này?',
             onConfirm: () => {
-				const w = warranties.find(x => x.id === id);
-				Database.deleteWarranty(id);
-                (async () => {
-                    try {
-                        const sb2 = getSupabase();
-                        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn bảo hành', details: `warrantyId=${id}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
-                    } catch {}
-                })();
-				notify('Đã xóa đơn bảo hành', 'success');
-				load();
+				(async () => {
+                    const sb = getSupabase();
+                    if (!sb) return notify('Không thể xóa bảo hành', 'error');
+					const w = warranties.find(x => x.id === id);
+					const { error } = await sb.from('warranties').delete().eq('id', id);
+					if (!error) {
+                        try {
+                            const sb2 = getSupabase();
+                            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn bảo hành', details: `warrantyId=${id}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
+                        } catch {}
+						notify('Đã xóa đơn bảo hành', 'success');
+						load();
+					} else {
+						notify('Không thể xóa bảo hành', 'error');
+					}
+				})();
 			}
 		});
 	};

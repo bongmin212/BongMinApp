@@ -32,16 +32,61 @@ const WarehouseList: React.FC = () => {
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
 
-  const refresh = () => {
-    Database.sweepExpiredProfiles();
-    setItems(Database.getInventory());
-    setProducts(Database.getProducts());
-    setPackages(Database.getPackages());
-    setCustomers(Database.getCustomers());
+  const refresh = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    // Optional sweep on client for local display of expired flags is no longer needed
+    const [invRes, prodRes, pkgRes, custRes] = await Promise.all([
+      sb.from('inventory').select('*').order('created_at', { ascending: true }),
+      sb.from('products').select('*').order('created_at', { ascending: true }),
+      sb.from('packages').select('*').order('created_at', { ascending: true }),
+      sb.from('customers').select('*').order('created_at', { ascending: true })
+    ]);
+    const inv = (invRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      productId: r.product_id,
+      packageId: r.package_id,
+      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+      sourceNote: r.source_note || '',
+      purchasePrice: r.purchase_price,
+      productInfo: r.product_info || '',
+      notes: r.notes || '',
+      status: r.status,
+      isAccountBased: !!r.is_account_based,
+      accountColumns: r.account_columns || [],
+      accountData: r.account_data || {},
+      totalSlots: r.total_slots || 0,
+      profiles: Array.isArray(r.profiles) ? r.profiles : [],
+      linkedOrderId: r.linked_order_id || undefined,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as InventoryItem[];
+    const prods = (prodRes.data || []) as Product[];
+    const pkgs = (pkgRes.data || []) as ProductPackage[];
+    const custs = (custRes.data || []) as Customer[];
+    setItems(inv);
+    setProducts(prods);
+    setPackages(pkgs);
+    setCustomers(custs);
   };
 
   useEffect(() => {
     refresh();
+  }, []);
+
+  // Realtime inventory subscribe
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const ch = sb
+      .channel('realtime:inventory')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
+        refresh();
+      })
+      .subscribe();
+    return () => { try { ch.unsubscribe(); } catch {} };
   }, []);
 
   // Initialize from URL/localStorage
@@ -236,14 +281,20 @@ const WarehouseList: React.FC = () => {
     setConfirmState({
       message: `Xóa ${deletable.length} mục kho (chỉ mục Sẵn có)?`,
       onConfirm: async () => {
-        deletable.forEach(id => Database.deleteInventoryItem(id));
-        try {
-          const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
-        } catch {}
-        setSelectedIds([]);
-        refresh();
-        notify('Đã xóa mục kho đã chọn', 'success');
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể xóa kho', 'error');
+        const { error } = await sb.from('inventory').delete().in('id', deletable);
+        if (!error) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
+          } catch {}
+          setSelectedIds([]);
+          refresh();
+          notify('Đã xóa mục kho đã chọn', 'success');
+        } else {
+          notify('Không thể xóa kho', 'error');
+        }
       }
     });
   };
@@ -253,7 +304,20 @@ const WarehouseList: React.FC = () => {
     setConfirmState({
       message: `Gỡ liên kết ${unlinkables.length} mục kho khỏi đơn?`,
       onConfirm: async () => {
-        unlinkables.forEach(id => Database.releaseInventoryItem(id));
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể gỡ liên kết', 'error');
+        for (const id of unlinkables) {
+          const item = items.find(i => i.id === id);
+          if (!item) continue;
+          if (item.isAccountBased) {
+            const nextProfiles = (item.profiles || []).map((p: any) => (
+              p.assignedOrderId ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
+            ));
+            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', id);
+          } else {
+            await sb.from('inventory').update({ status: 'AVAILABLE', linked_order_id: null }).eq('id', id);
+          }
+        }
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho hàng loạt', details: `ids=${unlinkables.join(',')}` });
@@ -269,9 +333,11 @@ const WarehouseList: React.FC = () => {
     setConfirmState({
       message: 'Xóa mục này khỏi kho?',
       onConfirm: async () => {
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể xóa mục này khỏi kho', 'error');
         const snapshot = items.find(i => i.id === id) || null;
-        const ok = Database.deleteInventoryItem(id);
-        if (ok) {
+        const { error } = await sb.from('inventory').delete().eq('id', id);
+        if (!error) {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
@@ -291,16 +357,21 @@ const WarehouseList: React.FC = () => {
     setConfirmState({
       message: 'Gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có?',
       onConfirm: async () => {
-        const released = Database.releaseInventoryItem(id);
-        if (released) {
-          try {
-            const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho khỏi đơn', details: `inventoryId=${id}; orderId=${inv.linkedOrderId}` });
-          } catch {}
-          notify('Đã gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có', 'success');
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể gỡ liên kết khỏi đơn', 'error');
+        if (inv.isAccountBased) {
+          const nextProfiles = (inv.profiles || []).map((p: any) => (
+            p.assignedOrderId === inv.linkedOrderId ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
+          ));
+          await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', id);
         } else {
-          notify('Không thể gỡ liên kết khỏi đơn', 'error');
+          await sb.from('inventory').update({ status: 'AVAILABLE', linked_order_id: null }).eq('id', id);
         }
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho khỏi đơn', details: `inventoryId=${id}; orderId=${inv.linkedOrderId}` });
+        } catch {}
+        notify('Đã gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có', 'success');
         refresh();
       }
     });
@@ -537,7 +608,7 @@ const WarehouseList: React.FC = () => {
             </div>
             <div className="mb-3">
               {(() => {
-                const item = Database.getInventory().find(x => x.id === profilesModal.item.id) || profilesModal.item;
+                const item = items.find(x => x.id === profilesModal.item.id) || profilesModal.item;
                 const profiles = item.profiles || [];
                 if (!profiles.length) return <div className="text-muted">Không có slot</div>;
                 return (

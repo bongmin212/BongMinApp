@@ -106,8 +106,22 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         });
 
         try {
-          const updated = Database.updateCustomer(customer.id, formData);
-          if (updated) {
+          const sb = getSupabase();
+          if (!sb) throw new Error('Supabase not configured');
+          const { error } = await sb
+            .from('customers')
+            .update({
+              code: formData.code,
+              name: formData.name,
+              type: formData.type,
+              phone: formData.phone,
+              email: formData.email,
+              source: formData.source,
+              source_detail: formData.sourceDetail,
+              notes: formData.notes
+            })
+            .eq('id', customer.id);
+          if (!error) {
             const detail = [`customerId=${customer.id}; customerCode=${customer.code}`, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
@@ -124,10 +138,24 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         }
       } else {
         // Create new customer
-        const created = Database.saveCustomer({ ...formData, code: ensuredCode });
+        const sb = getSupabase();
+        if (!sb) throw new Error('Supabase not configured');
+        const { error: insertError } = await sb
+          .from('customers')
+          .insert({
+            code: ensuredCode,
+            name: formData.name,
+            type: formData.type,
+            phone: formData.phone,
+            email: formData.email,
+            source: formData.source,
+            source_detail: formData.sourceDetail,
+            notes: formData.notes
+          });
+        if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo khách hàng', details: `customerId=${created.id}; customerCode=${created.code}; name=${created.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo khách hàng', details: `customerCode=${ensuredCode}; name=${formData.name}` });
         } catch {}
         notify('Thêm khách hàng thành công', 'success');
         onSuccess();

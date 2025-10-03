@@ -56,34 +56,34 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     loadData();
     
     if (order) {
-      // Check if inventory is still linked to this order
-      let invLinked = '';
-      if (order.inventoryItemId) {
-        const inv = Database.getInventory().find(i => i.id === order.inventoryItemId);
-        if (inv) {
-          // Accept classic link
-          if (inv.linkedOrderId === order.id) {
-            invLinked = order.inventoryItemId;
-          } else if (inv.isAccountBased && (inv.profiles || []).some(p => p.assignedOrderId === order.id)) {
-            // Accept account-based profile assignment
-            invLinked = order.inventoryItemId;
+      (async () => {
+        // Check if inventory is still linked to this order
+        let invLinked = '';
+        try {
+          const sb = getSupabase();
+          if (sb && order.inventoryItemId) {
+            const { data: inv } = await sb.from('inventory').select('*').eq('id', order.inventoryItemId).single();
+            if (inv) {
+              if (inv.linked_order_id === order.id) {
+                invLinked = order.inventoryItemId;
+              } else if (inv.is_account_based && (inv.profiles || []).some((p: any) => p.assignedOrderId === order.id)) {
+                invLinked = order.inventoryItemId;
+              }
+            }
           }
-        }
-      }
-      // Fallback 1: classic link by linkedOrderId
-      if (!invLinked) {
-        const invByOrder = Database.getInventory().find(i => i.linkedOrderId === order.id);
-        if (invByOrder) {
-          invLinked = invByOrder.id;
-        }
-      }
-      // Fallback 2: account-based item where a profile is assigned to this order
-      if (!invLinked) {
-        const invWithProfile = Database.getInventory().find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === order.id));
-        if (invWithProfile) {
-          invLinked = invWithProfile.id;
-        }
-      }
+          if (!invLinked && sb) {
+            const { data: invByOrder } = await sb.from('inventory').select('id').eq('linked_order_id', order.id).maybeSingle();
+            if (invByOrder?.id) invLinked = invByOrder.id as any;
+          }
+          if (!invLinked && sb) {
+            const { data: invList } = await sb.from('inventory').select('*').eq('is_account_based', true);
+            const found = (invList || []).find((i: any) => Array.isArray(i.profiles) && i.profiles.some((p: any) => p.assignedOrderId === order.id));
+            if (found) invLinked = found.id as any;
+          }
+        } catch {}
+
+        setSelectedInventoryId(invLinked);
+      })();
       
       setFormData({
         code: order.code,
@@ -98,7 +98,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         customPrice: order.customPrice || 0,
         customFieldValues: (order as any).customFieldValues || {}
       });
-      setSelectedInventoryId(invLinked);
       if ((order as any).inventoryProfileId) {
         setSelectedProfileId((order as any).inventoryProfileId as any);
       }
@@ -344,7 +343,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     
     // If selected inventory is account-based, force selecting a profile/slot
     if (selectedInventoryId) {
-      const inv = Database.getInventory().find(i => i.id === selectedInventoryId);
+      const inv = availableInventory.find(i => i.id === selectedInventoryId);
       const pkg = packages.find(p => p.id === formData.packageId);
       if ((inv?.isAccountBased || pkg?.isAccountBased) && !selectedProfileId) {
         newErrors["inventoryProfileId"] = 'Vui lòng chọn slot để cấp';
@@ -379,7 +378,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return Object.keys(picked).length ? picked : undefined;
       })();
 
-      const pickedInventory = selectedInventoryId ? (availableInventory.find(i => i.id === selectedInventoryId) || Database.getInventory().find(i => i.id === selectedInventoryId)) : undefined;
+      const pickedInventory = selectedInventoryId ? availableInventory.find(i => i.id === selectedInventoryId) : undefined;
       const pkgConfig = packages.find(p => p.id === formData.packageId);
       // Auto-import info from warehouse
       const autoInfo = (() => {
@@ -857,7 +856,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   </select>
                   <div className="small text-muted mt-1">Nếu chọn, đơn sẽ sử dụng hàng trong kho và tự đánh dấu là đã bán.</div>
                   {!!selectedInventoryId && (() => {
-                    const item = availableInventory.find(i => i.id === selectedInventoryId) || Database.getInventory().find(i => i.id === selectedInventoryId);
+                    const item = availableInventory.find(i => i.id === selectedInventoryId);
                     if (!item) return null;
                     return (
                       <div className="mt-2 p-2 border rounded bg-light">
@@ -1132,7 +1131,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               name="orderInfo"
               className="form-control"
               value={(() => {
-                const item = selectedInventoryId ? (availableInventory.find(i => i.id === selectedInventoryId) || Database.getInventory().find(i => i.id === selectedInventoryId)) : undefined;
+                const item = selectedInventoryId ? availableInventory.find(i => i.id === selectedInventoryId) : undefined;
                 if (!item) return '';
                 if (item.isAccountBased) {
                   // Build using the currently selected package columns to avoid drift
