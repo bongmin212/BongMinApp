@@ -218,10 +218,16 @@ export const IconPlus = createIcon(
 
 export const IconLogo = createIcon(
   <>
-    <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
-    <path d="M12 6l4 2v4l-4 2-4-2V8l4-2z" />
-    <path d="M12 10l4-2" />
-    <path d="M12 10l-4-2" />
+    <defs>
+      <linearGradient id="bmLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stopColor="#3b82f6" />
+        <stop offset="100%" stopColor="#1d4ed8" />
+      </linearGradient>
+    </defs>
+    <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" stroke="url(#bmLogoGrad)" />
+    <path d="M12 6l4 2v4l-4 2-4-2V8l4-2z" stroke="url(#bmLogoGrad)" />
+    <path d="M12 10l4-2" stroke="url(#bmLogoGrad)" />
+    <path d="M12 10l-4-2" stroke="url(#bmLogoGrad)" />
   </>
 );
 

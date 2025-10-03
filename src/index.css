@@ -876,6 +876,34 @@ p {
   40%, 100% { transform: rotateZ(0); }
 }
 
+/* Wordmark styles for login */
+.wordmark {
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-700));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tracking-in {
+  animation: tracking-in-expand 0.7s cubic-bezier(0.215, 0.610, 0.355, 1.000) both;
+}
+
+@keyframes tracking-in-expand {
+  0% {
+    letter-spacing: -0.2em;
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.6;
+  }
+  100% {
+    letter-spacing: 0.08em;
+    opacity: 1;
+  }
+}
+
 /* When a modal is open, freeze background interactivity/hover to avoid stacking glitches */
 body:has(.modal) .navbar,
 body:has(.modal) .sidebar,

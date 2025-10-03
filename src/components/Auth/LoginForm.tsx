@@ -52,12 +52,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       <div className="modal">
         <div className="modal-content">
           <div className="text-center">
-            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 72, height: 72, borderRadius: 16, background: 'var(--bg-tertiary)', boxShadow: 'var(--shadow-md)', marginBottom: '1rem' }}>
-              <div className="animate-spin" style={{ animation: 'spin 1.2s linear infinite' }}>
+            <div className="animate-glow" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 72, height: 72, borderRadius: 16, background: 'var(--bg-tertiary)', boxShadow: '0 0 20px rgba(59, 130, 246, 0.25), var(--shadow-md)', marginBottom: '1rem' }}>
+              <div className="animate-spin animate-pulse" style={{ animation: 'spin 1.2s linear infinite' }}>
                 <IconLogo size={40} className="text-primary" />
               </div>
             </div>
-            <div style={{ color: 'var(--text-secondary)' }}>Đang tải...</div>
+            <div className="wordmark tracking-in" style={{ marginTop: '-4px' }}>BongMin</div>
+            <div style={{ color: 'var(--text-secondary)', marginTop: 4 }}>Đang tải...</div>
           </div>
         </div>
       </div>
