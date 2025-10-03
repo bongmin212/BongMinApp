@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { exportToXlsx } from '../../utils/excel';
 
 const ActivityLogList: React.FC = () => {
-  const { isManager } = useAuth();
+  const { isManager, state } = useAuth();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -84,6 +84,12 @@ const ActivityLogList: React.FC = () => {
     );
     
     setLogs(sortedLogs);
+    // Merge current authenticated user (Supabase) into employees list if missing
+    try {
+      if (state?.user && !allEmployees.some(e => e.id === state.user!.id)) {
+        allEmployees.push({ ...state.user });
+      }
+    } catch {}
     setEmployees(allEmployees);
     setOrders(allOrders);
     setCustomers(allCustomers);
@@ -94,7 +100,9 @@ const ActivityLogList: React.FC = () => {
 
   const getEmployeeName = (employeeId: string) => {
     const employee = employees.find(e => e.id === employeeId);
-    return employee ? employee.username : 'Không xác định';
+    if (employee) return employee.username;
+    if (state?.user && state.user.id === employeeId) return state.user.username;
+    return 'Không xác định';
   };
 
   const formatDateTime = (date: Date) => {

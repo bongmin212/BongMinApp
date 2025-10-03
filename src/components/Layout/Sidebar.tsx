@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getSupabase } from '../../utils/supabaseClient';
 import { IconBox, IconClipboard, IconUsers, IconCart, IconUser, IconChart, IconTrendingUp, IconReceipt, IconPackage, IconShield } from '../Icons';
 
 interface SidebarProps {
@@ -10,6 +11,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { isManager } = useAuth();
 
+  const sb = getSupabase();
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <IconTrendingUp /> },
     { id: 'orders', label: 'Đơn hàng', icon: <IconCart /> },
@@ -19,10 +21,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'warehouse', label: 'Kho hàng', icon: <IconClipboard /> },
     { id: 'warranties', label: 'Bảo hành', icon: <IconShield /> },
     { id: 'expenses', label: 'Chi phí', icon: <IconReceipt /> },
-    ...(isManager() ? [
-      { id: 'employees', label: 'Nhân viên', icon: <IconUser /> },
-      { id: 'activity-logs', label: 'Lịch sử hoạt động', icon: <IconChart /> }
-    ] : [])
+    // Show Activity Logs for managers regardless of Supabase
+    ...(isManager() ? [ { id: 'activity-logs', label: 'Lịch sử hoạt động', icon: <IconChart /> } ] : []),
+    // Show Employees only in local/demo mode (no Supabase)
+    ...(isManager() && !sb ? [ { id: 'employees', label: 'Nhân viên', icon: <IconUser /> } ] : [])
   ];
 
   return (

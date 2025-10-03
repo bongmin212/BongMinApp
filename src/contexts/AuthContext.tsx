@@ -135,6 +135,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return false;
         }
         Database.setAuthToken(res.sessionToken);
+        // Log activity for Supabase-auth login
+        try {
+          Database.saveActivityLog({
+            employeeId: res.user.id,
+            action: 'Đăng nhập hệ thống',
+            details: `Nhân viên ${res.user.username} đăng nhập`
+          });
+        } catch {}
         dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
         return true;
       }
