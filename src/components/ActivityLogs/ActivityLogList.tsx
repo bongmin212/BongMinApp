@@ -212,8 +212,23 @@ const ActivityLogList: React.FC = () => {
       }
     }
     // prefer embedded name if provided to keep showing after deletion
-    if (kv.name) parts.push(`Khách ${kv.name}`);
-    else if (customer) parts.push(`Khách ${customer.name}`);
+    // Explicit entity-specific names first
+    if (kv.productName) {
+      parts.push(`Sản phẩm ${kv.productName}`);
+    } else if (kv.packageName) {
+      parts.push(`Gói ${kv.packageName}`);
+    } else if (kv.customerName) {
+      parts.push(`Khách ${kv.customerName}`);
+    } else if (kv.name) {
+      // Fallback: infer label from action text when only `name=` is present
+      const actionLower = String(log.action || '').toLowerCase();
+      if (actionLower.includes('sản phẩm')) parts.push(`Sản phẩm ${kv.name}`);
+      else if (actionLower.includes('gói')) parts.push(`Gói ${kv.name}`);
+      else if (actionLower.includes('kho')) parts.push(`Kho ${kv.name}`);
+      else parts.push(`Khách ${kv.name}`);
+    } else if (customer) {
+      parts.push(`Khách ${customer.name}`);
+    }
     if (employee) {
       parts.push(`Nhân viên ${employee.username}`);
     }
