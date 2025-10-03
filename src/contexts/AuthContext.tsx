@@ -72,25 +72,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Prefer Supabase session if configured
         const sb = getSupabase();
         if (sb) {
-          const { data } = await sb.auth.getSession();
-          if (data?.session) {
-            // load profile from employees by email
-            const email = data.session.user.email || '';
-            const { data: row } = await sb.from('employees').select('*').eq('username', email).single();
-            if (row) {
-              const user: Employee = {
-                id: row.id,
-                code: row.code,
-                username: row.username,
-                passwordHash: row.password_hash || '',
-                role: row.role,
-                createdAt: new Date(row.created_at),
-                updatedAt: new Date(row.updated_at)
-              };
-              dispatch({ type: 'LOAD_USER', payload: { user, token: data.session.access_token } });
-              return;
-            }
+        const { data } = await sb.auth.getSession();
+        if (data?.session) {
+          // load or provision profile from employees by email
+          const email = data.session.user.email || '';
+          let { data: row } = await sb.from('employees').select('*').eq('username', email).single();
+          if (!row) {
+            const up = await sb
+              .from('employees')
+              .upsert({ id: data.session.user.id, code: 'NV001', username: email, role: 'MANAGER' }, { onConflict: 'username' })
+              .select('*')
+              .single();
+            row = up.data as any;
           }
+          if (row) {
+            const user: Employee = {
+              id: row.id,
+              code: row.code,
+              username: row.username,
+              passwordHash: row.password_hash || '',
+              role: row.role,
+              createdAt: new Date(row.created_at),
+              updatedAt: new Date(row.updated_at)
+            };
+            dispatch({ type: 'LOAD_USER', payload: { user, token: data.session.access_token } });
+            return;
+          }
+        }
           dispatch({ type: 'SET_LOADING', payload: false });
           return;
         }
@@ -147,12 +155,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           dispatch({ type: 'SET_LOADING', payload: false });
           return false;
         }
-        // Fetch employee profile by auth user id or by username fallback
-        const { data: row } = await sb
+        // Fetch employee profile (auto-provision if missing)
+        let { data: row } = await sb
           .from('employees')
           .select('*')
           .eq('username', username)
           .single();
+        if (!row) {
+          const up = await sb
+            .from('employees')
+            .upsert({ id: data.session.user.id, code: 'NV001', username, role: 'MANAGER' }, { onConflict: 'username' })
+            .select('*')
+            .single();
+          row = up.data as any;
+        }
         if (!row) {
           dispatch({ type: 'SET_LOADING', payload: false });
           return false;
