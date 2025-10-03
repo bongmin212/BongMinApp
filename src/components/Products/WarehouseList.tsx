@@ -5,6 +5,7 @@ import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx } from '../../utils/excel';
+import { getSupabase } from '../../utils/supabaseClient';
 
 const WarehouseList: React.FC = () => {
   const { state } = useAuth();
@@ -234,7 +235,7 @@ const WarehouseList: React.FC = () => {
     if (deletable.length === 0) return;
     setConfirmState({
       message: `Xóa ${deletable.length} mục kho (chỉ mục Sẵn có)?`,
-      onConfirm: () => {
+      onConfirm: async () => {
         deletable.forEach(id => Database.deleteInventoryItem(id));
         try {
           const sb2 = getSupabase();
@@ -251,7 +252,7 @@ const WarehouseList: React.FC = () => {
     if (unlinkables.length === 0) return;
     setConfirmState({
       message: `Gỡ liên kết ${unlinkables.length} mục kho khỏi đơn?`,
-      onConfirm: () => {
+      onConfirm: async () => {
         unlinkables.forEach(id => Database.releaseInventoryItem(id));
         try {
           const sb2 = getSupabase();
@@ -267,7 +268,7 @@ const WarehouseList: React.FC = () => {
   const remove = (id: string) => {
     setConfirmState({
       message: 'Xóa mục này khỏi kho?',
-      onConfirm: () => {
+      onConfirm: async () => {
         const snapshot = items.find(i => i.id === id) || null;
         const ok = Database.deleteInventoryItem(id);
         if (ok) {
@@ -289,7 +290,7 @@ const WarehouseList: React.FC = () => {
     if (!inv || !inv.linkedOrderId) return;
     setConfirmState({
       message: 'Gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có?',
-      onConfirm: () => {
+      onConfirm: async () => {
         const released = Database.releaseInventoryItem(id);
         if (released) {
           try {

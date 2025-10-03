@@ -54,7 +54,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
     try {
       const { data, error } = await sb.from(t.name).select('*');
       if (error) throw error;
-      const rows = (data || []).map(d => reviveDates(toCamel(d)));
+      const rows = (data || []).map((d: any) => reviveDates(toCamel(d)));
       // special-case expenses setter not available in Database; load via direct localStorage write pattern used there
       if (t.name === 'expenses') {
         // reuse Database API shapes
@@ -72,7 +72,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
   try {
     const { data, error } = await sb.from('activity_logs').select('*').order('timestamp', { ascending: true });
     if (error) throw error;
-    const rows = (data || []).map(d => reviveDates(toCamel<ActivityLog>(d)));
+    const rows = (data || []).map((d: any) => reviveDates(toCamel<ActivityLog>(d)));
     Database.setActivityLogs(rows);
   } catch (e) {
     console.warn('[SupabaseSync] hydrate activity_logs failed', e);

@@ -3,6 +3,7 @@ import { Product, ProductFormData } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { getSupabase } from '../../utils/supabaseClient';
 
 interface ProductFormProps {
   product?: Product | null;
@@ -35,7 +36,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
     }
   }, [product]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation

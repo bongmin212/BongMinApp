@@ -5,6 +5,7 @@ import PackageForm from './PackageForm';
 // removed export button
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { getSupabase } from '../../utils/supabaseClient';
 
 const PackageList: React.FC = () => {
   const { state } = useAuth();
@@ -45,7 +46,7 @@ const PackageList: React.FC = () => {
   const handleDelete = (id: string) => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa gói sản phẩm này?',
-      onConfirm: () => {
+      onConfirm: async () => {
         const success = Database.deletePackage(id);
         if (success) {
           try {
@@ -73,7 +74,7 @@ const PackageList: React.FC = () => {
     if (selectedIds.length === 0) return;
     setConfirmState({
       message: `Xóa ${selectedIds.length} gói sản phẩm đã chọn?`,
-      onConfirm: () => {
+      onConfirm: async () => {
         selectedIds.forEach(id => Database.deletePackage(id));
         try {
           const sb2 = getSupabase();

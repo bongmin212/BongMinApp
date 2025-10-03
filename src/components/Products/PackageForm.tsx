@@ -3,6 +3,7 @@ import { ProductPackage, Product, PackageFormData, PackageCustomField } from '..
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { getSupabase } from '../../utils/supabaseClient';
 
 interface PackageFormProps {
   package?: ProductPackage | null;
@@ -64,7 +65,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     }
   }, [pkg]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation

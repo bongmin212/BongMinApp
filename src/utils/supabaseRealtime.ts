@@ -22,7 +22,8 @@ export function subscribeRealtime(): Unsubscribe {
 
   const channels: { unsubscribe: () => void }[] = [];
 
-  const handleRow = (table: string, payload: any) => {
+  type PostgresChange = { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new?: any; old?: any };
+  const handleRow = (table: string, payload: PostgresChange) => {
     const newRow = payload.new ? reviveDates(toCamel(payload.new)) : undefined;
     const oldRow = payload.old ? reviveDates(toCamel(payload.old)) : undefined;
     switch (table) {
@@ -101,7 +102,7 @@ export function subscribeRealtime(): Unsubscribe {
   TABLES.forEach((table) => {
     const ch = sb
       .channel(`realtime:${table}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, (payload) => handleRow(table, payload))
+      .on('postgres_changes', { event: '*', schema: 'public', table }, (payload: any) => handleRow(table, payload as PostgresChange))
       .subscribe();
     channels.push(ch);
   });

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
+import { getSupabase } from '../../utils/supabaseClient';
 
 interface WarehouseFormProps {
   item?: any;
@@ -90,7 +91,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     return cols || [];
   }, [selectedPkg, item]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: { [key: string]: string } = {};
     const ensuredCode = (formData.code || '').trim() || Database.generateNextInventoryCode();
