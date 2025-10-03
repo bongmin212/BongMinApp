@@ -23,7 +23,7 @@ export function toSnake<T = any>(obj: any): T {
   return out as T;
 }
 
-export function reviveDates<T extends { createdAt?: any; updatedAt?: any }>(x: T): T {
+export function reviveDates<T = any>(x: T): T {
   const out: any = { ...x };
   if (out.createdAt) out.createdAt = new Date(out.createdAt);
   if (out.updatedAt) out.updatedAt = new Date(out.updatedAt);
