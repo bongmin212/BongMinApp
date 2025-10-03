@@ -86,7 +86,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
                 className="form-control"
                 value={formData.username}
                 onChange={handleChange}
-                placeholder="Nhập email"
+                placeholder="Nhập email của bạn"
                 required
               />
             </div>
