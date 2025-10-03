@@ -6,17 +6,17 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import LoginForm from './components/Auth/LoginForm';
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
+import ActivityLogList from './components/ActivityLogs/ActivityLogList';
+import { getSupabase } from './utils/supabaseClient';
 const ProductList = lazy(() => import('./components/Products/ProductList'));
 const PackageList = lazy(() => import('./components/Products/PackageList'));
 const WarehouseList = lazy(() => import('./components/Products/WarehouseList'));
 const CustomerList = lazy(() => import('./components/Customers/CustomerList'));
 const OrderList = lazy(() => import('./components/Orders/OrderList'));
 // removed EmployeeList and UserManagement per requirements
-import ActivityLogList from './components/ActivityLogs/ActivityLogList';
 const WarrantyList = lazy(() => import('./components/Orders/WarrantyList'));
 const Dashboard = lazy(() => import('./components/Dashboard/Dashboard'));
 const ExpenseList = lazy(() => import('./components/Expenses/ExpenseList'));
-import { getSupabase } from './utils/supabaseClient';
 
 const AppContent: React.FC = () => {
   const { state } = useAuth();

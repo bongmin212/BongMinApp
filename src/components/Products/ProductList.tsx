@@ -342,7 +342,7 @@ const ProductList: React.FC = () => {
         />
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {paginatedProducts.length === 0 ? (
         <div className="text-center py-4" style={{ animation: 'fadeInUp 0.5s ease-out' }}>
           <div style={{ marginBottom: '1rem', opacity: 0.6, display: 'inline-flex' }}>
             <IconBox size={32} />
@@ -463,7 +463,6 @@ const ProductList: React.FC = () => {
               </tbody>
             </table>
           )}
-        </div>
         </div>
       )}
 
