@@ -108,11 +108,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
           const updated = Database.updateCustomer(customer.id, formData);
           if (updated) {
             const detail = [`customerId=${customer.id}; customerCode=${customer.code}`, ...changedEntries].join('; ');
-            Database.saveActivityLog({
-              employeeId: state.user?.id || 'system',
-              action: 'Cập nhật khách hàng',
-              details: detail
-            });
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật khách hàng', details: detail });
+            } catch {}
             notify('Cập nhật khách hàng thành công', 'success');
             onSuccess();
           } else {
@@ -125,11 +124,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
       } else {
         // Create new customer
         const created = Database.saveCustomer({ ...formData, code: ensuredCode });
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Tạo khách hàng',
-          details: `customerId=${created.id}; customerCode=${created.code}; name=${created.name}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo khách hàng', details: `customerId=${created.id}; customerCode=${created.code}; name=${created.name}` });
+        } catch {}
         notify('Thêm khách hàng thành công', 'success');
         onSuccess();
       }

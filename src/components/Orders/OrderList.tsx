@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, Warranty } from '../../types';
+import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
 import OrderForm from './OrderForm';
 // removed export button
@@ -46,7 +47,7 @@ const OrderList: React.FC = () => {
     loadData();
   }, []);
 
-  // Initialize filters from URL/localStorage
+  // Initialize filters from URL (no localStorage)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -57,7 +58,7 @@ const OrderList: React.FC = () => {
       const to = params.get('to') || '';
       const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
       const p = parseInt(params.get('page') || '1', 10);
-      const l = parseInt((params.get('limit') || localStorage.getItem('orderList.limit') || '10'), 10);
+      const l = parseInt((params.get('limit') || '10'), 10);
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
       setFilterStatus(status);
@@ -81,10 +82,7 @@ const OrderList: React.FC = () => {
     setPage(1);
   }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter]);
 
-  // Persist limit
-  useEffect(() => {
-    try { localStorage.setItem('orderList.limit', String(limit)); } catch {}
-  }, [limit]);
+  // No localStorage persistence
 
   // Sync URL with current filters
   useEffect(() => {
@@ -104,17 +102,40 @@ const OrderList: React.FC = () => {
     } catch {}
   }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, page, limit]);
 
-  const loadData = () => {
-    const allOrders = Database.getOrders();
-    const allCustomers = Database.getCustomers();
-    const allPackages = Database.getPackages();
-    const allProducts = Database.getProducts();
-    
+  const loadData = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const [ordersRes, customersRes, packagesRes, productsRes] = await Promise.all([
+      sb.from('orders').select('*'),
+      sb.from('customers').select('*'),
+      sb.from('packages').select('*'),
+      sb.from('products').select('*')
+    ]);
+    const allOrders = (ordersRes.data || []).map((r: any) => ({
+      ...r,
+      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Order[];
     setOrders(allOrders);
-    setCustomers(allCustomers);
-    setPackages(allPackages);
-    setProducts(allProducts);
+    setCustomers((customersRes.data || []) as Customer[]);
+    setPackages((packagesRes.data || []) as ProductPackage[]);
+    setProducts((productsRes.data || []) as Product[]);
   };
+
+  // Realtime subscribe
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const channel = sb
+      .channel('realtime:orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        loadData();
+      })
+      .subscribe();
+    return () => { try { channel.unsubscribe(); } catch {} };
+  }, []);
 
   const handleCreate = () => {
     setEditingOrder(null);
@@ -138,7 +159,7 @@ const OrderList: React.FC = () => {
 
   const handleDelete = (id: string) => {
     const order = orders.find(o => o.id === id);
-    const invLinked = Database.getInventory().find(i => i.linkedOrderId === id);
+    const invLinked: any = null; // inventory unlink handled server-side if needed
     const now = new Date();
     const isExpired = order ? new Date(order.expiryDate) < now : false;
 
@@ -151,27 +172,21 @@ const OrderList: React.FC = () => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa đơn hàng này?',
       onConfirm: () => {
-        if (invLinked) {
-          const order = orders.find(o => o.id === id);
-          Database.releaseInventoryItem(invLinked.id);
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Gỡ liên kết kho khỏi đơn',
-            details: `orderId=${id}; orderCode=${order?.code}; inventoryId=${invLinked.id}; inventoryCode=${invLinked.code}`
-          });
-        }
-        const success = Database.deleteOrder(id);
-        if (success) {
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Xóa đơn hàng',
-            details: (() => { const o = orders.find(x => x.id === id); return `orderId=${id}; orderCode=${o?.code}`; })()
-          });
-          loadData();
-          notify('Xóa đơn hàng thành công', 'success');
-        } else {
-          notify('Không thể xóa đơn hàng', 'error');
-        }
+        (async () => {
+          const sb = getSupabase();
+          if (!sb) return notify('Không thể xóa đơn hàng', 'error');
+          const { error } = await sb.from('orders').delete().eq('id', id);
+          if (!error) {
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: (() => { const o = orders.find(x => x.id === id); return `orderId=${id}; orderCode=${o?.code}`; })() });
+            } catch {}
+            loadData();
+            notify('Xóa đơn hàng thành công', 'success');
+          } else {
+            notify('Không thể xóa đơn hàng', 'error');
+          }
+        })();
       }
     });
   };
@@ -180,10 +195,10 @@ const OrderList: React.FC = () => {
     const order = orders.find(o => o.id === id);
     if (!order) return;
     // Try classic link first
-    let invLinked = Database.getInventory().find(i => i.linkedOrderId === id);
+    let invLinked = Database.getInventory().find((i: any) => i.linkedOrderId === id);
     // Optionally try by inventoryItemId if present on order
     if (!invLinked && (order as any).inventoryItemId) {
-      const found = Database.getInventory().find(i => i.id === (order as any).inventoryItemId);
+      const found = Database.getInventory().find((i: any) => i.id === (order as any).inventoryItemId);
       if (found && (found.linkedOrderId === id || (found.isAccountBased && (found.profiles || []).some(p => p.assignedOrderId === id)))) {
         invLinked = found;
       }
@@ -200,15 +215,14 @@ const OrderList: React.FC = () => {
     // For non-expired orders, simple confirm
     setConfirmState({
       message: 'Trả slot về kho? (Đơn vẫn được giữ nguyên)',
-      onConfirm: () => {
+      onConfirm: async () => {
         Database.releaseInventoryItem(invLinked!.id);
         // Preserve latest orderInfo after unlinking inventory
         Database.updateOrder(order.id, { orderInfo: String((order as any).orderInfo || '') } as any);
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Trả slot về kho',
-          details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked!.id}; inventoryCode=${invLinked!.code}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Trả slot về kho', details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked!.id}; inventoryCode=${invLinked!.code}` });
+        } catch {}
         loadData();
         notify('Đã trả slot về kho', 'success');
       }
@@ -227,18 +241,17 @@ const OrderList: React.FC = () => {
     if (selectedIds.length === 0) return;
     setConfirmState({
       message: `Xóa ${selectedIds.length} đơn hàng đã chọn?`,
-      onConfirm: () => {
+      onConfirm: async () => {
         const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
         selectedIds.forEach(id => {
-          const invLinked = Database.getInventory().find(i => i.linkedOrderId === id);
+          const invLinked = Database.getInventory().find((i: any) => i.linkedOrderId === id);
           if (invLinked) Database.releaseInventoryItem(invLinked.id);
           Database.deleteOrder(id);
         });
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Xóa hàng loạt đơn hàng',
-          details: `orderCodes=${codes.join(',')}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt đơn hàng', details: `orderCodes=${codes.join(',')}` });
+        } catch {}
         setSelectedIds([]);
         loadData();
         notify('Đã xóa đơn hàng đã chọn', 'success');
@@ -248,32 +261,36 @@ const OrderList: React.FC = () => {
 
   const bulkSetStatus = (status: OrderStatus) => {
     if (selectedIds.length === 0) return;
-    selectedIds.forEach(id => Database.updateOrder(id, { status }));
-    {
+    (async () => {
+      const sb = getSupabase();
+      if (!sb) return notify('Không thể cập nhật trạng thái', 'error');
+      const { error } = await sb.from('orders').update({ status }).in('id', selectedIds);
+      if (error) return notify('Không thể cập nhật trạng thái', 'error');
       const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
-      Database.saveActivityLog({
-        employeeId: state.user?.id || 'system',
-        action: 'Cập nhật trạng thái hàng loạt',
-        details: `status=${status}; orderCodes=${codes.join(',')}`
-      });
-    }
-    loadData();
-    notify('Đã cập nhật trạng thái', 'success');
+      try {
+        const sb2 = getSupabase();
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật trạng thái hàng loạt', details: `status=${status}; orderCodes=${codes.join(',')}` });
+      } catch {}
+      loadData();
+      notify('Đã cập nhật trạng thái', 'success');
+    })();
   };
 
   const bulkSetPayment = (paymentStatus: PaymentStatus) => {
     if (selectedIds.length === 0) return;
-    selectedIds.forEach(id => Database.updateOrder(id, { paymentStatus }));
-    {
+    (async () => {
+      const sb = getSupabase();
+      if (!sb) return notify('Không thể cập nhật thanh toán', 'error');
+      const { error } = await sb.from('orders').update({ payment_status: paymentStatus }).in('id', selectedIds);
+      if (error) return notify('Không thể cập nhật thanh toán', 'error');
       const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
-      Database.saveActivityLog({
-        employeeId: state.user?.id || 'system',
-        action: 'Cập nhật thanh toán hàng loạt',
-        details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}`
-      });
-    }
-    loadData();
-    notify('Đã cập nhật thanh toán', 'success');
+      try {
+        const sb2 = getSupabase();
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
+      } catch {}
+      loadData();
+      notify('Đã cập nhật thanh toán', 'success');
+    })();
   };
 
   const handleFormSubmit = () => {
@@ -820,10 +837,10 @@ const OrderList: React.FC = () => {
                       }
                     }
                     // Fallback 1: find by linkedOrderId (classic single-item link)
-                    const byLinked = Database.getInventory().find(i => i.linkedOrderId === viewingOrder.id);
+                    const byLinked = Database.getInventory().find((i: any) => i.linkedOrderId === viewingOrder.id);
                     if (byLinked) return byLinked;
                     // Fallback 2: account-based items where a profile is assigned to this order
-                    return Database.getInventory().find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === viewingOrder.id));
+                    return Database.getInventory().find((i: any) => i.isAccountBased && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
                   })();
                   if (!inv) return 'Không liên kết';
                   const code = inv.code ?? '';
@@ -845,15 +862,15 @@ const OrderList: React.FC = () => {
               </div>
               {viewingOrder.notes && <div><strong>Ghi chú:</strong> {viewingOrder.notes}</div>}
               {(() => {
-                const list = Database.getWarrantiesByOrder(viewingOrder.id);
+                // warranties are loaded via effectful call elsewhere; render state
                 return (
                   <div style={{ marginTop: '12px' }}>
                     <strong>Lịch sử bảo hành:</strong>
-                    {list.length === 0 ? (
+                    {warrantiesForOrder.length === 0 ? (
                       <div>Chưa có</div>
                     ) : (
                       <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                        {list.map(w => (
+                        {warrantiesForOrder.map((w: any) => (
                           <li key={w.id}>
                             {new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.reason} ({w.status === 'DONE' ? 'đã xong' : 'chưa xong'})
                           </li>
@@ -1127,7 +1144,7 @@ const OrderList: React.FC = () => {
               </button>
               <button
                 className="btn btn-primary"
-                onClick={() => {
+                onClick={async () => {
                   const o = renewState.order;
                   const updated = Database.renewOrder(o.id, renewState.packageId, {
                     note: renewState.note,
@@ -1137,11 +1154,10 @@ const OrderList: React.FC = () => {
                     customPrice: renewState.customPrice
                   });
                   if (updated) {
-                    Database.saveActivityLog({
-                      employeeId: state.user?.id || 'system',
-                      action: 'Gia hạn đơn hàng',
-                      details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}`
-                    });
+                    try {
+                      const sb2 = getSupabase();
+                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
+                    } catch {}
                     setRenewState(null);
                     setViewingOrder(updated);
                     loadData();
@@ -1263,14 +1279,13 @@ const OrderList: React.FC = () => {
               </button>
               <button
                 className="btn btn-danger"
-                onClick={() => {
+                onClick={async () => {
                   const o = refundState.order;
                   const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED' });
-                  Database.saveActivityLog({
-                    employeeId: state.user?.id || 'system',
-                    action: 'Hoàn tiền đơn hàng',
-                    details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}`
-                  });
+                  try {
+                    const sb2 = getSupabase();
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}` });
+                  } catch {}
                   setRefundState(null);
                   setViewingOrder(null);
                   loadData();
@@ -1331,18 +1346,17 @@ const OrderList: React.FC = () => {
               <button
                 className="btn btn-danger"
                 disabled={!returnConfirmState.acknowledged}
-                onClick={() => {
+                onClick={async () => {
                   if (!returnConfirmState) return;
                   const { order, inventoryId, mode } = returnConfirmState;
                   // Return slot first
                   Database.releaseInventoryItem(inventoryId);
                   // Preserve latest orderInfo after unlinking inventory
                   Database.updateOrder(order.id, { orderInfo: String((order as any).orderInfo || '') } as any);
-                  Database.saveActivityLog({
-                    employeeId: state.user?.id || 'system',
-                    action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho',
-                    details: `orderId=${order.id}; inventoryId=${inventoryId}`
-                  });
+                  try {
+                    const sb2 = getSupabase();
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho', details: `orderId=${order.id}; inventoryId=${inventoryId}` });
+                  } catch {}
                   if (mode === 'RETURN_ONLY') {
                     setReturnConfirmState(null);
                     loadData();
@@ -1352,11 +1366,10 @@ const OrderList: React.FC = () => {
                   // DELETE_AND_RETURN
                   const success = Database.deleteOrder(order.id);
                   if (success) {
-                  Database.saveActivityLog({
-                      employeeId: state.user?.id || 'system',
-                      action: 'Xóa đơn hàng',
-                      details: `orderId=${order.id}; orderCode=${order.code}`
-                    });
+                  try {
+                    const sb2 = getSupabase();
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}; orderCode=${order.code}` });
+                  } catch {}
                     setReturnConfirmState(null);
                     loadData();
                     notify('Đã trả slot về kho và xóa đơn', 'success');

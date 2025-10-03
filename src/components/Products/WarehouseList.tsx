@@ -236,7 +236,10 @@ const WarehouseList: React.FC = () => {
       message: `Xóa ${deletable.length} mục kho (chỉ mục Sẵn có)?`,
       onConfirm: () => {
         deletable.forEach(id => Database.deleteInventoryItem(id));
-        Database.saveActivityLog({ employeeId: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
+        } catch {}
         setSelectedIds([]);
         refresh();
         notify('Đã xóa mục kho đã chọn', 'success');
@@ -250,7 +253,10 @@ const WarehouseList: React.FC = () => {
       message: `Gỡ liên kết ${unlinkables.length} mục kho khỏi đơn?`,
       onConfirm: () => {
         unlinkables.forEach(id => Database.releaseInventoryItem(id));
-        Database.saveActivityLog({ employeeId: state.user?.id || 'system', action: 'Gỡ liên kết kho hàng loạt', details: `ids=${unlinkables.join(',')}` });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho hàng loạt', details: `ids=${unlinkables.join(',')}` });
+        } catch {}
         setSelectedIds([]);
         refresh();
         notify('Đã gỡ liên kết các mục kho', 'success');
@@ -265,11 +271,10 @@ const WarehouseList: React.FC = () => {
         const snapshot = items.find(i => i.id === id) || null;
         const ok = Database.deleteInventoryItem(id);
         if (ok) {
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Xóa khỏi kho',
-            details: `inventoryItemId=${id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}`
-          });
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
+          } catch {}
           notify('Đã xóa khỏi kho', 'success');
         } else {
           notify('Không thể xóa mục này khỏi kho', 'error');
@@ -287,11 +292,10 @@ const WarehouseList: React.FC = () => {
       onConfirm: () => {
         const released = Database.releaseInventoryItem(id);
         if (released) {
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Gỡ liên kết kho khỏi đơn',
-            details: `inventoryId=${id}; orderId=${inv.linkedOrderId}`
-          });
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho khỏi đơn', details: `inventoryId=${id}; orderId=${inv.linkedOrderId}` });
+          } catch {}
           notify('Đã gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có', 'success');
         } else {
           notify('Không thể gỡ liên kết khỏi đơn', 'error');

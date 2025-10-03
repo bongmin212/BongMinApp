@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSupabase } from '../../utils/supabaseClient';
-import { IconBox, IconClipboard, IconUsers, IconCart, IconUser, IconChart, IconTrendingUp, IconReceipt, IconPackage, IconShield } from '../Icons';
+import { IconBox, IconClipboard, IconUsers, IconCart, IconChart, IconTrendingUp, IconReceipt, IconPackage, IconShield } from '../Icons';
 
 interface SidebarProps {
   activeTab: string;
@@ -21,10 +21,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     { id: 'warehouse', label: 'Kho hàng', icon: <IconClipboard /> },
     { id: 'warranties', label: 'Bảo hành', icon: <IconShield /> },
     { id: 'expenses', label: 'Chi phí', icon: <IconReceipt /> },
-    // Show Activity Logs for managers regardless of Supabase
-    ...(isManager() ? [ { id: 'activity-logs', label: 'Lịch sử hoạt động', icon: <IconChart /> } ] : []),
-    // Show Employees only in local/demo mode (no Supabase)
-    ...(isManager() && !sb ? [ { id: 'employees', label: 'Nhân viên', icon: <IconUser /> } ] : [])
+    // Chỉ còn Lịch sử hoạt động cho quản lý
+    ...(isManager() ? [ { id: 'activity-logs', label: 'Lịch sử hoạt động', icon: <IconChart /> } ] : [])
   ];
 
   return (

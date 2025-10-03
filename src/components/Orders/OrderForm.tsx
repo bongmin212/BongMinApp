@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Order, Customer, ProductPackage, Product, OrderFormData, ORDER_STATUSES, PAYMENT_STATUSES, InventoryItem, OrderStatus } from '../../types';
 import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
@@ -102,66 +103,173 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setSelectedProfileId((order as any).inventoryProfileId as any);
       }
     } else {
-      // Prefill auto code for new order
-      const nextCode = Database.generateNextOrderCode('DH', 4);
-      setFormData(prev => ({ ...prev, code: nextCode }));
+      // Prefill auto code for new order (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('orders').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const generateNextCodeFromList = (list: string[], prefix: string, padLength: number = 4): string => {
+            let maxNum = 0;
+            let detectedPad = padLength;
+            list.forEach(code => {
+              const m = String(code || '').match(/^([A-Za-z]+)(\d+)$/);
+              if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
+                const numStr = m[2];
+                const num = parseInt(numStr, 10);
+                if (!isNaN(num)) {
+                  if (num > maxNum) maxNum = num;
+                  detectedPad = Math.max(detectedPad, numStr.length);
+                }
+              }
+            });
+            const nextNum = maxNum + 1;
+            const width = Math.max(padLength, detectedPad);
+            return `${prefix}${String(nextNum).padStart(width, '0')}`;
+          };
+          const nextCode = generateNextCodeFromList(codes, 'DH', 4);
+          setFormData(prev => ({ ...prev, code: nextCode }));
+        } catch {}
+      })();
     }
   }, [order]);
 
-  const loadData = () => {
-    const allCustomers = Database.getCustomers();
-    const allPackages = Database.getPackages();
-    const allProducts = Database.getProducts();
-    
+  const loadData = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const [customersRes, packagesRes, productsRes] = await Promise.all([
+      sb.from('customers').select('*').order('created_at', { ascending: true }),
+      sb.from('packages').select('*').order('created_at', { ascending: true }),
+      sb.from('products').select('*').order('created_at', { ascending: true })
+    ]);
+    const allCustomers = (customersRes.data || []).map((r: any) => ({
+      ...r,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Customer[];
+    const allPackages = (packagesRes.data || []).map((r: any) => ({
+      ...r,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as ProductPackage[];
+    const allProducts = (productsRes.data || []).map((r: any) => ({
+      ...r,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Product[];
     setCustomers(allCustomers);
     setPackages(allPackages);
     setProducts(allProducts);
   };
 
   useEffect(() => {
-    // Base list: available items by selected package
-    const baseItems = formData.packageId
-      ? Database.getAvailableInventoryByPackage(formData.packageId)
-      : [];
-
-    // Always include linked inventory when editing, even if SOLD or package changed later
-    let merged: InventoryItem[] = baseItems;
-    if (order && order.inventoryItemId) {
-      const linked = Database.getInventory().find(i => i.id === order.inventoryItemId);
-      // Include if classic link or account-based profile link is valid
-      if (linked && (linked.linkedOrderId === order.id || (linked.isAccountBased && (linked.profiles || []).some(p => p.assignedOrderId === order.id)))) {
-        merged = [linked, ...baseItems.filter(i => i.id !== linked.id)];
+    const loadAvailableInventory = async () => {
+      const sb = getSupabase();
+      if (!sb || !formData.packageId) {
+        setAvailableInventory([]);
+        return;
       }
-    } else if (order) {
-      const linkedByOrder = Database.getInventory().find(i => i.linkedOrderId === order.id);
-      if (linkedByOrder) {
-        merged = [linkedByOrder, ...baseItems.filter(i => i.id !== linkedByOrder.id)];
+      const pkg = packages.find(p => p.id === formData.packageId);
+      const prod = pkg ? products.find(pr => pr.id === pkg.productId) : undefined;
+      let query = sb.from('inventory').select('*');
+      if (prod?.sharedInventoryPool) {
+        query = query.eq('product_id', prod.id);
       } else {
-        const invWithProfile = Database.getInventory().find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === order.id));
-        if (invWithProfile) {
-          merged = [invWithProfile, ...baseItems.filter(i => i.id !== invWithProfile.id)];
-        }
+        query = query.eq('package_id', formData.packageId);
       }
-    }
-    setAvailableInventory(merged);
-
-    // Keep selectedInventoryId if editing with existing link; otherwise reset when package changes
-    if (!(order && order.inventoryItemId && order.packageId === formData.packageId)) {
-      // Only use order.inventoryItemId if it's still valid
-      let validInventoryId = '';
-      if (order?.inventoryItemId) {
-        const inv = Database.getInventory().find(i => i.id === order.inventoryItemId);
-        if (inv && inv.linkedOrderId === order.id) {
-          validInventoryId = order.inventoryItemId;
+      const { data } = await query.order('created_at', { ascending: true });
+      let items = (data || []).map((i: any) => ({
+        ...i,
+        purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(),
+        expiryDate: i.expiry_date ? new Date(i.expiry_date) : undefined,
+        createdAt: i.created_at ? new Date(i.created_at) : new Date(),
+        updatedAt: i.updated_at ? new Date(i.updated_at) : new Date(),
+        isAccountBased: i.is_account_based,
+        accountColumns: i.account_columns,
+        accountData: i.account_data,
+        totalSlots: i.total_slots,
+        profiles: i.profiles
+      })) as InventoryItem[];
+      // Filter availability
+      items = items.filter((i: any) => {
+        if (i.isAccountBased) {
+          const total = i.totalSlots || 0;
+          const assigned = (i.profiles || []).filter((p: any) => p.isAssigned).length;
+          return total > assigned;
         }
-      }
-      // If current selectedInventoryId is not in the new filtered list, clear it
-      setSelectedInventoryId(prev => {
-        if (prev && merged.some(i => i.id === prev)) return prev;
-        return validInventoryId;
+        return i.status === 'AVAILABLE';
       });
-    }
-  }, [formData.packageId, order]);
+
+      // Include linked inventory for editing
+      let merged: InventoryItem[] = items;
+      if (order?.inventoryItemId) {
+        const { data: linked } = await sb.from('inventory').select('*').eq('id', order.inventoryItemId).single();
+        if (linked) {
+          const linkedMapped = {
+            ...linked,
+            purchaseDate: linked.purchase_date ? new Date(linked.purchase_date) : new Date(),
+            expiryDate: linked.expiry_date ? new Date(linked.expiry_date) : undefined,
+            createdAt: linked.created_at ? new Date(linked.created_at) : new Date(),
+            updatedAt: linked.updated_at ? new Date(linked.updated_at) : new Date(),
+            isAccountBased: linked.is_account_based,
+            accountColumns: linked.account_columns,
+            accountData: linked.account_data,
+            totalSlots: linked.total_slots,
+            profiles: linked.profiles
+          } as any;
+          merged = [linkedMapped as InventoryItem, ...items.filter(i => i.id !== linkedMapped.id)];
+        }
+      } else if (order) {
+        const { data: byOrder } = await sb.from('inventory').select('*').eq('linked_order_id', order.id).limit(1);
+        if (byOrder && byOrder[0]) {
+          const l = byOrder[0];
+          const mapped = {
+            ...l,
+            purchaseDate: l.purchase_date ? new Date(l.purchase_date) : new Date(),
+            expiryDate: l.expiry_date ? new Date(l.expiry_date) : undefined,
+            createdAt: l.created_at ? new Date(l.created_at) : new Date(),
+            updatedAt: l.updated_at ? new Date(l.updated_at) : new Date(),
+            isAccountBased: l.is_account_based,
+            accountColumns: l.account_columns,
+            accountData: l.account_data,
+            totalSlots: l.total_slots,
+            profiles: l.profiles
+          } as any;
+          merged = [mapped as InventoryItem, ...items.filter(i => i.id !== mapped.id)];
+        }
+      }
+      setAvailableInventory(merged);
+
+      // Keep selectedInventoryId if editing with existing link; otherwise reset when package changes
+      if (!(order && order.inventoryItemId && order.packageId === formData.packageId)) {
+        let validInventoryId = '';
+        if (order?.inventoryItemId) {
+          const exists = merged.some(i => i.id === order.inventoryItemId);
+          if (exists) validInventoryId = order.inventoryItemId;
+        }
+        setSelectedInventoryId(prev => {
+          if (prev && merged.some(i => i.id === prev)) return prev;
+          return validInventoryId;
+        });
+      }
+    };
+    loadAvailableInventory();
+  }, [formData.packageId, order, packages, products]);
+
+  // Realtime: refresh available inventory when inventory changes
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const ch = sb
+      .channel('realtime:inventory-for-form')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, () => {
+        // trigger refresh by updating dependency
+        setFormData(prev => ({ ...prev }));
+      })
+      .subscribe();
+    return () => { try { ch.unsubscribe(); } catch {} };
+  }, []);
 
   // Auto-enforce status rules based on inventory selection
   useEffect(() => {
@@ -175,7 +283,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   // Auto-pick first available slot for account-based inventory when none selected
   useEffect(() => {
     if (!selectedInventoryId) return;
-    const inv = availableInventory.find(i => i.id === selectedInventoryId) || Database.getInventory().find(i => i.id === selectedInventoryId);
+    const inv = availableInventory.find(i => i.id === selectedInventoryId);
     const pkg = packages.find(p => p.id === formData.packageId);
     if (!(inv?.isAccountBased || pkg?.isAccountBased)) return;
     const options = (inv?.profiles || []).filter(p => !p.isAssigned || p.assignedOrderId === (order?.id || ''));
@@ -196,7 +304,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     }
   }, [order, packages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Ensure code exists even if effect hasn't populated yet
     const ensuredCode = (formData.code || '').trim() || Database.generateNextOrderCode('DH', 4);
@@ -342,45 +450,75 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         });
 
         try {
-          const updated = Database.updateOrder(order.id, orderData);
-          if (updated) {
+          const sb = getSupabase();
+          if (!sb) throw new Error('Supabase not configured');
+          const { error } = await sb
+            .from('orders')
+            .update({
+              code: orderData.code,
+              purchase_date: orderData.purchaseDate,
+              package_id: orderData.packageId,
+              customer_id: orderData.customerId,
+              status: orderData.status,
+              payment_status: orderData.paymentStatus,
+              order_info: orderData.orderInfo,
+              notes: orderData.notes,
+              expiry_date: orderData.expiryDate,
+              inventory_item_id: orderData.inventoryItemId,
+              use_custom_price: orderData.useCustomPrice,
+              custom_price: orderData.customPrice,
+              custom_field_values: orderData.customFieldValues
+            })
+            .eq('id', order.id);
+          if (!error) {
             // Update inventory link/profile if changed
             const prevInventoryId = order.inventoryItemId;
             const nextInventoryId = selectedInventoryId || undefined;
 
-            // Always release old inventory link
-            const existingLinkedInventory = Database.getInventory().find(i => i.linkedOrderId === order.id);
-            if (existingLinkedInventory && !existingLinkedInventory.isAccountBased) {
-              Database.releaseInventoryItem(existingLinkedInventory.id);
-            }
-
-            // For account-based, release previous profile if changed
-            if (order.inventoryItemId && (order as any).inventoryProfileId) {
-              const inv = Database.getInventory().find(i => i.id === order.inventoryItemId);
-              if (inv?.isAccountBased) {
-                Database.releaseProfile(order.inventoryItemId, (order as any).inventoryProfileId as string);
+            // Release previous links in Supabase
+            try {
+              // Release classic link
+              const { data: linkedItems } = await sb
+                .from('inventory')
+                .select('*')
+                .eq('linked_order_id', order.id);
+              if (linkedItems && linkedItems.length) {
+                const ids = linkedItems.map((it: any) => it.id);
+                await sb.from('inventory').update({ status: 'AVAILABLE', linked_order_id: null }).in('id', ids);
               }
-            }
+              // Release account-based profiles on the previous inventory item if any
+              if (order.inventoryItemId) {
+                const { data: prevInv } = await sb.from('inventory').select('*').eq('id', order.inventoryItemId).single();
+                if (prevInv && prevInv.is_account_based) {
+                  const profiles = Array.isArray(prevInv.profiles) ? prevInv.profiles : [];
+                  const nextProfiles = profiles.map((p: any) => p.assignedOrderId === order.id ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p);
+                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', order.inventoryItemId);
+                }
+              }
+            } catch {}
 
             if (nextInventoryId) {
-              const inv = Database.getInventory().find(i => i.id === nextInventoryId);
-              if (inv?.isAccountBased) {
+              const { data: inv } = await sb.from('inventory').select('*').eq('id', nextInventoryId).single();
+              if (inv && inv.is_account_based) {
                 if (!selectedProfileId) {
                   notify('Vui lòng chọn slot để cấp', 'warning');
                 } else {
-                  Database.assignProfileToOrder(nextInventoryId, selectedProfileId, order.id, orderData.expiryDate);
+                  const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
+                    ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
+                    : p);
+                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', nextInventoryId);
                 }
               } else {
-                Database.sellInventoryItem(nextInventoryId, order.id);
+                await sb.from('inventory').update({ status: 'SOLD', linked_order_id: order.id }).eq('id', nextInventoryId);
               }
             }
             const base = [`orderId=${order.id}; orderCode=${order.code}`];
             const detail = [...base, ...changedEntries].join('; ');
-            Database.saveActivityLog({
-              employeeId: state.user?.id || 'system',
-              action: 'Cập nhật đơn hàng',
-              details: detail
-            });
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn hàng', details: detail });
+            } catch {}
             notify('Cập nhật đơn hàng thành công', 'success');
             onSuccess();
           } else {
@@ -391,25 +529,61 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           notify(errorMessage, 'error');
         }
       } else {
-        // Create new order
-        const created = Database.saveOrder(orderData as any);
+        // Create new order via Supabase
+        const sb = getSupabase();
+        if (!sb) throw new Error('Supabase not configured');
+        const { data: createData, error: createErr } = await sb
+          .from('orders')
+          .insert({
+            code: orderData.code,
+            purchase_date: orderData.purchaseDate,
+            package_id: orderData.packageId,
+            customer_id: orderData.customerId,
+            status: orderData.status,
+            payment_status: orderData.paymentStatus,
+            order_info: orderData.orderInfo,
+            notes: orderData.notes,
+            expiry_date: orderData.expiryDate,
+            inventory_item_id: orderData.inventoryItemId,
+            use_custom_price: orderData.useCustomPrice,
+            custom_price: orderData.customPrice,
+            custom_field_values: orderData.customFieldValues
+          })
+          .select('*')
+          .single();
+        if (createErr || !createData) throw new Error(createErr?.message || 'Tạo đơn thất bại');
+        const created = {
+          ...createData,
+          id: createData.id,
+          code: createData.code,
+          createdAt: new Date(createData.created_at),
+          updatedAt: new Date(createData.updated_at)
+        } as Order;
         if (selectedInventoryId) {
-          const inv = Database.getInventory().find(i => i.id === selectedInventoryId);
-          if (inv?.isAccountBased) {
-            if (!selectedProfileId) {
-              notify('Vui lòng chọn profile để cấp', 'warning');
-            } else {
-              Database.assignProfileToOrder(selectedInventoryId, selectedProfileId, created.id, orderData.expiryDate);
+          try {
+            const sb2 = getSupabase();
+            if (sb2) {
+              const { data: inv } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
+              if (inv && inv.is_account_based) {
+                if (!selectedProfileId) {
+                  notify('Vui lòng chọn profile để cấp', 'warning');
+                } else {
+                  const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
+                    ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
+                    : p);
+                  await sb2.from('inventory').update({ profiles: nextProfiles }).eq('id', selectedInventoryId);
+                }
+              } else {
+                await sb2.from('inventory').update({ status: 'SOLD', linked_order_id: created.id }).eq('id', selectedInventoryId);
+              }
             }
-          } else {
-            Database.sellInventoryItem(selectedInventoryId, created.id);
-          }
+          } catch {}
         }
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Tạo đơn hàng',
-          details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileId=${selectedProfileId || '-'}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileId=${selectedProfileId || '-'}` });
+        } catch {}
         notify('Tạo đơn hàng thành công', 'success');
         onSuccess();
       }
@@ -1007,7 +1181,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     : 'Bạn có chắc chắn muốn xóa đơn hàng này?';
                   setConfirmState({
                     message: msg,
-                    onConfirm: () => {
+                    onConfirm: async () => {
                       // Resolve inventory to release (classic or account-based)
                       const inv = (() => {
                         if (order.inventoryItemId) {
@@ -1035,19 +1209,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         } else {
                           Database.releaseInventoryItem(inv.id);
                         }
-                        Database.saveActivityLog({
-                          employeeId: state.user?.id || 'system',
-                          action: 'Gỡ liên kết kho khỏi đơn',
-                          details: `orderId=${order.id}; inventoryId=${inv.id}`
-                        });
+                        try {
+                          const sb2 = getSupabase();
+                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho khỏi đơn', details: `orderId=${order.id}; inventoryId=${inv.id}` });
+                        } catch {}
                       }
                       const success = Database.deleteOrder(order.id);
                       if (success) {
-                        Database.saveActivityLog({
-                          employeeId: state.user?.id || 'system',
-                          action: 'Xóa đơn hàng',
-                          details: `orderId=${order.id}`
-                        });
+                        try {
+                          const sb2 = getSupabase();
+                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}` });
+                        } catch {}
                         onClose();
                         onSuccess();
                       } else {

@@ -144,11 +144,10 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
           if (updated) {
             const base = [`packageId=${pkg.id}; packageCode=${pkg.code}`, `productId=${nextSnapshot.productId}`];
             const detail = [...base, ...changedEntries].join('; ');
-            Database.saveActivityLog({
-              employeeId: state.user?.id || 'system',
-              action: 'Cập nhật gói sản phẩm',
-              details: detail
-            });
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật gói sản phẩm', details: detail });
+            } catch {}
             notify('Cập nhật gói sản phẩm thành công', 'success');
             onSuccess();
           } else {
@@ -166,11 +165,10 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
           defaultSlots: formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined
         };
         const created = Database.savePackage(normalizedForm as any);
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Tạo gói sản phẩm',
-          details: `packageId=${created.id}; packageCode=${created.code}; productId=${created.productId}; name=${created.name}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo gói sản phẩm', details: `packageId=${created.id}; packageCode=${created.code}; productId=${created.productId}; name=${created.name}` });
+        } catch {}
         notify('Thêm gói sản phẩm thành công', 'success');
         onSuccess();
       }

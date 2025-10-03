@@ -17,6 +17,20 @@ import {
 import { Warranty, WarrantyFormData } from '../types';
 import { mirrorDelete, mirrorInsert, mirrorUpdate, mirrorActivityLog } from './supabaseSync';
 
+// In-memory backing store (clears on refresh; authoritative source is Supabase)
+const MEM: Record<string, any[]> = {
+  bongmin_products: [],
+  bongmin_packages: [],
+  bongmin_customers: [],
+  bongmin_orders: [],
+  bongmin_employees: [],
+  bongmin_activity_logs: [],
+  bongmin_inventory: [],
+  bongmin_warranties: [],
+  bongmin_expenses: []
+};
+
+// Keep symbolic keys for existing call sites; backed by in-memory store
 const STORAGE_KEYS = {
   PRODUCTS: 'bongmin_products',
   PACKAGES: 'bongmin_packages',
@@ -24,7 +38,6 @@ const STORAGE_KEYS = {
   ORDERS: 'bongmin_orders',
   EMPLOYEES: 'bongmin_employees',
   ACTIVITY_LOGS: 'bongmin_activity_logs',
-  AUTH_TOKEN: 'bongmin_auth_token',
   INVENTORY: 'bongmin_inventory',
   WARRANTIES: 'bongmin_warranties',
   EXPENSES: 'bongmin_expenses'
@@ -36,20 +49,12 @@ const generateId = (): string => {
 };
 
 const getFromStorage = <T>(key: string, defaultValue: T[]): T[] => {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
+  const arr = MEM[key];
+  return Array.isArray(arr) ? (arr as T[]) : defaultValue;
 };
 
 const saveToStorage = <T>(key: string, data: T[]): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.error('Error saving to storage:', error);
-  }
+  MEM[key] = Array.isArray(data) ? [...data] : [];
 };
 
 // Database operations
@@ -106,9 +111,7 @@ export class Database {
   static generateNextInventoryCode(): string {
     return this.generateNextCodeFromList(this.getInventory().map(i => i.code), 'KHO', 3);
   }
-  static generateNextEmployeeCode(): string {
-    return this.generateNextCodeFromList(this.getEmployees().map(e => e.code), 'NV', 3);
-  }
+  // Employees are managed by Supabase; no local code generation
   static async generateNextExpenseCode(): Promise<string> {
     const expenses = await this.getExpenses();
     return this.generateNextCodeFromList(expenses.map(e => e.code), 'CP', 3);
@@ -912,57 +915,7 @@ export class Database {
   static getEmployees(): Employee[] {
     return getFromStorage(STORAGE_KEYS.EMPLOYEES, []);
   }
-
-  static saveEmployee(employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Employee {
-    const employees = this.getEmployees();
-    
-    const autoCode = String(employee.code || '').trim() || this.generateNextEmployeeCode();
-    if (employees.some(e => e.code === autoCode)) {
-      throw new Error(`Mã nhân viên "${autoCode}" đã tồn tại`);
-    }
-    
-    const newEmployee: Employee = {
-      ...employee,
-      code: autoCode,
-      id: generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    employees.push(newEmployee);
-    saveToStorage(STORAGE_KEYS.EMPLOYEES, employees);
-    mirrorInsert('employees', newEmployee);
-    return newEmployee;
-  }
-
-  static updateEmployee(id: string, updates: Partial<Employee>): Employee | null {
-    const employees = this.getEmployees();
-    const index = employees.findIndex(e => e.id === id);
-    if (index === -1) return null;
-    
-    // Check if code already exists (excluding current employee)
-    if (updates.code && employees.some(e => e.code === updates.code && e.id !== id)) {
-      throw new Error(`Mã nhân viên "${updates.code}" đã tồn tại`);
-    }
-    
-    employees[index] = {
-      ...employees[index],
-      ...updates,
-      updatedAt: new Date()
-    };
-    saveToStorage(STORAGE_KEYS.EMPLOYEES, employees);
-    mirrorUpdate('employees', id, employees[index]);
-    return employees[index];
-  }
-
-  static deleteEmployee(id: string): boolean {
-    const employees = this.getEmployees();
-    const filtered = employees.filter(e => e.id !== id);
-    if (filtered.length === employees.length) return false;
-    
-    saveToStorage(STORAGE_KEYS.EMPLOYEES, filtered);
-    mirrorDelete('employees', id);
-    return true;
-  }
+  // save/update/delete employee removed; managed via Supabase
 
   // Activity Logs
   static setActivityLogs(items: ActivityLog[]): void {
@@ -976,39 +929,8 @@ export class Database {
     return this.getActivityLogs().filter(log => log.employeeId === employeeId);
   }
 
-  static saveActivityLog(log: Omit<ActivityLog, 'id' | 'timestamp'>): ActivityLog {
-    const logs = this.getActivityLogs();
-    const newLog: ActivityLog = {
-      ...log,
-      id: generateId(),
-      timestamp: new Date()
-    };
-    logs.push(newLog);
-    saveToStorage(STORAGE_KEYS.ACTIVITY_LOGS, logs);
-    mirrorActivityLog(newLog);
-    return newLog;
-  }
 
-  // Auth
-  static getAuthToken(): string | null {
-    try {
-      return sessionStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-    } catch {
-      return null;
-    }
-  }
-
-  static setAuthToken(token: string): void {
-    try {
-      sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
-    } catch {}
-  }
-
-  static clearAuthToken(): void {
-    try {
-      sessionStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-    } catch {}
-  }
+  // Auth token helpers removed in Supabase-only mode
 
   // Migration functions
   static migrateCustomers(): void {
@@ -1051,6 +973,7 @@ export class Database {
     }
   }
 
+  // Demo migrations removed in Supabase-only mode
   static migrateProducts(): void {
     const products = this.getProducts();
     let needsUpdate = false;
@@ -1139,81 +1062,14 @@ export class Database {
     }
   }
 
-  static migrateEmployees(): void {
-    const employees = this.getEmployees();
-    let needsUpdate = false;
-    
-    const migratedEmployees = employees.map((employee, index) => {
-      if (!employee.code) {
-        needsUpdate = true;
-        return {
-          ...employee,
-          code: `NV${String(index + 1).padStart(3, '0')}`
-        };
-      }
-      return employee;
-    });
-    
-    if (needsUpdate) {
-      saveToStorage(STORAGE_KEYS.EMPLOYEES, migratedEmployees);
-    }
-  }
+  // Employees managed via Supabase; no local migration
 
   // Initialize default data
-  static initializeDefaultData(): void {
-    // Do not auto-create default admin with hardcoded password
-    const employees = this.getEmployees();
-
-    // Migrate existing data to add code field
-    this.migrateCustomers();
-    this.migrateOrders();
-    this.migrateProducts();
-    this.migratePackages();
-    this.migrateInventory();
-    this.migrateWarranties();
-    this.migrateEmployees();
-
-    // If any data already exists, skip creating demo data below
-    if (employees.length > 0) return;
-
-    // Create sample products
-    const windowsProduct: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
-      code: 'SP001',
-      name: 'Windows 11 Pro',
-      description: 'Bản quyền Windows 11 Professional'
-    };
-    const windows = this.saveProduct(windowsProduct);
-
-    // Create sample packages
-    const windowsPackage: Omit<ProductPackage, 'id' | 'createdAt' | 'updatedAt'> = {
-      code: 'PK001',
-      productId: windows.id,
-      name: 'Windows 11 Pro - Vĩnh viễn',
-      warrantyPeriod: 24, // 2 years for "vĩnh viễn"
-      costPrice: 300000,
-      ctvPrice: 500000,
-      retailPrice: 800000
-    };
-    this.savePackage(windowsPackage);
-
-    // Create sample customer
-    const sampleCustomer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
-      code: 'KH001',
-      name: 'Nguyễn Văn A',
-      type: 'RETAIL',
-      phone: '0123456789',
-      email: 'nguyenvana@email.com',
-      source: 'FACEBOOK',
-      sourceDetail: 'Fanpage ABC',
-      notes: 'Khách hàng mới'
-    };
-    this.saveCustomer(sampleCustomer);
-  }
+  // initializeDefaultData removed for Supabase-only mode
 
   // Expense methods
   static async getExpenses(): Promise<Expense[]> {
-    const expenses = localStorage.getItem(STORAGE_KEYS.EXPENSES);
-    return expenses ? JSON.parse(expenses) : [];
+    return getFromStorage('bongmin_expenses', []);
   }
 
   static async createExpense(expenseData: ExpenseFormData): Promise<Expense> {
@@ -1232,7 +1088,7 @@ export class Database {
     };
     
     expenses.push(newExpense);
-    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+    saveToStorage('bongmin_expenses', expenses);
     
     return newExpense;
   }
@@ -1253,14 +1109,14 @@ export class Database {
       updatedAt: new Date(),
     };
     
-    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+    saveToStorage('bongmin_expenses', expenses);
     return expenses[index];
   }
 
   static async deleteExpense(id: string): Promise<void> {
     const expenses = await this.getExpenses();
     const filteredExpenses = expenses.filter(expense => expense.id !== id);
-    localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(filteredExpenses));
+    saveToStorage('bongmin_expenses', filteredExpenses);
   }
 }
 

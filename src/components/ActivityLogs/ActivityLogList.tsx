@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityLog, Employee, Order, Customer, Product, ProductPackage, ORDER_STATUSES, WARRANTY_STATUSES, InventoryItem } from '../../types';
-import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { exportToXlsx } from '../../utils/excel';
 
@@ -23,14 +23,14 @@ const ActivityLogList: React.FC = () => {
     loadData();
   }, []);
 
-  // Initialize from URL/localStorage
+  // Initialize from URL (no localStorage)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q') || '';
       const emp = params.get('emp') || '';
       const p = parseInt(params.get('page') || '1', 10);
-      const l = parseInt((params.get('limit') || localStorage.getItem('activityList.limit') || '20'), 10);
+      const l = parseInt((params.get('limit') || '20'), 10);
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
       setSelectedEmployee(emp);
@@ -50,10 +50,7 @@ const ActivityLogList: React.FC = () => {
     setPage(1);
   }, [debouncedSearchTerm, selectedEmployee]);
 
-  // Persist limit
-  useEffect(() => {
-    try { localStorage.setItem('activityList.limit', String(limit)); } catch {}
-  }, [limit]);
+  // No localStorage persistence
 
   // Sync URL
   useEffect(() => {
@@ -69,22 +66,56 @@ const ActivityLogList: React.FC = () => {
     } catch {}
   }, [debouncedSearchTerm, selectedEmployee, page, limit]);
 
-  const loadData = () => {
-    const allLogs = Database.getActivityLogs();
-    const allEmployees = Database.getEmployees();
-    const allOrders = Database.getOrders();
-    const allCustomers = Database.getCustomers();
-    const allProducts = Database.getProducts();
-    const allPackages = Database.getPackages();
-    const allInventory = Database.getInventory();
-    
-    // Sort logs by timestamp (newest first)
-    const sortedLogs = allLogs.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-    
+  const loadData = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const [logsRes, empRes, ordersRes, customersRes, productsRes, packagesRes, invRes] = await Promise.all([
+      sb.from('activity_logs').select('*'),
+      sb.from('employees').select('*'),
+      sb.from('orders').select('*'),
+      sb.from('customers').select('*'),
+      sb.from('products').select('*'),
+      sb.from('packages').select('*'),
+      sb.from('inventory').select('*')
+    ]);
+
+    const allLogs = (logsRes.data || []).map((r: any) => ({
+      id: r.id,
+      employeeId: r.employee_id || r.employeeId,
+      action: r.action,
+      details: r.details || undefined,
+      timestamp: r.timestamp ? new Date(r.timestamp) : new Date()
+    })) as ActivityLog[];
+    const allEmployees = (empRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      username: r.username || r.email || r.id,
+      passwordHash: '',
+      role: String(r.role || '').toUpperCase() === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE',
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Employee[];
+    const allOrders = (ordersRes.data || []).map((r: any) => ({
+      ...r,
+      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Order[];
+    const allCustomers = (customersRes.data || []) as Customer[];
+    const allProducts = (productsRes.data || []) as Product[];
+    const allPackages = (packagesRes.data || []) as ProductPackage[];
+    const allInventory = (invRes.data || []).map((i: any) => ({
+      ...i,
+      purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(i.purchaseDate),
+      expiryDate: i.expiry_date ? new Date(i.expiry_date) : new Date(i.expiryDate),
+      createdAt: i.created_at ? new Date(i.created_at) : new Date(),
+      updatedAt: i.updated_at ? new Date(i.updated_at) : new Date()
+    })) as InventoryItem[];
+
+    const sortedLogs = allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
     setLogs(sortedLogs);
-    // Merge current authenticated user (Supabase) into employees list if missing
     try {
       if (state?.user && !allEmployees.some(e => e.id === state.user!.id)) {
         allEmployees.push({ ...state.user });
@@ -97,6 +128,19 @@ const ActivityLogList: React.FC = () => {
     setPackages(allPackages);
     setInventory(allInventory);
   };
+
+  // Realtime updates for activity logs
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const channel = sb
+      .channel('realtime:activity_logs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
+        loadData();
+      })
+      .subscribe();
+    return () => { try { channel.unsubscribe(); } catch {} };
+  }, []);
 
   const getEmployeeName = (employeeId: string) => {
     const employee = employees.find(e => e.id === employeeId);

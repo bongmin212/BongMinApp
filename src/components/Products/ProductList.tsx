@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../../types';
-import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 import ProductForm from './ProductForm';
 import { IconEdit, IconTrash, IconBox, IconClipboard } from '../Icons';
 // removed export button
@@ -24,13 +24,13 @@ const ProductList: React.FC = () => {
     loadProducts();
   }, []);
 
-  // Initialize from URL and localStorage
+  // Initialize from URL (no localStorage)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const q = params.get('q') || '';
       const p = parseInt(params.get('page') || '1', 10);
-      const l = parseInt((params.get('limit') || localStorage.getItem('productList.limit') || '10'), 10);
+      const l = parseInt((params.get('limit') || '10'), 10);
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
@@ -49,10 +49,7 @@ const ProductList: React.FC = () => {
     setPage(1);
   }, [debouncedSearchTerm]);
 
-  // Persist limit
-  useEffect(() => {
-    try { localStorage.setItem('productList.limit', String(limit)); } catch {}
-  }, [limit]);
+  // No localStorage persistence
 
   // Sync URL
   useEffect(() => {
@@ -67,10 +64,33 @@ const ProductList: React.FC = () => {
     } catch {}
   }, [debouncedSearchTerm, page, limit]);
 
-  const loadProducts = () => {
-    const allProducts = Database.getProducts();
+  const loadProducts = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const { data } = await sb.from('products').select('*').order('created_at', { ascending: true });
+    const allProducts = (data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      description: r.description || '',
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Product[];
     setProducts(allProducts);
   };
+
+  // Realtime subscribe
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const channel = sb
+      .channel('realtime:products')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        loadProducts();
+      })
+      .subscribe();
+    return () => { try { channel.unsubscribe(); } catch {} };
+  }, []);
 
   const handleCreate = () => {
     setEditingProduct(null);
@@ -88,18 +108,21 @@ const ProductList: React.FC = () => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa sản phẩm này?',
       onConfirm: () => {
-        const success = Database.deleteProduct(id);
-        if (success) {
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Xóa sản phẩm',
-            details: `productId=${id}`
-          });
-          loadProducts();
-          notify('Xóa sản phẩm thành công', 'success');
-        } else {
-          notify('Không thể xóa sản phẩm', 'error');
-        }
+        (async () => {
+          const sb = getSupabase();
+          if (!sb) return notify('Không thể xóa sản phẩm', 'error');
+          const { error } = await sb.from('products').delete().eq('id', id);
+          if (!error) {
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa sản phẩm', details: `productId=${id}` });
+            } catch {}
+            loadProducts();
+            notify('Xóa sản phẩm thành công', 'success');
+          } else {
+            notify('Không thể xóa sản phẩm', 'error');
+          }
+        })();
       }
     });
   };
@@ -118,15 +141,22 @@ const ProductList: React.FC = () => {
     setConfirmState({
       message: `Xóa ${count} sản phẩm đã chọn?`,
       onConfirm: () => {
-        selectedIds.forEach(id => Database.deleteProduct(id));
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Xóa hàng loạt sản phẩm',
-          details: `ids=${selectedIds.join(',')}`
-        });
-        setSelectedIds([]);
-        loadProducts();
-        notify('Đã xóa sản phẩm đã chọn', 'success');
+        (async () => {
+          const sb = getSupabase();
+          if (!sb) return notify('Không thể xóa sản phẩm', 'error');
+          const { error } = await sb.from('products').delete().in('id', selectedIds);
+          if (!error) {
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}` });
+            } catch {}
+            setSelectedIds([]);
+            loadProducts();
+            notify('Đã xóa sản phẩm đã chọn', 'success');
+          } else {
+            notify('Không thể xóa sản phẩm', 'error');
+          }
+        })();
       }
     });
   };

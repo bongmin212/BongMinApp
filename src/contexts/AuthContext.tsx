@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Prefer Supabase session if configured
+        // Supabase-only auth
         const sb = getSupabase();
         if (sb) {
           const res = await getSessionUser();
@@ -81,47 +81,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             dispatch({ type: 'LOAD_USER', payload: { user: res.user, token: res.token } });
             try { await hydrateAllFromSupabase(); } catch {}
             try { if (unsubRef.current) { unsubRef.current(); } unsubRef.current = subscribeRealtime(); } catch {}
-            return;
+          } else {
+            dispatch({ type: 'SET_LOADING', payload: false });
           }
-          dispatch({ type: 'SET_LOADING', payload: false });
           return;
         }
 
-        // Fallback: local token flow
-        // Defensive: never let an init error keep the app stuck on loading
-        try { Database.initializeDefaultData(); } catch {}
-
-        const rawToken = Database.getAuthToken();
-        if (rawToken) {
-          try {
-            const { parseAppToken } = await import('../utils/auth');
-            const parsed = parseAppToken(rawToken);
-            if (!parsed) {
-              Database.clearAuthToken();
-              dispatch({ type: 'LOGOUT' });
-              return;
-            }
-            const employees = Database.getEmployees();
-            const current = parsed.uid ? employees.find(e => e.id === parsed.uid) : undefined;
-            if (current) {
-              dispatch({ type: 'LOAD_USER', payload: { user: current, token: rawToken } });
-            } else {
-              Database.clearAuthToken();
-              dispatch({ type: 'LOGOUT' });
-            }
-            return;
-          } catch {
-            Database.clearAuthToken();
-            dispatch({ type: 'LOGOUT' });
-            return;
-          }
-        }
-
-        // No token – show login
+        // Supabase is required; if not configured, stay on login screen
         dispatch({ type: 'SET_LOADING', payload: false });
       } catch {
         // Final safety net
-        Database.clearAuthToken();
         dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
@@ -131,77 +100,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (username: string, password: string): Promise<boolean> => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      // Prefer Supabase if configured
       const sb = getSupabase();
-      if (sb) {
-        const res = await signInWithEmailPassword(username, password);
-        if (!res.ok) {
-          dispatch({ type: 'SET_LOADING', payload: false });
-          return false;
+      if (!sb) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        return false;
+      }
+
+      const res = await signInWithEmailPassword(username, password);
+      if (!res.ok) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        return false;
+      }
+      // Optional: activity log
+      try {
+      try {
+        const sb = getSupabase();
+        if (sb) {
+          await sb.from('activity_logs').insert({ employee_id: res.user.id, action: 'Đăng nhập hệ thống', details: `Nhân viên ${res.user.username} đăng nhập` });
         }
-        Database.setAuthToken(res.sessionToken);
-        // Log activity for Supabase-auth login
-        try {
-          Database.saveActivityLog({
-            employeeId: res.user.id,
-            action: 'Đăng nhập hệ thống',
-            details: `Nhân viên ${res.user.username} đăng nhập`
-          });
-        } catch {}
-        dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
-        try { await hydrateAllFromSupabase(); } catch {}
-        try { if (unsubRef.current) { unsubRef.current(); } unsubRef.current = subscribeRealtime(); } catch {}
-        return true;
-      }
-
-      const inputUsername = username.trim();
-      const inputPassword = password;
-
-      // Throttling đơn giản: 5 lần trong 30s theo username
-      const key = 'bongmin_login_attempts';
-      const now = Date.now();
-      const windowMs = 30000;
-      const limit = 5;
-      const raw = localStorage.getItem(key);
-      const arr = raw ? (JSON.parse(raw) as Array<{ u: string; t: number }>) : [];
-      const recent = arr.filter(x => now - x.t < windowMs && x.u === inputUsername);
-      if (recent.length >= limit) {
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return false;
-      }
-
-      const employees = Database.getEmployees();
-      const employee = employees.find(e => e.username === inputUsername);
-      if (!employee) {
-        localStorage.setItem(key, JSON.stringify([...recent, { u: inputUsername, t: now }]));
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return false;
-      }
-
-      const { verifyPassword, serializePasswordRecord, createPasswordRecord, createAppToken } = await import('../utils/auth');
-      const result = await verifyPassword(inputPassword, employee.passwordHash);
-      if (!result.ok) {
-        localStorage.setItem(key, JSON.stringify([...recent, { u: inputUsername, t: now }]));
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return false;
-      }
-
-      // Auto-upgrade legacy plaintext to PBKDF2
-      if (result.upgraded) {
-        const upgradedStr = serializePasswordRecord(result.upgraded);
-        Database.updateEmployee(employee.id, { passwordHash: upgradedStr });
-      }
-
-      const token = createAppToken({ uid: employee.id });
-      Database.setAuthToken(token);
-
-      Database.saveActivityLog({
-        employeeId: employee.id,
-        action: 'Đăng nhập hệ thống',
-        details: `Nhân viên ${employee.username} đăng nhập`
-      });
-
-      dispatch({ type: 'LOGIN_SUCCESS', payload: { user: employee, token } });
+      } catch {}
+      } catch {}
+      dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
+      try { await hydrateAllFromSupabase(); } catch {}
+      try { if (unsubRef.current) { unsubRef.current(); } unsubRef.current = subscribeRealtime(); } catch {}
       return true;
     } catch (error) {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -216,17 +137,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try { if (unsubRef.current) { unsubRef.current(); unsubRef.current = null; } } catch {}
     if (state.user) {
-      // Log activity
-      Database.saveActivityLog({
-        employeeId: state.user.id,
-        action: 'Đăng xuất hệ thống',
-        details: `Nhân viên ${state.user.username} đăng xuất`
-      });
+      try {
+        const sb = getSupabase();
+        if (sb) {
+          sb.from('activity_logs').insert({ employee_id: state.user.id, action: 'Đăng xuất hệ thống', details: `Nhân viên ${state.user.username} đăng xuất` });
+        }
+      } catch {}
     }
-    
-    Database.clearAuthToken();
     dispatch({ type: 'LOGOUT' });
   };
+
+  // removed setRole; role changes are now managed via SQL/admin
 
   // Idle timeout with rolling refresh (30 minutes)
   useEffect(() => {
@@ -242,26 +163,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const IDLE_TTL_MS = 30 * 60 * 1000; // 30 minutes
     const MIN_REFRESH_GAP_MS = 60 * 1000; // don't refresh more than once per minute
 
-    const refreshTokenIfNeeded = async (force: boolean = false) => {
-      try {
-        const rawToken = Database.getAuthToken();
-        const { parseAppToken, createAppToken } = await import('../utils/auth');
-        const parsed = parseAppToken(rawToken);
-        const now = Date.now();
-        if (!parsed) {
-          logout();
-          return;
-        }
-        const timeLeft = parsed.exp - now;
-        if (force || timeLeft < IDLE_TTL_MS / 2) {
-          if (!force && now - lastRefreshAt < MIN_REFRESH_GAP_MS) return;
-          lastRefreshAt = now;
-          const newTok = createAppToken({ uid: parsed.uid, ttlMs: IDLE_TTL_MS });
-          Database.setAuthToken(newTok);
-        }
-      } catch {
-        logout();
-      }
+    const refreshTokenIfNeeded = async (_force: boolean = false) => {
+      // Local token flow removed; nothing to refresh when Supabase is disabled
+      return;
     };
 
     const activity = () => {
@@ -329,7 +233,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     logout,
     isManager,
-    isEmployee
+    isEmployee,
+    
   };
 
   return (

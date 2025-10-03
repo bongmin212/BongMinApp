@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { NotificationProvider } from './contexts/NotificationContext';
-import { Database } from './utils/database';
 import LoginForm from './components/Auth/LoginForm';
 import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
@@ -12,7 +11,7 @@ import PackageList from './components/Products/PackageList';
 import WarehouseList from './components/Products/WarehouseList';
 import CustomerList from './components/Customers/CustomerList';
 import OrderList from './components/Orders/OrderList';
-import EmployeeList from './components/Employees/EmployeeList';
+// removed EmployeeList and UserManagement per requirements
 import ActivityLogList from './components/ActivityLogs/ActivityLogList';
 import WarrantyList from './components/Orders/WarrantyList';
 import Dashboard from './components/Dashboard/Dashboard';
@@ -24,13 +23,7 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
-    // Only seed local demo data when NOT using Supabase
-    try {
-      const sb = getSupabase();
-      if (!sb) {
-        Database.initializeDefaultData();
-      }
-    } catch {}
+    // Supabase-only mode: no local/demo seeding
   }, []);
 
   if (!state.isAuthenticated) {
@@ -53,8 +46,7 @@ const AppContent: React.FC = () => {
         return <OrderList />;
       case 'warranties':
         return <WarrantyList />;
-      case 'employees':
-        return <EmployeeList />;
+      // employees and user-management removed
       case 'activity-logs':
         return <ActivityLogList />;
       case 'expenses':

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Customer, CustomerType, CustomerSource, CUSTOMER_TYPES, CUSTOMER_SOURCES } from '../../types';
-import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 import CustomerForm from './CustomerForm';
 import CustomerOrderHistory from './CustomerOrderHistory';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,7 +28,7 @@ const CustomerList: React.FC = () => {
     loadCustomers();
   }, []);
 
-  // Initialize state from URL and localStorage
+  // Initialize state from URL (no localStorage)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -37,10 +37,7 @@ const CustomerList: React.FC = () => {
       const s = (params.get('source') || '') as CustomerSource | '';
       const p = parseInt(params.get('page') || '1', 10);
       const lsLimit = params.get('limit');
-      const savedLimit = parseInt(
-        (lsLimit || localStorage.getItem('customerList.limit') || '10'),
-        10
-      );
+      const savedLimit = parseInt((lsLimit || '10'), 10);
       if (!Number.isNaN(savedLimit) && savedLimit > 0) {
         setLimit(savedLimit);
       }
@@ -65,12 +62,7 @@ const CustomerList: React.FC = () => {
     setPage(1);
   }, [debouncedSearchTerm, filterType, filterSource]);
 
-  // Persist limit
-  useEffect(() => {
-    try {
-      localStorage.setItem('customerList.limit', String(limit));
-    } catch {}
-  }, [limit]);
+  // No localStorage persistence
 
   // Sync URL with state
   useEffect(() => {
@@ -87,10 +79,30 @@ const CustomerList: React.FC = () => {
     } catch {}
   }, [debouncedSearchTerm, filterType, filterSource, page, limit]);
 
-  const loadCustomers = () => {
-    const allCustomers = Database.getCustomers();
+  const loadCustomers = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const { data } = await sb.from('customers').select('*').order('created_at', { ascending: true });
+    const allCustomers = (data || []).map((r: any) => ({
+      ...r,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Customer[];
     setCustomers(allCustomers);
   };
+
+  // Realtime subscribe
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const channel = sb
+      .channel('realtime:customers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => {
+        loadCustomers();
+      })
+      .subscribe();
+    return () => { try { channel.unsubscribe(); } catch {} };
+  }, []);
 
   const handleCreate = () => {
     setEditingCustomer(null);
@@ -113,19 +125,22 @@ const CustomerList: React.FC = () => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa khách hàng này?',
       onConfirm: () => {
-        const snapshot = customers.find(c => c.id === id) || null;
-        const success = Database.deleteCustomer(id);
-        if (success) {
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Xóa khách hàng',
-            details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}`
-          });
-          loadCustomers();
-          notify('Xóa khách hàng thành công', 'success');
-        } else {
-          notify('Không thể xóa khách hàng', 'error');
-        }
+        (async () => {
+          const sb = getSupabase();
+          if (!sb) return notify('Không thể xóa khách hàng', 'error');
+          const snapshot = customers.find(c => c.id === id) || null;
+          const { error } = await sb.from('customers').delete().eq('id', id);
+          if (!error) {
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
+            } catch {}
+            loadCustomers();
+            notify('Xóa khách hàng thành công', 'success');
+          } else {
+            notify('Không thể xóa khách hàng', 'error');
+          }
+        })();
       }
     });
   };
@@ -144,17 +159,22 @@ const CustomerList: React.FC = () => {
     setConfirmState({
       message: `Xóa ${count} khách hàng đã chọn?`,
       onConfirm: () => {
-        const beforeCount = Database.getCustomers().length;
-        selectedIds.forEach(id => Database.deleteCustomer(id));
-        const afterCount = Database.getCustomers().length;
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Xóa hàng loạt khách hàng',
-          details: `count=${beforeCount - afterCount}; ids=${selectedIds.join(',')}`
-        });
-        setSelectedIds([]);
-        loadCustomers();
-        notify('Đã xóa khách hàng đã chọn', 'success');
+        (async () => {
+          const sb = getSupabase();
+          if (!sb) return notify('Không thể xóa khách hàng', 'error');
+          const { error } = await sb.from('customers').delete().in('id', selectedIds);
+          if (!error) {
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt khách hàng', details: `ids=${selectedIds.join(',')}` });
+            } catch {}
+            setSelectedIds([]);
+            loadCustomers();
+            notify('Đã xóa khách hàng đã chọn', 'success');
+          } else {
+            notify('Không thể xóa khách hàng', 'error');
+          }
+        })();
       }
     });
   };

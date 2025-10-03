@@ -84,11 +84,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
           const updated = Database.updateProduct(product.id, formData);
           if (updated) {
             const detail = [`productId=${product.id}; productCode=${product.code}`, ...changedEntries].join('; ');
-            Database.saveActivityLog({
-              employeeId: state.user?.id || 'system',
-              action: 'Cập nhật sản phẩm',
-              details: detail
-            });
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật sản phẩm', details: detail });
+            } catch {}
             notify('Cập nhật sản phẩm thành công', 'success');
             onSuccess();
           } else {
@@ -101,11 +100,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
       } else {
         // Create new product
         const created = Database.saveProduct({ ...formData, code: ensuredCode });
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Tạo sản phẩm',
-          details: `productId=${created.id}; productCode=${created.code}; name=${created.name}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo sản phẩm', details: `productId=${created.id}; productCode=${created.code}; name=${created.name}` });
+        } catch {}
         notify('Thêm sản phẩm thành công', 'success');
         onSuccess();
       }

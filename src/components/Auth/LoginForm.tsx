@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 
 interface LoginFormProps {
@@ -17,13 +16,8 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const [isFirstRun, setIsFirstRun] = useState(false);
 
   useEffect(() => {
-    try {
-      // If Supabase is configured, skip local first-run UI entirely
-      const sb = getSupabase();
-      setIsFirstRun(false);
-    } catch {
-      setIsFirstRun(false);
-    }
+    // Supabase-only mode
+    setIsFirstRun(false);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

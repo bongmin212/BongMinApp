@@ -48,11 +48,10 @@ const PackageList: React.FC = () => {
       onConfirm: () => {
         const success = Database.deletePackage(id);
         if (success) {
-          Database.saveActivityLog({
-            employeeId: state.user?.id || 'system',
-            action: 'Xóa gói sản phẩm',
-            details: `packageId=${id}`
-          });
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa gói sản phẩm', details: `packageId=${id}` });
+          } catch {}
           loadData();
           notify('Xóa gói sản phẩm thành công', 'success');
         } else {
@@ -76,7 +75,10 @@ const PackageList: React.FC = () => {
       message: `Xóa ${selectedIds.length} gói sản phẩm đã chọn?`,
       onConfirm: () => {
         selectedIds.forEach(id => Database.deletePackage(id));
-        Database.saveActivityLog({ employeeId: state.user?.id || 'system', action: 'Xóa hàng loạt gói', details: `ids=${selectedIds.join(',')}` });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt gói', details: `ids=${selectedIds.join(',')}` });
+        } catch {}
         setSelectedIds([]);
         loadData();
         notify('Đã xóa gói đã chọn', 'success');

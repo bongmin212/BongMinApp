@@ -138,11 +138,10 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         if (!updated) throw new Error('Không thể cập nhật kho');
         // Propagate changes to linked orders
         Database.refreshOrdersForInventory(item.id);
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Sửa kho',
-          details: `inventoryId=${item.id}; code=${formData.code}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Sửa kho', details: `inventoryId=${item.id}; code=${formData.code}` });
+        } catch {}
         onSuccess();
       } else {
         const created = Database.saveInventoryItem({
@@ -151,11 +150,10 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           productId: selectedProduct,
           // profiles auto-generated from package config if applicable
         });
-        Database.saveActivityLog({
-          employeeId: state.user?.id || 'system',
-          action: 'Nhập kho',
-          details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryId=${created.id}; inventoryCode=${created.code}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}`
-        });
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryId=${created.id}; inventoryCode=${created.code}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
+        } catch {}
         onSuccess();
       }
     } catch (error) {

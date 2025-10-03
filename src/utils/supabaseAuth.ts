@@ -24,6 +24,43 @@ function mapRowToEmployee(row: any): Employee {
   };
 }
 
+async function provisionEmployeeRow(
+  sb: ReturnType<typeof getSupabase>,
+  params: { userId: string; emailFallback: string }
+): Promise<{ ok: true; row: any } | { ok: false }> {
+  if (!sb) return { ok: false };
+  const { userId, emailFallback } = params;
+  const baseCode = 'NV' + String((userId || '').replace(/[^a-z0-9]/gi, '').slice(0, 8) || '00000000').toUpperCase();
+  const tryUsernames: string[] = [];
+  const email = (emailFallback || '').trim();
+  if (email) tryUsernames.push(email);
+  tryUsernames.push(userId); // guaranteed unique fallback
+
+  // Attempt up to two usernames to avoid unique violations
+  for (let i = 0; i < tryUsernames.length; i++) {
+    const username = tryUsernames[i];
+    const code = i === 0 ? baseCode : baseCode + String(i + 1);
+    const { data: created, error } = await sb
+      .from('employees')
+      .insert({
+        id: userId,
+        code,
+        username,
+        role: 'EMPLOYEE',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('*')
+      .single();
+    if (!error && created) return { ok: true, row: created };
+    // If unique violation, retry with next candidate; otherwise abort
+    const msg = String(error?.message || '').toLowerCase();
+    const isUniqueViolation = msg.includes('duplicate key') || msg.includes('unique constraint');
+    if (!isUniqueViolation) break;
+  }
+  return { ok: false };
+}
+
 export async function signInWithEmailPassword(email: string, password: string): Promise<SupabaseSignInResult> {
   const sb = getSupabase();
   if (!sb) {
@@ -48,29 +85,13 @@ export async function signInWithEmailPassword(email: string, password: string): 
       return { ok: true, sessionToken: data.session.access_token, user: mapRowToEmployee(row) };
     }
 
-    // Auto-provision if missing: decide smart role
-    const metaRoleRaw: any = (data.session.user as any)?.app_metadata?.role ?? (data.session.user as any)?.user_metadata?.role;
-    const metaRole = normalizeRole(metaRoleRaw);
-    // First real employee becomes MANAGER (if table empty)
-    const { count } = await sb.from('employees').select('*', { count: 'exact', head: true });
-    const decidedRole = (count || 0) === 0 ? 'MANAGER' : metaRole;
-    const decidedUsername = data.session.user.email || email;
-    const decidedCode = 'NV' + String((data.session.user.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 6) || '000000').toUpperCase();
-
-    const { data: created, error: insErr } = await sb
-      .from('employees')
-      .insert({
-        id: data.session.user.id,
-        code: decidedCode,
-        username: decidedUsername,
-        role: decidedRole,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('*')
-      .single();
-    if (!insErr && created) {
-      return { ok: true, sessionToken: data.session.access_token, user: mapRowToEmployee(created) };
+    // Auto-provision if missing with safe fallbacks for unique constraints
+    const provision = await provisionEmployeeRow(sb, {
+      userId: data.session.user.id,
+      emailFallback: data.session.user.email || email
+    });
+    if (provision.ok) {
+      return { ok: true, sessionToken: data.session.access_token, user: mapRowToEmployee(provision.row) };
     }
   } catch (e) {
     console.warn('[SupabaseAuth] employees lookup/provision failed, using fallback', e);
@@ -112,27 +133,12 @@ export async function getSessionUser(): Promise<{ ok: true; token: string; user:
     }
 
     // Auto-provision here as well to self-heal sessions
-    const metaRoleRaw: any = (data.session.user as any)?.app_metadata?.role ?? (data.session.user as any)?.user_metadata?.role;
-    const metaRole = normalizeRole(metaRoleRaw);
-    const { count } = await sb.from('employees').select('*', { count: 'exact', head: true });
-    const decidedRole = (count || 0) === 0 ? 'MANAGER' : metaRole;
-    const decidedUsername = email || data.session.user.id;
-    const decidedCode = 'NV' + String((data.session.user.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 6) || '000000').toUpperCase();
-
-    const { data: created, error: insErr } = await sb
-      .from('employees')
-      .insert({
-        id: data.session.user.id,
-        code: decidedCode,
-        username: decidedUsername,
-        role: decidedRole,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .select('*')
-      .single();
-    if (!insErr && created) {
-      return { ok: true, token: data.session.access_token, user: mapRowToEmployee(created) };
+    const provision = await provisionEmployeeRow(sb, {
+      userId: data.session.user.id,
+      emailFallback: email
+    });
+    if (provision.ok) {
+      return { ok: true, token: data.session.access_token, user: mapRowToEmployee(provision.row) };
     }
   } catch (e) {
     console.warn('[SupabaseAuth] getSessionUser lookup/provision failed, using fallback', e);
