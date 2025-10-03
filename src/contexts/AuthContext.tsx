@@ -290,6 +290,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [state.isAuthenticated]);
 
+  // Live-refresh current user's role from Supabase when their employees row changes
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb || !state.user?.id) return;
+
+    const channel = sb
+      .channel('realtime:self-role')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees', filter: `id=eq.${state.user.id}` },
+        async () => {
+          try {
+            const res = await getSessionUser();
+            if (res.ok) {
+              dispatch({ type: 'LOAD_USER', payload: { user: res.user, token: res.token } });
+            }
+          } catch {}
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { channel.unsubscribe(); } catch {}
+    };
+  }, [state.user?.id]);
+
   const isManager = (): boolean => {
     return state.user?.role === 'MANAGER';
   };
