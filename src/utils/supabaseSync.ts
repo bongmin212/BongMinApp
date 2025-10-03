@@ -3,7 +3,7 @@ import { Database } from './database';
 import { ActivityLog, Customer, Employee, Expense, InventoryItem, Order, Product, ProductPackage, Warranty } from '../types';
 
 // snake_case <-> camelCase mapping helpers
-function toCamel<T = any>(row: any): T {
+export function toCamel<T = any>(row: any): T {
   if (!row || typeof row !== 'object') return row;
   const out: any = Array.isArray(row) ? [] : {};
   Object.keys(row).forEach(k => {
@@ -13,7 +13,7 @@ function toCamel<T = any>(row: any): T {
   return out as T;
 }
 
-function toSnake<T = any>(obj: any): T {
+export function toSnake<T = any>(obj: any): T {
   if (!obj || typeof obj !== 'object') return obj;
   const out: any = Array.isArray(obj) ? [] : {};
   Object.keys(obj).forEach(k => {
@@ -23,7 +23,7 @@ function toSnake<T = any>(obj: any): T {
   return out as T;
 }
 
-function reviveDates<T extends { createdAt?: any; updatedAt?: any }>(x: T): T {
+export function reviveDates<T extends { createdAt?: any; updatedAt?: any }>(x: T): T {
   const out: any = { ...x };
   if (out.createdAt) out.createdAt = new Date(out.createdAt);
   if (out.updatedAt) out.updatedAt = new Date(out.updatedAt);
