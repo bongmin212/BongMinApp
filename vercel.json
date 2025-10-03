@@ -1,8 +1,12 @@
 {
   "version": 2,
-  "env": {
-    "CI": "false"
+  "build": {
+    "env": {
+      "CI": "false",
+      "DISABLE_ESLINT_PLUGIN": "true"
+    }
   },
+  "regions": ["hkg1"],
   "builds": [
     {
       "src": "package.json",
