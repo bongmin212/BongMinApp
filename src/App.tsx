@@ -17,14 +17,20 @@ import ActivityLogList from './components/ActivityLogs/ActivityLogList';
 import WarrantyList from './components/Orders/WarrantyList';
 import Dashboard from './components/Dashboard/Dashboard';
 import ExpenseList from './components/Expenses/ExpenseList';
+import { getSupabase } from './utils/supabaseClient';
 
 const AppContent: React.FC = () => {
   const { state } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
-    // Initialize default data on first load
-    Database.initializeDefaultData();
+    // Only seed local demo data when NOT using Supabase
+    try {
+      const sb = getSupabase();
+      if (!sb) {
+        Database.initializeDefaultData();
+      }
+    } catch {}
   }, []);
 
   if (!state.isAuthenticated) {

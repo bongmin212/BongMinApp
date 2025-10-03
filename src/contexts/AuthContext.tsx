@@ -69,12 +69,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // Defensive: never let an init error keep the app stuck on loading
-        try {
-          Database.initializeDefaultData();
-        } catch {
-          // ignore init errors – app can still proceed to login
+        // Prefer Supabase session if configured
+        const sb = getSupabase();
+        if (sb) {
+          const { data } = await sb.auth.getSession();
+          if (data?.session) {
+            // load profile from employees by email
+            const email = data.session.user.email || '';
+            const { data: row } = await sb.from('employees').select('*').eq('username', email).single();
+            if (row) {
+              const user: Employee = {
+                id: row.id,
+                code: row.code,
+                username: row.username,
+                passwordHash: row.password_hash || '',
+                role: row.role,
+                createdAt: new Date(row.created_at),
+                updatedAt: new Date(row.updated_at)
+              };
+              dispatch({ type: 'LOAD_USER', payload: { user, token: data.session.access_token } });
+              return;
+            }
+          }
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return;
         }
+
+        // Fallback: local token flow
+        // Defensive: never let an init error keep the app stuck on loading
+        try { Database.initializeDefaultData(); } catch {}
 
         const rawToken = Database.getAuthToken();
         if (rawToken) {
@@ -225,6 +248,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Idle timeout with rolling refresh (30 minutes)
   useEffect(() => {
     if (!state.isAuthenticated) return;
+    const sb = getSupabase();
+    if (sb) {
+      // Supabase handles token rotation; no custom idle refresh
+      return;
+    }
 
     let lastRefreshAt = 0;
     let intervalId: number | undefined;
