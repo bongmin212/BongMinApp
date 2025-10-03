@@ -3,6 +3,7 @@ import { Employee, AuthState } from '../types';
 import { Database } from '../utils/database';
 import { getSupabase } from '../utils/supabaseClient';
 import { getSessionUser, signInWithEmailPassword } from '../utils/supabaseAuth';
+import { hydrateAllFromSupabase } from '../utils/supabaseSync';
 
 interface AuthContextType {
   state: AuthState;
@@ -76,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const res = await getSessionUser();
           if (res.ok) {
             dispatch({ type: 'LOAD_USER', payload: { user: res.user, token: res.token } });
+            try { await hydrateAllFromSupabase(); } catch {}
             return;
           }
           dispatch({ type: 'SET_LOADING', payload: false });
@@ -144,6 +146,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         } catch {}
         dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
+        try { await hydrateAllFromSupabase(); } catch {}
         return true;
       }
 

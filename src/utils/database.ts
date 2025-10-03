@@ -15,6 +15,7 @@ import {
   ExpenseFormData
 } from '../types';
 import { Warranty, WarrantyFormData } from '../types';
+import { mirrorDelete, mirrorInsert, mirrorUpdate, mirrorActivityLog } from './supabaseSync';
 
 const STORAGE_KEYS = {
   PRODUCTS: 'bongmin_products',
@@ -124,6 +125,9 @@ export class Database {
     return d;
   }
   // Warranties
+  static setWarranties(items: Warranty[]): void {
+    saveToStorage(STORAGE_KEYS.WARRANTIES, items);
+  }
   static getWarranties(): Warranty[] {
     return getFromStorage(STORAGE_KEYS.WARRANTIES, []).map((w: any) => ({
       ...w,
@@ -153,6 +157,12 @@ export class Database {
     };
     warranties.push(newWarranty);
     saveToStorage(STORAGE_KEYS.WARRANTIES, warranties);
+    // mirror
+    mirrorInsert('warranties', {
+      ...newWarranty,
+      createdAt: newWarranty.createdAt.toISOString(),
+      updatedAt: newWarranty.updatedAt.toISOString()
+    });
     return newWarranty;
   }
 
@@ -168,6 +178,7 @@ export class Database {
     
     warranties[index] = { ...warranties[index], ...updates, updatedAt: new Date() };
     saveToStorage(STORAGE_KEYS.WARRANTIES, warranties);
+    mirrorUpdate('warranties', id, warranties[index]);
     return warranties[index];
   }
 
@@ -176,9 +187,13 @@ export class Database {
     const filtered = warranties.filter(w => w.id !== id);
     if (filtered.length === warranties.length) return false;
     saveToStorage(STORAGE_KEYS.WARRANTIES, filtered);
+    mirrorDelete('warranties', id);
     return true;
   }
   // Inventory
+  static setInventory(items: InventoryItem[]): void {
+    saveToStorage(STORAGE_KEYS.INVENTORY, items);
+  }
   static getInventory(): InventoryItem[] {
     return getFromStorage(STORAGE_KEYS.INVENTORY, []).map((i: any) => ({
       ...i,
@@ -282,6 +297,13 @@ export class Database {
     };
     items.push(newItem);
     saveToStorage(STORAGE_KEYS.INVENTORY, items);
+    mirrorInsert('inventory', {
+      ...newItem,
+      purchaseDate: newItem.purchaseDate.toISOString(),
+      expiryDate: newItem.expiryDate.toISOString(),
+      createdAt: newItem.createdAt.toISOString(),
+      updatedAt: newItem.updatedAt.toISOString()
+    });
     return newItem;
   }
 
@@ -297,6 +319,7 @@ export class Database {
     
     items[index] = { ...items[index], ...updates, updatedAt: new Date() };
     saveToStorage(STORAGE_KEYS.INVENTORY, items);
+    mirrorUpdate('inventory', id, items[index]);
     return items[index];
   }
 
@@ -331,6 +354,7 @@ export class Database {
       return o;
     });
     if (changed) saveToStorage(STORAGE_KEYS.ORDERS, nextOrders);
+    if (changed) nextOrders.forEach(o => mirrorUpdate('orders', o.id, o));
   }
 
   // Account-based inventory helpers
@@ -491,6 +515,9 @@ export class Database {
   }
 
   // Products
+  static setProducts(items: Product[]): void {
+    saveToStorage(STORAGE_KEYS.PRODUCTS, items);
+  }
   static getProducts(): Product[] {
     return getFromStorage(STORAGE_KEYS.PRODUCTS, []);
   }
@@ -512,6 +539,7 @@ export class Database {
     };
     products.push(newProduct);
     saveToStorage(STORAGE_KEYS.PRODUCTS, products);
+    mirrorInsert('products', newProduct);
     return newProduct;
   }
 
@@ -531,6 +559,7 @@ export class Database {
       updatedAt: new Date()
     };
     saveToStorage(STORAGE_KEYS.PRODUCTS, products);
+    mirrorUpdate('products', id, products[index]);
     return products[index];
   }
 
@@ -540,10 +569,14 @@ export class Database {
     if (filtered.length === products.length) return false;
     
     saveToStorage(STORAGE_KEYS.PRODUCTS, filtered);
+    mirrorDelete('products', id);
     return true;
   }
 
   // Packages
+  static setPackages(items: ProductPackage[]): void {
+    saveToStorage(STORAGE_KEYS.PACKAGES, items);
+  }
   static getPackages(): ProductPackage[] {
     return getFromStorage(STORAGE_KEYS.PACKAGES, []);
   }
@@ -569,6 +602,7 @@ export class Database {
     };
     packages.push(newPackage);
     saveToStorage(STORAGE_KEYS.PACKAGES, packages);
+    mirrorInsert('packages', newPackage);
     return newPackage;
   }
 
@@ -594,6 +628,7 @@ export class Database {
     } as ProductPackage;
     packages[index] = next;
     saveToStorage(STORAGE_KEYS.PACKAGES, packages);
+    mirrorUpdate('packages', id, next);
     // Propagate slot count to inventory items of this package (only account-based)
     try {
       const items = this.getInventory();
@@ -626,10 +661,14 @@ export class Database {
     if (filtered.length === packages.length) return false;
     
     saveToStorage(STORAGE_KEYS.PACKAGES, filtered);
+    mirrorDelete('packages', id);
     return true;
   }
 
   // Customers
+  static setCustomers(items: Customer[]): void {
+    saveToStorage(STORAGE_KEYS.CUSTOMERS, items);
+  }
   static getCustomers(): Customer[] {
     return getFromStorage(STORAGE_KEYS.CUSTOMERS, []);
   }
@@ -651,6 +690,7 @@ export class Database {
     };
     customers.push(newCustomer);
     saveToStorage(STORAGE_KEYS.CUSTOMERS, customers);
+    mirrorInsert('customers', newCustomer);
     return newCustomer;
   }
 
@@ -670,6 +710,7 @@ export class Database {
       updatedAt: new Date()
     };
     saveToStorage(STORAGE_KEYS.CUSTOMERS, customers);
+    mirrorUpdate('customers', id, customers[index]);
     return customers[index];
   }
 
@@ -679,10 +720,14 @@ export class Database {
     if (filtered.length === customers.length) return false;
     
     saveToStorage(STORAGE_KEYS.CUSTOMERS, filtered);
+    mirrorDelete('customers', id);
     return true;
   }
 
   // Orders
+  static setOrders(items: Order[]): void {
+    saveToStorage(STORAGE_KEYS.ORDERS, items);
+  }
   static getOrders(): Order[] {
     return getFromStorage(STORAGE_KEYS.ORDERS, []);
   }
@@ -711,6 +756,7 @@ export class Database {
     };
     orders.push(newOrder);
     saveToStorage(STORAGE_KEYS.ORDERS, orders);
+    mirrorInsert('orders', newOrder);
     return newOrder;
   }
 
@@ -730,6 +776,7 @@ export class Database {
       updatedAt: new Date()
     };
     saveToStorage(STORAGE_KEYS.ORDERS, orders);
+    mirrorUpdate('orders', id, orders[index]);
     return orders[index];
   }
 
@@ -785,6 +832,7 @@ export class Database {
 
     orders[index] = nextOrder;
     saveToStorage(STORAGE_KEYS.ORDERS, orders);
+    mirrorUpdate('orders', nextOrder.id, nextOrder);
 
     // Sync account-based slot expiry if applicable
     try {
@@ -853,10 +901,14 @@ export class Database {
 
     const filtered = orders.filter(o => o.id !== id);
     saveToStorage(STORAGE_KEYS.ORDERS, filtered);
+    mirrorDelete('orders', id);
     return true;
   }
 
   // Employees
+  static setEmployees(items: Employee[]): void {
+    saveToStorage(STORAGE_KEYS.EMPLOYEES, items);
+  }
   static getEmployees(): Employee[] {
     return getFromStorage(STORAGE_KEYS.EMPLOYEES, []);
   }
@@ -878,6 +930,7 @@ export class Database {
     };
     employees.push(newEmployee);
     saveToStorage(STORAGE_KEYS.EMPLOYEES, employees);
+    mirrorInsert('employees', newEmployee);
     return newEmployee;
   }
 
@@ -897,6 +950,7 @@ export class Database {
       updatedAt: new Date()
     };
     saveToStorage(STORAGE_KEYS.EMPLOYEES, employees);
+    mirrorUpdate('employees', id, employees[index]);
     return employees[index];
   }
 
@@ -906,10 +960,14 @@ export class Database {
     if (filtered.length === employees.length) return false;
     
     saveToStorage(STORAGE_KEYS.EMPLOYEES, filtered);
+    mirrorDelete('employees', id);
     return true;
   }
 
   // Activity Logs
+  static setActivityLogs(items: ActivityLog[]): void {
+    saveToStorage(STORAGE_KEYS.ACTIVITY_LOGS, items);
+  }
   static getActivityLogs(): ActivityLog[] {
     return getFromStorage(STORAGE_KEYS.ACTIVITY_LOGS, []);
   }
@@ -927,6 +985,7 @@ export class Database {
     };
     logs.push(newLog);
     saveToStorage(STORAGE_KEYS.ACTIVITY_LOGS, logs);
+    mirrorActivityLog(newLog);
     return newLog;
   }
 
