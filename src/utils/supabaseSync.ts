@@ -84,10 +84,49 @@ export async function mirrorInsert(table: string, payload: any): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
   try {
-    const snake = toSnake(payload);
+    // Normalize payload: convert Dates to ISO strings and drop non-UUID ids to allow DB defaults
+    const normalized = (() => {
+      const clone: any = Array.isArray(payload) ? payload.map((x: any) => ({ ...x })) : { ...payload };
+
+      const coerce = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        Object.keys(obj).forEach((k) => {
+          const v = obj[k];
+          if (v instanceof Date) {
+            obj[k] = v.toISOString();
+          } else if (v && typeof v === 'object' && !Array.isArray(v)) {
+            coerce(v);
+          }
+        });
+        return obj;
+      };
+
+      const coerceId = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
+        if (Object.prototype.hasOwnProperty.call(obj, 'id')) {
+          const idVal = obj.id;
+          if (idVal && typeof idVal === 'string' && !looksLikeUuid(idVal)) {
+            // Let DB generate UUID if our local id isn't a UUID
+            delete obj.id;
+          }
+        }
+      };
+
+      if (Array.isArray(clone)) {
+        clone.forEach((item) => { coerce(item); coerceId(item); });
+      } else {
+        coerce(clone);
+        coerceId(clone);
+      }
+      return clone;
+    })();
+
+    const snake = toSnake(normalized);
     await sb.from(table).insert(snake);
-  } catch (e) {
-    console.warn('[SupabaseSync] mirrorInsert failed', table, e);
+  } catch (e: any) {
+    const message = e?.message || e?.error || String(e);
+    console.warn('[SupabaseSync] mirrorInsert failed', { table, message, payloadKeys: Object.keys(payload || {}) });
   }
 }
 
