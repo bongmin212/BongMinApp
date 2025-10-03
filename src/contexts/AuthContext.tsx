@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { Employee, AuthState } from '../types';
 import { Database } from '../utils/database';
 import { getSupabase } from '../utils/supabaseClient';
+import { getSessionUser, signInWithEmailPassword } from '../utils/supabaseAuth';
 
 interface AuthContextType {
   state: AuthState;
@@ -72,51 +73,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Prefer Supabase session if configured
         const sb = getSupabase();
         if (sb) {
-          const { data } = await sb.auth.getSession();
-          if (data?.session) {
-            // Try employees table, but don't block login if it's missing/mismatched
-            const email = data.session.user.email || '';
-            try {
-              let { data: row } = await sb
-                .from('employees')
-                .select('*')
-                .eq('username', email)
-                .single();
-              if (!row) {
-                const up = await sb
-                  .from('employees')
-                  .upsert({ id: data.session.user.id, code: 'NV001', username: email, role: 'MANAGER' }, { onConflict: 'username' })
-                  .select('*')
-                  .single();
-                row = up.data as any;
-              }
-              if (row) {
-                const user: Employee = {
-                  id: row.id,
-                  code: row.code,
-                  username: row.username,
-                  passwordHash: row.password_hash || '',
-                  role: row.role,
-                  createdAt: new Date(row.created_at),
-                  updatedAt: new Date(row.updated_at)
-                };
-                dispatch({ type: 'LOAD_USER', payload: { user, token: data.session.access_token } });
-                return;
-              }
-            } catch {
-              // Fallback to Supabase user only when employees table is not ready
-              const user: Employee = {
-                id: data.session.user.id,
-                code: 'NV001',
-                username: email || data.session.user.id,
-                passwordHash: '',
-                role: 'MANAGER',
-                createdAt: new Date(),
-                updatedAt: new Date()
-              };
-              dispatch({ type: 'LOAD_USER', payload: { user, token: data.session.access_token } });
-              return;
-            }
+          const res = await getSessionUser();
+          if (res.ok) {
+            dispatch({ type: 'LOAD_USER', payload: { user: res.user, token: res.token } });
+            return;
           }
           dispatch({ type: 'SET_LOADING', payload: false });
           return;
@@ -169,60 +129,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Prefer Supabase if configured
       const sb = getSupabase();
       if (sb) {
-        const { data, error } = await sb.auth.signInWithPassword({ email: username, password });
-        if (error || !data.session) {
+        const res = await signInWithEmailPassword(username, password);
+        if (!res.ok) {
           dispatch({ type: 'SET_LOADING', payload: false });
           return false;
         }
-        try {
-          // Fetch employee profile (auto-provision if missing)
-          let { data: row } = await sb
-            .from('employees')
-            .select('*')
-            .eq('username', username)
-            .single();
-          if (!row) {
-            const up = await sb
-              .from('employees')
-              .upsert({ id: data.session.user.id, code: 'NV001', username, role: 'MANAGER' }, { onConflict: 'username' })
-              .select('*')
-              .single();
-            row = up.data as any;
-          }
-          if (row) {
-            const user: Employee = {
-              id: row.id,
-              code: row.code,
-              username: row.username,
-              passwordHash: row.password_hash || '',
-              role: row.role,
-              createdAt: new Date(row.created_at),
-              updatedAt: new Date(row.updated_at)
-            };
-            const token = data.session.access_token;
-            Database.setAuthToken(token);
-            dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token } });
-            return true;
-          }
-        } catch {
-          // If employees table fails, still log in with Supabase identity
-          const email = data.session.user.email || username;
-          const user: Employee = {
-            id: data.session.user.id,
-            code: 'NV001',
-            username: email,
-            passwordHash: '',
-            role: 'MANAGER',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          const token = data.session.access_token;
-          Database.setAuthToken(token);
-          dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token } });
-          return true;
-        }
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return false;
+        Database.setAuthToken(res.sessionToken);
+        dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
+        return true;
       }
 
       const inputUsername = username.trim();
