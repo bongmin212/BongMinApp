@@ -67,30 +67,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Check for existing session on app start (validate token exp, bind user)
   useEffect(() => {
     const checkAuth = async () => {
-      Database.initializeDefaultData();
-      const rawToken = Database.getAuthToken();
-      if (rawToken) {
+      try {
+        // Defensive: never let an init error keep the app stuck on loading
         try {
-          const { parseAppToken } = await import('../utils/auth');
-          const parsed = parseAppToken(rawToken);
-          if (!parsed) {
+          Database.initializeDefaultData();
+        } catch {
+          // ignore init errors – app can still proceed to login
+        }
+
+        const rawToken = Database.getAuthToken();
+        if (rawToken) {
+          try {
+            const { parseAppToken } = await import('../utils/auth');
+            const parsed = parseAppToken(rawToken);
+            if (!parsed) {
+              Database.clearAuthToken();
+              dispatch({ type: 'LOGOUT' });
+              return;
+            }
+            const employees = Database.getEmployees();
+            const current = parsed.uid ? employees.find(e => e.id === parsed.uid) : undefined;
+            if (current) {
+              dispatch({ type: 'LOAD_USER', payload: { user: current, token: rawToken } });
+            } else {
+              Database.clearAuthToken();
+              dispatch({ type: 'LOGOUT' });
+            }
+            return;
+          } catch {
             Database.clearAuthToken();
             dispatch({ type: 'LOGOUT' });
             return;
           }
-          const employees = Database.getEmployees();
-          const current = parsed.uid ? employees.find(e => e.id === parsed.uid) : undefined;
-          if (current) {
-            dispatch({ type: 'LOAD_USER', payload: { user: current, token: rawToken } });
-          } else {
-            Database.clearAuthToken();
-            dispatch({ type: 'LOGOUT' });
-          }
-        } catch (error) {
-          Database.clearAuthToken();
-          dispatch({ type: 'LOGOUT' });
         }
-      } else {
+
+        // No token – show login
+        dispatch({ type: 'SET_LOADING', payload: false });
+      } catch {
+        // Final safety net
+        Database.clearAuthToken();
         dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
