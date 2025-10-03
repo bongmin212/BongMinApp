@@ -79,14 +79,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         {
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label className="form-label">Tên đăng nhập</label>
+              <label className="form-label">Email</label>
               <input
-                type="text"
+                type="email"
                 name="username"
                 className="form-control"
                 value={formData.username}
                 onChange={handleChange}
-                placeholder="Nhập tên đăng nhập"
+                placeholder="Nhập email Supabase"
                 required
               />
             </div>

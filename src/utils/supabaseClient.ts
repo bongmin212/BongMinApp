@@ -10,7 +10,9 @@ export function getSupabase(): SupabaseClient | null {
     if (cached) return cached;
     cached = createClient(url, anon, {
       auth: {
-        persistSession: false
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
       }
     });
     return cached;
