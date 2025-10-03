@@ -44,12 +44,36 @@ export async function signInWithEmailPassword(email: string, password: string): 
       .select('*')
       .eq('id', data.session.user.id)
       .single();
-    // Do not auto-upsert as MANAGER; respect existing DB role. If not found, fall back below.
     if (row) {
       return { ok: true, sessionToken: data.session.access_token, user: mapRowToEmployee(row) };
     }
+
+    // Auto-provision if missing: decide smart role
+    const metaRoleRaw: any = (data.session.user as any)?.app_metadata?.role ?? (data.session.user as any)?.user_metadata?.role;
+    const metaRole = normalizeRole(metaRoleRaw);
+    // First real employee becomes MANAGER (if table empty)
+    const { count } = await sb.from('employees').select('*', { count: 'exact', head: true });
+    const decidedRole = (count || 0) === 0 ? 'MANAGER' : metaRole;
+    const decidedUsername = data.session.user.email || email;
+    const decidedCode = 'NV' + String((data.session.user.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 6) || '000000').toUpperCase();
+
+    const { data: created, error: insErr } = await sb
+      .from('employees')
+      .insert({
+        id: data.session.user.id,
+        code: decidedCode,
+        username: decidedUsername,
+        role: decidedRole,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('*')
+      .single();
+    if (!insErr && created) {
+      return { ok: true, sessionToken: data.session.access_token, user: mapRowToEmployee(created) };
+    }
   } catch (e) {
-    console.warn('[SupabaseAuth] employees lookup/upsert failed, using fallback', e);
+    console.warn('[SupabaseAuth] employees lookup/provision failed, using fallback', e);
   }
 
   // Fallback to Supabase identity (prefer role from user/app metadata if present)
@@ -83,12 +107,35 @@ export async function getSessionUser(): Promise<{ ok: true; token: string; user:
       .select('*')
       .eq('id', data.session.user.id)
       .single();
-    // Do not auto-upsert; if no row, use fallback mapping below
     if (row) {
       return { ok: true, token: data.session.access_token, user: mapRowToEmployee(row) };
     }
+
+    // Auto-provision here as well to self-heal sessions
+    const metaRoleRaw: any = (data.session.user as any)?.app_metadata?.role ?? (data.session.user as any)?.user_metadata?.role;
+    const metaRole = normalizeRole(metaRoleRaw);
+    const { count } = await sb.from('employees').select('*', { count: 'exact', head: true });
+    const decidedRole = (count || 0) === 0 ? 'MANAGER' : metaRole;
+    const decidedUsername = email || data.session.user.id;
+    const decidedCode = 'NV' + String((data.session.user.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 6) || '000000').toUpperCase();
+
+    const { data: created, error: insErr } = await sb
+      .from('employees')
+      .insert({
+        id: data.session.user.id,
+        code: decidedCode,
+        username: decidedUsername,
+        role: decidedRole,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select('*')
+      .single();
+    if (!insErr && created) {
+      return { ok: true, token: data.session.access_token, user: mapRowToEmployee(created) };
+    }
   } catch (e) {
-    console.warn('[SupabaseAuth] getSessionUser employees lookup failed, using fallback', e);
+    console.warn('[SupabaseAuth] getSessionUser lookup/provision failed, using fallback', e);
   }
 
   // Fallback (prefer role from user/app metadata if present)
