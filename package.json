@@ -4,6 +4,7 @@
   "description": "App quản lý đơn hàng, sản phẩm và khách hàng cho bản quyền số",
   "private": true,
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
     "@types/node": "^16.18.0",
     "html2canvas": "^1.4.0",
     "jspdf": "^2.5.0",

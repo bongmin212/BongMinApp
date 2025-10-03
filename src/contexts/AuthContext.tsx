@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { Employee, AuthState } from '../types';
 import { Database } from '../utils/database';
+import { getSupabase } from '../utils/supabaseClient';
 
 interface AuthContextType {
   state: AuthState;
@@ -115,6 +116,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (username: string, password: string): Promise<boolean> => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
+      // Prefer Supabase if configured
+      const sb = getSupabase();
+      if (sb) {
+        const { data, error } = await sb.auth.signInWithPassword({ email: username, password });
+        if (error || !data.session) {
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return false;
+        }
+        // Fetch employee profile by auth user id or by username fallback
+        const { data: row } = await sb
+          .from('employees')
+          .select('*')
+          .eq('username', username)
+          .single();
+        if (!row) {
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return false;
+        }
+        const user: Employee = {
+          id: row.id,
+          code: row.code,
+          username: row.username,
+          passwordHash: row.password_hash || '',
+          role: row.role,
+          createdAt: new Date(row.created_at),
+          updatedAt: new Date(row.updated_at)
+        };
+        const token = data.session.access_token;
+        Database.setAuthToken(token);
+        dispatch({ type: 'LOGIN_SUCCESS', payload: { user, token } });
+        return true;
+      }
+
       const inputUsername = username.trim();
       const inputPassword = password;
 
@@ -171,6 +205,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    const sb = getSupabase();
+    if (sb) {
+      try { sb.auth.signOut(); } catch {}
+    }
     if (state.user) {
       // Log activity
       Database.saveActivityLog({
