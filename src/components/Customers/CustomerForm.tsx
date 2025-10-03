@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getSupabase } from '../../utils/supabaseClient';
 import { Customer, CustomerFormData, CustomerType, CustomerSource, CUSTOMER_TYPES, CUSTOMER_SOURCES } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
@@ -43,7 +44,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
     }
   }, [customer]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
