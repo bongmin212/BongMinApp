@@ -139,6 +139,14 @@ const CustomerList: React.FC = () => {
             const currentCustomers = Database.getCustomers();
             Database.setCustomers(currentCustomers.filter(c => c.id !== id));
             
+            // Force refresh form if it's open
+            if (showForm && !editingCustomer) {
+              setShowForm(false);
+              setTimeout(() => {
+                setShowForm(true);
+              }, 0);
+            }
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
@@ -175,6 +183,14 @@ const CustomerList: React.FC = () => {
             // Update local storage immediately
             const currentCustomers = Database.getCustomers();
             Database.setCustomers(currentCustomers.filter(c => !selectedIds.includes(c.id)));
+            
+            // Force refresh form if it's open
+            if (showForm && !editingCustomer) {
+              setShowForm(false);
+              setTimeout(() => {
+                setShowForm(true);
+              }, 0);
+            }
             
             try {
               const sb2 = getSupabase();

@@ -397,6 +397,14 @@ const handleDelete = (id: string) => {
 						const currentWarranties = Database.getWarranties();
 						Database.setWarranties(currentWarranties.filter(w => w.id !== id));
 						
+						// Force refresh form if it's open
+						if (showForm && !editingWarranty) {
+							setShowForm(false);
+							setTimeout(() => {
+								setShowForm(true);
+							}, 0);
+						}
+						
                         try {
                             const sb2 = getSupabase();
                             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn bảo hành', details: `warrantyId=${id}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });

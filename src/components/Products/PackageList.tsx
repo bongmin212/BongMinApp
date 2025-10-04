@@ -98,6 +98,14 @@ const PackageList: React.FC = () => {
           const currentPackages = Database.getPackages();
           Database.setPackages(currentPackages.filter(p => p.id !== id));
           
+          // Force refresh form if it's open
+          if (showForm && !editingPackage) {
+            setShowForm(false);
+            setTimeout(() => {
+              setShowForm(true);
+            }, 0);
+          }
+          
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa gói sản phẩm', details: `packageId=${id}` });
@@ -131,6 +139,14 @@ const PackageList: React.FC = () => {
           // Update local storage immediately
           const currentPackages = Database.getPackages();
           Database.setPackages(currentPackages.filter(p => !selectedIds.includes(p.id)));
+          
+          // Force refresh form if it's open
+          if (showForm && !editingPackage) {
+            setShowForm(false);
+            setTimeout(() => {
+              setShowForm(true);
+            }, 0);
+          }
           
           try {
             const sb2 = getSupabase();

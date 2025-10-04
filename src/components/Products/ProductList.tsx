@@ -145,6 +145,14 @@ const ProductList: React.FC = () => {
             const currentProducts = Database.getProducts();
             Database.setProducts(currentProducts.filter(p => p.id !== id));
             
+            // Force refresh form if it's open
+            if (showForm && !editingProduct) {
+              setShowForm(false);
+              setTimeout(() => {
+                setShowForm(true);
+              }, 0);
+            }
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa sản phẩm', details: `productId=${id}` });
@@ -181,6 +189,14 @@ const ProductList: React.FC = () => {
             // Update local storage immediately
             const currentProducts = Database.getProducts();
             Database.setProducts(currentProducts.filter(p => !selectedIds.includes(p.id)));
+            
+            // Force refresh form if it's open
+            if (showForm && !editingProduct) {
+              setShowForm(false);
+              setTimeout(() => {
+                setShowForm(true);
+              }, 0);
+            }
             
             try {
               const sb2 = getSupabase();

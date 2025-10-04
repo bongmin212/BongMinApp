@@ -289,6 +289,14 @@ const WarehouseList: React.FC = () => {
           const currentInventory = Database.getInventory();
           Database.setInventory(currentInventory.filter(i => !deletable.includes(i.id)));
           
+          // Force refresh form if it's open
+          if (showForm && !editingItem) {
+            setShowForm(false);
+            setTimeout(() => {
+              setShowForm(true);
+            }, 0);
+          }
+          
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
@@ -345,6 +353,14 @@ const WarehouseList: React.FC = () => {
           // Update local storage immediately
           const currentInventory = Database.getInventory();
           Database.setInventory(currentInventory.filter(i => i.id !== id));
+          
+          // Force refresh form if it's open
+          if (showForm && !editingItem) {
+            setShowForm(false);
+            setTimeout(() => {
+              setShowForm(true);
+            }, 0);
+          }
           
           try {
             const sb2 = getSupabase();
