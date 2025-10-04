@@ -62,6 +62,9 @@ export class Database {
   // Order code helpers
   static generateNextOrderCode(prefix: string = 'DH', padLength: number = 4): string {
     const orders = this.getOrders();
+    if (orders.length === 0) {
+      return `${prefix}${String(1).padStart(padLength, '0')}`;
+    }
     let maxNum = 0;
     let detectedPad = padLength;
     orders.forEach(o => {
@@ -100,24 +103,47 @@ export class Database {
     return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
   static generateNextCustomerCode(): string {
-    return this.generateNextCodeFromList(this.getCustomers().map(c => c.code), 'KH', 3);
+    const customers = this.getCustomers();
+    if (customers.length === 0) {
+      return 'KH001';
+    }
+    return this.generateNextCodeFromList(customers.map(c => c.code), 'KH', 3);
   }
   static generateNextProductCode(): string {
-    return this.generateNextCodeFromList(this.getProducts().map(p => p.code), 'SP', 3);
+    const products = this.getProducts();
+    if (products.length === 0) {
+      return 'SP001';
+    }
+    return this.generateNextCodeFromList(products.map(p => p.code), 'SP', 3);
   }
   static generateNextPackageCode(): string {
-    return this.generateNextCodeFromList(this.getPackages().map(p => p.code), 'PK', 3);
+    const packages = this.getPackages();
+    if (packages.length === 0) {
+      return 'PK001';
+    }
+    return this.generateNextCodeFromList(packages.map(p => p.code), 'PK', 3);
   }
   static generateNextInventoryCode(): string {
-    return this.generateNextCodeFromList(this.getInventory().map(i => i.code), 'KHO', 3);
+    const inventory = this.getInventory();
+    if (inventory.length === 0) {
+      return 'KHO001';
+    }
+    return this.generateNextCodeFromList(inventory.map(i => i.code), 'KHO', 3);
   }
   // Employees are managed by Supabase; no local code generation
   static async generateNextExpenseCode(): Promise<string> {
     const expenses = await this.getExpenses();
+    if (expenses.length === 0) {
+      return 'CP001';
+    }
     return this.generateNextCodeFromList(expenses.map(e => e.code), 'CP', 3);
   }
   static generateNextWarrantyCode(): string {
-    return this.generateNextCodeFromList(this.getWarranties().map(w => w.code), 'BH', 3);
+    const warranties = this.getWarranties();
+    if (warranties.length === 0) {
+      return 'BH001';
+    }
+    return this.generateNextCodeFromList(warranties.map(w => w.code), 'BH', 3);
   }
   // Date helpers
   static addMonths(base: Date, months: number): Date {

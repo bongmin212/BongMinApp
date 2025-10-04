@@ -424,14 +424,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         // Build change details: old -> new for each field
         const prevSnapshot = {
           code: order.code || '',
-          purchaseDate: new Date(order.purchaseDate).toISOString().split('T')[0],
+          purchaseDate: order.purchaseDate instanceof Date && !isNaN(order.purchaseDate.getTime()) ? order.purchaseDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           packageId: order.packageId,
           customerId: order.customerId,
           status: order.status,
           paymentStatus: (order as any).paymentStatus || 'UNPAID',
           orderInfo: (order as any).orderInfo || '',
           notes: order.notes || '',
-          expiryDate: new Date(order.expiryDate).toISOString().split('T')[0],
+          expiryDate: order.expiryDate instanceof Date && !isNaN(order.expiryDate.getTime()) ? order.expiryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           inventoryItemId: order.inventoryItemId || '',
           useCustomPrice: order.useCustomPrice || false,
           customPrice: order.customPrice || 0,
@@ -440,14 +440,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
         const nextSnapshot = {
           code: orderData.code || '',
-          purchaseDate: new Date(orderData.purchaseDate).toISOString().split('T')[0],
+          purchaseDate: orderData.purchaseDate instanceof Date && !isNaN(orderData.purchaseDate.getTime()) ? orderData.purchaseDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           packageId: orderData.packageId,
           customerId: orderData.customerId,
           status: orderData.status,
           paymentStatus: orderData.paymentStatus,
           orderInfo: orderData.orderInfo || '',
           notes: orderData.notes || '',
-          expiryDate: new Date(orderData.expiryDate).toISOString().split('T')[0],
+          expiryDate: orderData.expiryDate instanceof Date && !isNaN(orderData.expiryDate.getTime()) ? orderData.expiryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           inventoryItemId: orderData.inventoryItemId || '',
           useCustomPrice: orderData.useCustomPrice || false,
           customPrice: orderData.customPrice || 0,
@@ -745,7 +745,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               type="date"
               name="purchaseDate"
               className={`form-control ${errors.purchaseDate ? 'is-invalid' : ''}`}
-              value={formData.purchaseDate.toISOString().split('T')[0]}
+              value={formData.purchaseDate instanceof Date && !isNaN(formData.purchaseDate.getTime()) ? formData.purchaseDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
               onChange={(e) => setFormData(prev => ({
                 ...prev,
                 purchaseDate: new Date(e.target.value)
@@ -865,7 +865,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     <option value="">Không chọn</option>
                     {availableInventory.map(item => (
                       <option key={item.id} value={item.id}>
-                        #{item.code} | Nhập: {new Date(item.purchaseDate).toISOString().split('T')[0]} | HSD: {new Date(item.expiryDate).toISOString().split('T')[0]}
+                        #{item.code} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : 'N/A'}
                       </option>
                     ))}
                   </select>
