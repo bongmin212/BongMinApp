@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { Product } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import ProductForm from './ProductForm';
@@ -221,72 +220,6 @@ const ProductList: React.FC = () => {
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Sản phẩm');
   };
 
-  const rowHeight = 56;
-  const useVirtual = paginatedProducts.length > 50;
-
-  const Row = React.memo(({ index, style }: ListChildComponentProps) => {
-    const product = paginatedProducts[index];
-    return (
-      <div style={{ ...style, display: 'grid', gridTemplateColumns: '36px 15% 20% 35% 15% 15%', alignItems: 'center', borderBottom: '1px solid var(--border-color)', padding: '12px 16px' }}>
-        <div>
-          <input
-            type="checkbox"
-            checked={selectedIds.includes(product.id)}
-            onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
-          />
-        </div>
-        <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-          {product.code || `SP${index + 1}`}
-        </div>
-        <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-          {product.name}
-        </div>
-        <div style={{ color: 'var(--text-secondary)' }} title={product.description || ''}>
-          <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'normal' }}>
-            {product.description || '-'}
-          </div>
-        </div>
-        <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-          {new Date(product.createdAt).toLocaleDateString('vi-VN')}
-        </div>
-        <div>
-          <div className="d-flex" style={{ gap: 8 }}>
-            <button
-              onClick={() => handleCopyDescription(product)}
-              className="btn btn-light btn-sm"
-              style={{ transition: 'all 0.2s ease' }}
-              title="Copy mô tả"
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <IconClipboard />
-                <span className="ms-1">Copy</span>
-              </span>
-            </button>
-            <button
-              onClick={() => handleEdit(product)}
-              className="btn btn-secondary btn-sm"
-              style={{ transition: 'all 0.2s ease' }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <IconEdit />
-                <span className="ms-1">Sửa</span>
-              </span>
-            </button>
-            <button
-              onClick={() => handleDelete(product.id)}
-              className="btn btn-danger btn-sm"
-              style={{ transition: 'all 0.2s ease' }}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <IconTrash />
-                <span className="ms-1">Xóa</span>
-              </span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  });
 
   return (
     <div className="card">
@@ -368,100 +301,83 @@ const ProductList: React.FC = () => {
                 <th style={{ width: '15%' }}>Thao tác</th>
               </tr>
             </thead>
-          </table>
-          {useVirtual ? (
-            <div style={{ border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '36px 15% 20% 35% 15% 15%', background: 'var(--bg-primary)' }}>
-                <List
-                  height={Math.min(480, paginatedProducts.length * rowHeight)}
-                  itemCount={paginatedProducts.length}
-                  itemSize={rowHeight}
-                  width={'100%'}
-                >
-                  {Row}
-                </List>
-              </div>
-            </div>
-          ) : (
-            <table className="table" style={{ marginTop: '-1px' }}>
-              <tbody>
-                {paginatedProducts.map((product, index) => (
-                  <tr key={product.id}>
-                    <td style={{ width: 36 }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(product.id)}
-                        onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
-                      />
-                    </td>
-                    <td style={{ width: '15%' }}>
-                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                        {product.code || `SP${index + 1}`}
-                      </div>
-                    </td>
-                    <td style={{ width: '20%' }}>
-                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                        {product.name}
-                      </div>
-                    </td>
-                    <td style={{ width: '35%', color: 'var(--text-secondary)' }}>
-                      <div
-                        title={product.description || ''}
-                        style={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical' as any,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'normal'
-                        }}
+            <tbody>
+              {paginatedProducts.map((product, index) => (
+                <tr key={product.id}>
+                  <td style={{ width: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(product.id)}
+                      onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
+                    />
+                  </td>
+                  <td style={{ width: '15%' }}>
+                    <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                      {product.code || `SP${index + 1}`}
+                    </div>
+                  </td>
+                  <td style={{ width: '20%' }}>
+                    <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                      {product.name}
+                    </div>
+                  </td>
+                  <td style={{ width: '35%', color: 'var(--text-secondary)' }}>
+                    <div
+                      title={product.description || ''}
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: 'vertical' as any,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'normal'
+                      }}
+                    >
+                      {product.description || '-'}
+                    </div>
+                  </td>
+                  <td style={{ width: '15%', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                    {new Date(product.createdAt).toLocaleDateString('vi-VN')}
+                  </td>
+                  <td style={{ width: '15%' }}>
+                    <div className="d-flex" style={{ gap: 8 }}>
+                      <button
+                        onClick={() => handleCopyDescription(product)}
+                        className="btn btn-light btn-sm"
+                        style={{ transition: 'all 0.2s ease' }}
+                        title="Copy mô tả"
                       >
-                        {product.description || '-'}
-                      </div>
-                    </td>
-                    <td style={{ width: '15%', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                      {new Date(product.createdAt).toLocaleDateString('vi-VN')}
-                    </td>
-                    <td style={{ width: '15%' }}>
-                      <div className="d-flex" style={{ gap: 8 }}>
-                        <button
-                          onClick={() => handleCopyDescription(product)}
-                          className="btn btn-light btn-sm"
-                          style={{ transition: 'all 0.2s ease' }}
-                          title="Copy mô tả"
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <IconClipboard />
-                            <span className="ms-1">Copy</span>
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => handleEdit(product)}
-                          className="btn btn-secondary btn-sm"
-                          style={{ transition: 'all 0.2s ease' }}
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <IconEdit />
-                            <span className="ms-1">Sửa</span>
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="btn btn-danger btn-sm"
-                          style={{ transition: 'all 0.2s ease' }}
-                        >
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <IconTrash />
-                            <span className="ms-1">Xóa</span>
-                          </span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <IconClipboard />
+                          <span className="ms-1">Copy</span>
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleEdit(product)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ transition: 'all 0.2s ease' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <IconEdit />
+                          <span className="ms-1">Sửa</span>
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="btn btn-danger btn-sm"
+                        style={{ transition: 'all 0.2s ease' }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <IconTrash />
+                          <span className="ms-1">Xóa</span>
+                        </span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
