@@ -573,6 +573,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           createdAt: new Date(createData.created_at),
           updatedAt: new Date(createData.updated_at)
         } as Order;
+        
+        // Update local storage immediately to avoid code conflicts
+        const currentOrders = Database.getOrders();
+        Database.setOrders([...currentOrders, created]);
         if (selectedInventoryId) {
           try {
             const sb2 = getSupabase();

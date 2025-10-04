@@ -121,6 +121,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
             shared_inventory_pool: !!formData.sharedInventoryPool
           });
         if (insertError) throw new Error(insertError.message || 'Không thể tạo sản phẩm');
+        
+        // Update local storage immediately to avoid code conflicts
+        const newProduct = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          code: ensuredCode,
+          name: formData.name,
+          description: formData.description,
+          sharedInventoryPool: !!formData.sharedInventoryPool,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        const currentProducts = Database.getProducts();
+        Database.setProducts([...currentProducts, newProduct]);
+        
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo sản phẩm', details: `productCode=${ensuredCode}; name=${formData.name}` });

@@ -200,6 +200,27 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             default_slots: normalizedForm.defaultSlots
           });
         if (insertError) throw new Error(insertError.message || 'Không thể tạo gói sản phẩm');
+        
+        // Update local storage immediately to avoid code conflicts
+        const newPackage = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          code: normalizedForm.code,
+          productId: normalizedForm.productId,
+          name: normalizedForm.name,
+          warrantyPeriod: normalizedForm.warrantyPeriod,
+          costPrice: normalizedForm.costPrice,
+          ctvPrice: normalizedForm.ctvPrice,
+          retailPrice: normalizedForm.retailPrice,
+          customFields: normalizedForm.customFields,
+          isAccountBased: !!normalizedForm.isAccountBased,
+          accountColumns: normalizedForm.accountColumns,
+          defaultSlots: normalizedForm.defaultSlots,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        const currentPackages = Database.getPackages();
+        Database.setPackages([...currentPackages, newPackage]);
+        
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo gói sản phẩm', details: `packageCode=${normalizedForm.code}; productId=${normalizedForm.productId}; name=${normalizedForm.name}` });

@@ -153,6 +153,24 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             notes: formData.notes
           });
         if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
+        
+        // Update local storage immediately to avoid code conflicts
+        const newCustomer = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          code: ensuredCode,
+          name: formData.name,
+          type: formData.type,
+          phone: formData.phone,
+          email: formData.email,
+          source: formData.source,
+          sourceDetail: formData.sourceDetail,
+          notes: formData.notes,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        const currentCustomers = Database.getCustomers();
+        Database.setCustomers([...currentCustomers, newCustomer]);
+        
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo khách hàng', details: `customerCode=${ensuredCode}; name=${formData.name}` });

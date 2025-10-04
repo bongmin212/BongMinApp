@@ -164,6 +164,31 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             total_slots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : null
           });
         if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
+        
+        // Update local storage immediately to avoid code conflicts
+        const newInventoryItem = {
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          code: ensuredCode,
+          productId: selectedProduct,
+          packageId: formData.packageId,
+          purchaseDate: new Date(formData.purchaseDate),
+          expiryDate: new Date(formData.expiryDate),
+          sourceNote: formData.sourceNote,
+          purchasePrice: formData.purchasePrice,
+          productInfo: formData.productInfo,
+          notes: formData.notes,
+          status: 'AVAILABLE' as const,
+          isAccountBased: !!selectedPkg?.isAccountBased,
+          accountColumns: selectedPkg?.accountColumns,
+          accountData: formData.accountData,
+          totalSlots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : undefined,
+          profiles: selectedPkg?.isAccountBased ? Array.from({ length: Math.max(1, Number(selectedPkg?.defaultSlots || 5)) }, (_, idx) => ({ id: `slot-${idx + 1}`, label: `Slot ${idx + 1}`, isAssigned: false })) : undefined,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        const currentInventory = Database.getInventory();
+        Database.setInventory([...currentInventory, newInventoryItem]);
+        
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryCode=${ensuredCode}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
