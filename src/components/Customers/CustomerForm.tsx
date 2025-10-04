@@ -39,20 +39,67 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         notes: customer.notes || ''
       });
     } else {
-      // Always generate fresh code for new customer
-      const nextCode = Database.generateNextCustomerCode();
-      setFormData({
-        code: nextCode,
-        name: '',
-        type: 'RETAIL',
-        phone: '',
-        email: '',
-        source: 'WEB',
-        sourceDetail: '',
-        notes: ''
-      });
+      // Always generate fresh code for new customer (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('customers').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'KH', 3);
+          setFormData({
+            code: nextCode,
+            name: '',
+            type: 'RETAIL',
+            phone: '',
+            email: '',
+            source: 'WEB',
+            sourceDetail: '',
+            notes: ''
+          });
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextCustomerCode();
+          setFormData({
+            code: nextCode,
+            name: '',
+            type: 'RETAIL',
+            phone: '',
+            email: '',
+            source: 'WEB',
+            sourceDetail: '',
+            notes: ''
+          });
+        }
+      })();
     }
   }, [customer]);
+
+  // Force refresh code when form opens for new customer (after deletion)
+  useEffect(() => {
+    if (!customer) {
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('customers').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'KH', 3);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextCustomerCode();
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        }
+      })();
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

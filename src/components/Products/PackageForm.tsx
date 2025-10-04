@@ -55,28 +55,83 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         retailPrice: new Intl.NumberFormat('vi-VN').format(pkg.retailPrice)
       });
     } else {
-      // Always generate fresh code for new package
-      const nextCode = Database.generateNextPackageCode();
-      setFormData({
-        code: nextCode,
-        productId: '',
-        name: '',
-        warrantyPeriod: 0,
-        costPrice: 0,
-        ctvPrice: 0,
-        retailPrice: 0,
-        customFields: [],
-        isAccountBased: false,
-        accountColumns: [],
-        defaultSlots: 5
-      });
-      setPriceDisplay({
-        costPrice: '0',
-        ctvPrice: '0',
-        retailPrice: '0'
-      });
+      // Always generate fresh code for new package (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('packages').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'PK', 3);
+          setFormData({
+            code: nextCode,
+            productId: '',
+            name: '',
+            warrantyPeriod: 0,
+            costPrice: 0,
+            ctvPrice: 0,
+            retailPrice: 0,
+            customFields: [],
+            isAccountBased: false,
+            accountColumns: [],
+            defaultSlots: 5
+          });
+          setPriceDisplay({
+            costPrice: '0',
+            ctvPrice: '0',
+            retailPrice: '0'
+          });
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextPackageCode();
+          setFormData({
+            code: nextCode,
+            productId: '',
+            name: '',
+            warrantyPeriod: 0,
+            costPrice: 0,
+            ctvPrice: 0,
+            retailPrice: 0,
+            customFields: [],
+            isAccountBased: false,
+            accountColumns: [],
+            defaultSlots: 5
+          });
+          setPriceDisplay({
+            costPrice: '0',
+            ctvPrice: '0',
+            retailPrice: '0'
+          });
+        }
+      })();
     }
   }, [pkg]);
+
+  // Force refresh code when form opens for new package (after deletion)
+  useEffect(() => {
+    if (!pkg) {
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('packages').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'PK', 3);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextPackageCode();
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        }
+      })();
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

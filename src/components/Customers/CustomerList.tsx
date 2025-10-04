@@ -112,7 +112,7 @@ const CustomerList: React.FC = () => {
     setFormKey(prev => prev + 1); // Force refresh form key
     setTimeout(() => {
       setShowForm(true); // Then open with fresh state
-    }, 100); // Increase delay to ensure local storage is updated
+    }, 50); // Reduced delay for better UX
   };
 
   const handleEdit = (customer: Customer) => {
@@ -147,7 +147,7 @@ const CustomerList: React.FC = () => {
               setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
-              }, 100); // Add small delay to ensure local storage is updated
+              }, 50); // Reduced delay for better UX
             }
             
             try {
@@ -193,7 +193,7 @@ const CustomerList: React.FC = () => {
               setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
-              }, 100); // Add small delay to ensure local storage is updated
+              }, 50); // Reduced delay for better UX
             }
             
             try {

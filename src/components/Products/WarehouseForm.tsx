@@ -60,24 +60,75 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   // Prefill code for new inventory item
   useEffect(() => {
     if (!item) {
-      // Always generate fresh code for new inventory item
-      const nextCode = Database.generateNextInventoryCode();
-      setFormData({
-        code: nextCode,
-        productId: '',
-        packageId: '',
-        purchaseDate: new Date(),
-        sourceNote: '',
-        purchasePrice: 0,
-        productInfo: '',
-        notes: '',
-        isAccountBased: false,
-        accountColumns: [],
-        accountData: {},
-        totalSlots: 5
-      });
+      // Always generate fresh code for new inventory item (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('inventory').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'KHO', 3);
+          setFormData({
+            code: nextCode,
+            productId: '',
+            packageId: '',
+            purchaseDate: new Date(),
+            sourceNote: '',
+            purchasePrice: 0,
+            productInfo: '',
+            notes: '',
+            isAccountBased: false,
+            accountColumns: [],
+            accountData: {},
+            totalSlots: 5
+          });
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextInventoryCode();
+          setFormData({
+            code: nextCode,
+            productId: '',
+            packageId: '',
+            purchaseDate: new Date(),
+            sourceNote: '',
+            purchasePrice: 0,
+            productInfo: '',
+            notes: '',
+            isAccountBased: false,
+            accountColumns: [],
+            accountData: {},
+            totalSlots: 5
+          });
+        }
+      })();
     }
   }, [item]);
+
+  // Force refresh code when form opens for new inventory item (after deletion)
+  useEffect(() => {
+    if (!item) {
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('inventory').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'KHO', 3);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextInventoryCode();
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        }
+      })();
+    }
+  }, []);
 
   const filteredPackages = useMemo(() => {
     if (!selectedProduct) return packages;
