@@ -44,10 +44,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
       setFormData({
         code: nextCode,
         name: '',
-        type: 'INDIVIDUAL',
+        type: 'RETAIL',
         phone: '',
         email: '',
-        source: 'DIRECT',
+        source: 'WEB',
         sourceDetail: '',
         notes: ''
       });
