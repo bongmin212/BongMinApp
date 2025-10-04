@@ -55,6 +55,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         retailPrice: new Intl.NumberFormat('vi-VN').format(pkg.retailPrice)
       });
     } else {
+      // Always generate fresh code for new packages
       const nextCode = Database.generateNextPackageCode();
       setFormData(prev => ({ ...prev, code: nextCode }));
       setPriceDisplay({
@@ -64,6 +65,14 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
       });
     }
   }, [pkg]);
+
+  // Force refresh code when form opens for new package
+  useEffect(() => {
+    if (!pkg) {
+      const nextCode = Database.generateNextPackageCode();
+      setFormData(prev => ({ ...prev, code: nextCode }));
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

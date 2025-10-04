@@ -39,10 +39,19 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         notes: customer.notes || ''
       });
     } else {
+      // Always generate fresh code for new customers
       const nextCode = Database.generateNextCustomerCode();
       setFormData(prev => ({ ...prev, code: nextCode }));
     }
   }, [customer]);
+
+  // Force refresh code when form opens for new customer
+  useEffect(() => {
+    if (!customer) {
+      const nextCode = Database.generateNextCustomerCode();
+      setFormData(prev => ({ ...prev, code: nextCode }));
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

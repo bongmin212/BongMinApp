@@ -134,6 +134,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     }
   }, [order]);
 
+  // Force refresh code when form opens for new order
+  useEffect(() => {
+    if (!order) {
+      const nextCode = Database.generateNextOrderCode('DH', 4);
+      setFormData(prev => ({ ...prev, code: nextCode }));
+    }
+  }, []);
+
   const loadData = async () => {
     const sb = getSupabase();
     if (!sb) return;

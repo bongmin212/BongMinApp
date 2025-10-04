@@ -65,40 +65,54 @@ export class Database {
     if (orders.length === 0) {
       return `${prefix}${String(1).padStart(padLength, '0')}`;
     }
-    let maxNum = 0;
+    
+    const existingNumbers = new Set<number>();
     let detectedPad = padLength;
+    
     orders.forEach(o => {
       const m = String(o.code || '').match(/^([A-Za-z]+)(\d+)$/);
       if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
         const numStr = m[2];
         const num = parseInt(numStr, 10);
         if (!isNaN(num)) {
-          if (num > maxNum) maxNum = num;
-          // Keep the largest padding width we see, but at least padLength
+          existingNumbers.add(num);
           detectedPad = Math.max(detectedPad, numStr.length);
         }
       }
     });
-    const nextNum = maxNum + 1;
+    
+    // Find the first available number starting from 1
+    let nextNum = 1;
+    while (existingNumbers.has(nextNum)) {
+      nextNum++;
+    }
+    
     const width = Math.max(padLength, detectedPad);
     return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
   // Generic code helpers for other modules
   static generateNextCodeFromList(codes: string[], prefix: string, padLength: number = 3): string {
-    let maxNum = 0;
+    const existingNumbers = new Set<number>();
     let detectedPad = padLength;
+    
     codes.forEach(code => {
       const m = String(code || '').match(/^([A-Za-z]+)(\d+)$/);
       if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
         const numStr = m[2];
         const num = parseInt(numStr, 10);
         if (!isNaN(num)) {
-          if (num > maxNum) maxNum = num;
+          existingNumbers.add(num);
           detectedPad = Math.max(detectedPad, numStr.length);
         }
       }
     });
-    const nextNum = maxNum + 1;
+    
+    // Find the first available number starting from 1
+    let nextNum = 1;
+    while (existingNumbers.has(nextNum)) {
+      nextNum++;
+    }
+    
     const width = Math.max(padLength, detectedPad);
     return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
