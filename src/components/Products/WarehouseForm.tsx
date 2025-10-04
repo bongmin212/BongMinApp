@@ -166,13 +166,21 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
         
         // Update local storage immediately to avoid code conflicts
+        const purchaseDate = new Date(formData.purchaseDate);
+        const expiryDate = (() => {
+          const date = new Date(purchaseDate);
+          const months = selectedPkg ? selectedPkg.warrantyPeriod : 0;
+          date.setMonth(date.getMonth() + months);
+          return date;
+        })();
+        
         const newInventoryItem = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2),
           code: ensuredCode,
           productId: selectedProduct,
           packageId: formData.packageId,
-          purchaseDate: new Date(formData.purchaseDate),
-          expiryDate: new Date(formData.expiryDate),
+          purchaseDate,
+          expiryDate,
           sourceNote: formData.sourceNote,
           purchasePrice: formData.purchasePrice,
           productInfo: formData.productInfo,
