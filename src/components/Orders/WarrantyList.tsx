@@ -402,7 +402,7 @@ const handleDelete = (id: string) => {
 							setShowForm(false);
 							setTimeout(() => {
 								setShowForm(true);
-							}, 0);
+							}, 100); // Add small delay to ensure local storage is updated
 						}
 						
                         try {

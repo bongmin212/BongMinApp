@@ -138,7 +138,29 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   useEffect(() => {
     if (!order) {
       const nextCode = Database.generateNextOrderCode('DH', 4);
-      setFormData(prev => ({ ...prev, code: nextCode }));
+      setFormData({
+        code: nextCode,
+        customerId: '',
+        customerName: '',
+        customerPhone: '',
+        customerEmail: '',
+        productId: '',
+        packageId: '',
+        inventoryItemId: '',
+        quantity: 1,
+        unitPrice: 0,
+        totalPrice: 0,
+        discount: 0,
+        finalPrice: 0,
+        paymentMethod: 'CASH',
+        paymentStatus: 'PENDING',
+        deliveryMethod: 'PICKUP',
+        deliveryAddress: '',
+        deliveryDate: '',
+        notes: '',
+        status: 'PENDING',
+        email: ''
+      });
     }
   }, []);
 

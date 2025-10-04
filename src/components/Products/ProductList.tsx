@@ -150,7 +150,7 @@ const ProductList: React.FC = () => {
               setShowForm(false);
               setTimeout(() => {
                 setShowForm(true);
-              }, 0);
+              }, 100); // Add small delay to ensure local storage is updated
             }
             
             try {
@@ -195,7 +195,7 @@ const ProductList: React.FC = () => {
               setShowForm(false);
               setTimeout(() => {
                 setShowForm(true);
-              }, 0);
+              }, 100); // Add small delay to ensure local storage is updated
             }
             
             try {
@@ -434,6 +434,7 @@ const ProductList: React.FC = () => {
 
       {showForm && (
         <ProductForm
+          key={editingProduct?.id || 'new'}
           product={editingProduct}
           onClose={() => {
             setShowForm(false);

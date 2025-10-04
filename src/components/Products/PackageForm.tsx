@@ -55,24 +55,28 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         retailPrice: new Intl.NumberFormat('vi-VN').format(pkg.retailPrice)
       });
     } else {
-      // Always generate fresh code for new packages
+      // Always generate fresh code for new package
       const nextCode = Database.generateNextPackageCode();
-      setFormData(prev => ({ ...prev, code: nextCode }));
+      setFormData({
+        code: nextCode,
+        productId: '',
+        name: '',
+        warrantyPeriod: 0,
+        costPrice: 0,
+        ctvPrice: 0,
+        retailPrice: 0,
+        customFields: [],
+        isAccountBased: false,
+        accountColumns: [],
+        defaultSlots: 5
+      });
       setPriceDisplay({
-        costPrice: formData.costPrice ? new Intl.NumberFormat('vi-VN').format(formData.costPrice) : '0',
-        ctvPrice: formData.ctvPrice ? new Intl.NumberFormat('vi-VN').format(formData.ctvPrice) : '0',
-        retailPrice: formData.retailPrice ? new Intl.NumberFormat('vi-VN').format(formData.retailPrice) : '0'
+        costPrice: '0',
+        ctvPrice: '0',
+        retailPrice: '0'
       });
     }
   }, [pkg]);
-
-  // Force refresh code when form opens for new package
-  useEffect(() => {
-    if (!pkg) {
-      const nextCode = Database.generateNextPackageCode();
-      setFormData(prev => ({ ...prev, code: nextCode }));
-    }
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

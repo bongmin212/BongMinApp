@@ -60,19 +60,24 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   // Prefill code for new inventory item
   useEffect(() => {
     if (!item) {
-      // Always generate fresh code for new inventory items
+      // Always generate fresh code for new inventory item
       const nextCode = Database.generateNextInventoryCode();
-      setFormData(prev => ({ ...prev, code: nextCode }));
+      setFormData({
+        code: nextCode,
+        productId: '',
+        packageId: '',
+        purchaseDate: new Date().toISOString().split('T')[0],
+        sourceNote: '',
+        purchasePrice: 0,
+        productInfo: '',
+        notes: '',
+        isAccountBased: false,
+        accountColumns: [],
+        accountData: {},
+        totalSlots: 5
+      });
     }
   }, [item]);
-
-  // Force refresh code when form opens for new inventory item
-  useEffect(() => {
-    if (!item) {
-      const nextCode = Database.generateNextInventoryCode();
-      setFormData(prev => ({ ...prev, code: nextCode }));
-    }
-  }, []);
 
   const filteredPackages = useMemo(() => {
     if (!selectedProduct) return packages;

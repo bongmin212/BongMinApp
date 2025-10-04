@@ -103,7 +103,7 @@ const PackageList: React.FC = () => {
             setShowForm(false);
             setTimeout(() => {
               setShowForm(true);
-            }, 0);
+            }, 100); // Add small delay to ensure local storage is updated
           }
           
           try {
@@ -145,7 +145,7 @@ const PackageList: React.FC = () => {
             setShowForm(false);
             setTimeout(() => {
               setShowForm(true);
-            }, 0);
+            }, 100); // Add small delay to ensure local storage is updated
           }
           
           try {
@@ -332,6 +332,7 @@ const PackageList: React.FC = () => {
 
       {showForm && (
         <PackageForm
+          key={editingPackage?.id || 'new'}
           package={editingPackage}
           onClose={() => {
             setShowForm(false);

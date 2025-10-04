@@ -294,7 +294,7 @@ const WarehouseList: React.FC = () => {
             setShowForm(false);
             setTimeout(() => {
               setShowForm(true);
-            }, 0);
+            }, 100); // Add small delay to ensure local storage is updated
           }
           
           try {
@@ -359,7 +359,7 @@ const WarehouseList: React.FC = () => {
             setShowForm(false);
             setTimeout(() => {
               setShowForm(true);
-            }, 0);
+            }, 100); // Add small delay to ensure local storage is updated
           }
           
           try {
@@ -626,7 +626,7 @@ const WarehouseList: React.FC = () => {
       </div>
 
       {showForm && (
-        <WarehouseForm item={editingItem} onClose={() => { setShowForm(false); setEditingItem(null); }} onSuccess={() => { setShowForm(false); setEditingItem(null); refresh(); }} />
+        <WarehouseForm key={editingItem?.id || 'new'} item={editingItem} onClose={() => { setShowForm(false); setEditingItem(null); }} onSuccess={() => { setShowForm(false); setEditingItem(null); refresh(); }} />
       )}
 
       {profilesModal && (

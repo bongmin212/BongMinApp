@@ -192,7 +192,7 @@ const OrderList: React.FC = () => {
               setShowForm(false);
               setTimeout(() => {
                 setShowForm(true);
-              }, 0);
+              }, 100); // Add small delay to ensure local storage is updated
             }
             
             try {
@@ -812,6 +812,7 @@ const OrderList: React.FC = () => {
 
       {showForm && (
         <OrderForm
+          key={editingOrder?.id || 'new'}
           order={editingOrder}
           onClose={() => {
             setShowForm(false);
