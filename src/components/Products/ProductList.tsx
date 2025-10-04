@@ -227,7 +227,7 @@ const ProductList: React.FC = () => {
   const Row = React.memo(({ index, style }: ListChildComponentProps) => {
     const product = paginatedProducts[index];
     return (
-      <div style={{ ...style, display: 'grid', gridTemplateColumns: '36px 1fr 1fr 2fr 140px 180px', alignItems: 'center', borderBottom: '1px solid var(--border-color)', padding: '12px 16px' }}>
+      <div style={{ ...style, display: 'grid', gridTemplateColumns: '36px 15% 20% 35% 15% 15%', alignItems: 'center', borderBottom: '1px solid var(--border-color)', padding: '12px 16px' }}>
         <div>
           <input
             type="checkbox"
@@ -361,17 +361,17 @@ const ProductList: React.FC = () => {
                     onChange={(e) => handleToggleSelectAll(e.target.checked, paginatedProducts.map(p => p.id))}
                   />
                 </th>
-                <th>Mã sản phẩm</th>
-                <th>Tên sản phẩm</th>
-                <th>Mô tả</th>
-                <th>Ngày tạo</th>
-                <th>Thao tác</th>
+                <th style={{ width: '15%' }}>Mã sản phẩm</th>
+                <th style={{ width: '20%' }}>Tên sản phẩm</th>
+                <th style={{ width: '35%' }}>Mô tả</th>
+                <th style={{ width: '15%' }}>Ngày tạo</th>
+                <th style={{ width: '15%' }}>Thao tác</th>
               </tr>
             </thead>
           </table>
           {useVirtual ? (
             <div style={{ border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '36px 1fr 1fr 2fr 140px 180px', background: 'var(--bg-primary)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '36px 15% 20% 35% 15% 15%', background: 'var(--bg-primary)' }}>
                 <List
                   height={Math.min(480, paginatedProducts.length * rowHeight)}
                   itemCount={paginatedProducts.length}
@@ -387,24 +387,24 @@ const ProductList: React.FC = () => {
               <tbody>
                 {paginatedProducts.map((product, index) => (
                   <tr key={product.id}>
-                    <td>
+                    <td style={{ width: 36 }}>
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(product.id)}
                         onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
                       />
                     </td>
-                    <td>
+                    <td style={{ width: '15%' }}>
                       <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
                         {product.code || `SP${index + 1}`}
                       </div>
                     </td>
-                    <td>
+                    <td style={{ width: '20%' }}>
                       <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
                         {product.name}
                       </div>
                     </td>
-                    <td style={{ color: 'var(--text-secondary)' }}>
+                    <td style={{ width: '35%', color: 'var(--text-secondary)' }}>
                       <div
                         title={product.description || ''}
                         style={{
@@ -413,17 +413,16 @@ const ProductList: React.FC = () => {
                           WebkitBoxOrient: 'vertical' as any,
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          whiteSpace: 'normal',
-                          maxWidth: 560
+                          whiteSpace: 'normal'
                         }}
                       >
                         {product.description || '-'}
                       </div>
                     </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                    <td style={{ width: '15%', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {new Date(product.createdAt).toLocaleDateString('vi-VN')}
                     </td>
-                    <td>
+                    <td style={{ width: '15%' }}>
                       <div className="d-flex" style={{ gap: 8 }}>
                         <button
                           onClick={() => handleCopyDescription(product)}
