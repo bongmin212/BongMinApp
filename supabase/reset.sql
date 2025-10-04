@@ -55,6 +55,7 @@ create table public.packages (
   cost_price numeric not null default 0,
   ctv_price numeric not null default 0,
   retail_price numeric not null default 0,
+  custom_fields jsonb,
   is_account_based boolean default false,
   default_slots int,
   account_columns jsonb,
