@@ -82,6 +82,7 @@ export class Database {
     });
     
     // Find the first available number starting from 1
+    // This will reuse deleted codes immediately
     let nextNum = 1;
     while (existingNumbers.has(nextNum)) {
       nextNum++;
@@ -108,6 +109,7 @@ export class Database {
     });
     
     // Find the first available number starting from 1
+    // This will reuse deleted codes immediately
     let nextNum = 1;
     while (existingNumbers.has(nextNum)) {
       nextNum++;

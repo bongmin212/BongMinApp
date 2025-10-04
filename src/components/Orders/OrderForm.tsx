@@ -109,25 +109,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           if (!sb) return;
           const { data } = await sb.from('orders').select('code').order('created_at', { ascending: false }).limit(2000);
           const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const generateNextCodeFromList = (list: string[], prefix: string, padLength: number = 4): string => {
-            let maxNum = 0;
-            let detectedPad = padLength;
-            list.forEach(code => {
-              const m = String(code || '').match(/^([A-Za-z]+)(\d+)$/);
-              if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
-                const numStr = m[2];
-                const num = parseInt(numStr, 10);
-                if (!isNaN(num)) {
-                  if (num > maxNum) maxNum = num;
-                  detectedPad = Math.max(detectedPad, numStr.length);
-                }
-              }
-            });
-            const nextNum = maxNum + 1;
-            const width = Math.max(padLength, detectedPad);
-            return `${prefix}${String(nextNum).padStart(width, '0')}`;
-          };
-          const nextCode = generateNextCodeFromList(codes, 'DH', 4);
+          const nextCode = Database.generateNextCodeFromList(codes, 'DH', 4);
           setFormData(prev => ({ ...prev, code: nextCode }));
         } catch {}
       })();
@@ -137,21 +119,48 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   // Force refresh code when form opens for new order
   useEffect(() => {
     if (!order) {
-      const nextCode = Database.generateNextOrderCode('DH', 4);
-      setFormData({
-        code: nextCode,
-        purchaseDate: new Date(),
-        packageId: '',
-        customerId: '',
-        status: 'PROCESSING',
-        paymentStatus: 'UNPAID',
-        orderInfo: '',
-        notes: '',
-        useCustomPrice: false,
-        customPrice: 0,
-        customFieldValues: {},
-        inventoryProfileId: ''
-      });
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('orders').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'DH', 4);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode,
+            purchaseDate: new Date(),
+            packageId: '',
+            customerId: '',
+            status: 'PROCESSING',
+            paymentStatus: 'UNPAID',
+            orderInfo: '',
+            notes: '',
+            useCustomPrice: false,
+            customPrice: 0,
+            customFieldValues: {},
+            inventoryProfileId: ''
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextOrderCode('DH', 4);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode,
+            purchaseDate: new Date(),
+            packageId: '',
+            customerId: '',
+            status: 'PROCESSING',
+            paymentStatus: 'UNPAID',
+            orderInfo: '',
+            notes: '',
+            useCustomPrice: false,
+            customPrice: 0,
+            customFieldValues: {},
+            inventoryProfileId: ''
+          }));
+        }
+      })();
     }
   }, []);
 

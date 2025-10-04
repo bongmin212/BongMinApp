@@ -124,7 +124,7 @@ const ProductList: React.FC = () => {
     setFormKey(prev => prev + 1); // Force refresh form key
     setTimeout(() => {
       setShowForm(true); // Then open with fresh state
-    }, 100); // Increase delay to ensure local storage is updated
+    }, 50); // Reduced delay for better UX
   };
 
   const handleEdit = (product: Product) => {
@@ -153,7 +153,7 @@ const ProductList: React.FC = () => {
               setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
-              }, 100); // Add small delay to ensure local storage is updated
+              }, 50); // Reduced delay for better UX
             }
             
             try {
@@ -199,7 +199,7 @@ const ProductList: React.FC = () => {
               setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
-              }, 100); // Add small delay to ensure local storage is updated
+              }, 50); // Reduced delay for better UX
             }
             
             try {

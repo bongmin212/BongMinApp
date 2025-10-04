@@ -31,16 +31,59 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         sharedInventoryPool: !!product.sharedInventoryPool
       });
     } else {
-      // Always generate fresh code for new product
-      const nextCode = Database.generateNextProductCode();
-      setFormData({
-        code: nextCode,
-        name: '',
-        description: '',
-        sharedInventoryPool: false
-      });
+      // Always generate fresh code for new product (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('products').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'SP', 3);
+          setFormData({
+            code: nextCode,
+            name: '',
+            description: '',
+            sharedInventoryPool: false
+          });
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextProductCode();
+          setFormData({
+            code: nextCode,
+            name: '',
+            description: '',
+            sharedInventoryPool: false
+          });
+        }
+      })();
     }
   }, [product]);
+
+  // Force refresh code when form opens for new product (after deletion)
+  useEffect(() => {
+    if (!product) {
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('products').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'SP', 3);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextProductCode();
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        }
+      })();
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

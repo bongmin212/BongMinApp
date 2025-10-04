@@ -145,7 +145,7 @@ const OrderList: React.FC = () => {
     setShowForm(false); // Force close first
     setTimeout(() => {
       setShowForm(true); // Then open with fresh state
-    }, 0);
+    }, 50); // Small delay to ensure fresh state
   };
 
   const handleEdit = (order: Order) => {
@@ -192,7 +192,7 @@ const OrderList: React.FC = () => {
               setShowForm(false);
               setTimeout(() => {
                 setShowForm(true);
-              }, 100); // Add small delay to ensure local storage is updated
+              }, 50); // Reduced delay for better UX
             }
             
             try {
