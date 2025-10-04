@@ -113,12 +113,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       // Optional: activity log
       try {
-      try {
         const sb = getSupabase();
         if (sb) {
           await sb.from('activity_logs').insert({ employee_id: res.user.id, action: 'Đăng nhập hệ thống', details: `Nhân viên ${res.user.username} đăng nhập` });
         }
-      } catch {}
       } catch {}
       dispatch({ type: 'LOGIN_SUCCESS', payload: { user: res.user, token: res.sessionToken } });
       try { await hydrateAllFromSupabase(); } catch {}
