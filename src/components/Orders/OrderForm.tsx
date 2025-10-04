@@ -148,12 +148,27 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Customer[];
     const allPackages = (packagesRes.data || []).map((r: any) => ({
-      ...r,
+      id: r.id,
+      code: r.code,
+      productId: r.product_id,
+      name: r.name,
+      warrantyPeriod: r.warranty_period,
+      costPrice: r.cost_price,
+      ctvPrice: r.ctv_price,
+      retailPrice: r.retail_price,
+      customFields: r.custom_fields || [],
+      isAccountBased: !!r.is_account_based,
+      accountColumns: r.account_columns || [],
+      defaultSlots: r.default_slots,
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as ProductPackage[];
     const allProducts = (productsRes.data || []).map((r: any) => ({
-      ...r,
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      description: r.description || '',
+      sharedInventoryPool: !!r.shared_inventory_pool,
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Product[];
