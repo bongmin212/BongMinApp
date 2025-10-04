@@ -22,6 +22,7 @@ const ProductList: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [formKey, setFormKey] = useState(0);
 
   useEffect(() => {
     loadProducts();
@@ -120,9 +121,10 @@ const ProductList: React.FC = () => {
   const handleCreate = () => {
     setEditingProduct(null);
     setShowForm(false); // Force close first
+    setFormKey(prev => prev + 1); // Force refresh form key
     setTimeout(() => {
       setShowForm(true); // Then open with fresh state
-    }, 0);
+    }, 100); // Increase delay to ensure local storage is updated
   };
 
   const handleEdit = (product: Product) => {
@@ -148,6 +150,7 @@ const ProductList: React.FC = () => {
             // Force refresh form if it's open
             if (showForm && !editingProduct) {
               setShowForm(false);
+              setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
               }, 100); // Add small delay to ensure local storage is updated
@@ -193,6 +196,7 @@ const ProductList: React.FC = () => {
             // Force refresh form if it's open
             if (showForm && !editingProduct) {
               setShowForm(false);
+              setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
               }, 100); // Add small delay to ensure local storage is updated
@@ -434,7 +438,7 @@ const ProductList: React.FC = () => {
 
       {showForm && (
         <ProductForm
-          key={editingProduct?.id || 'new'}
+          key={`${editingProduct?.id || 'new'}-${formKey}`}
           product={editingProduct}
           onClose={() => {
             setShowForm(false);

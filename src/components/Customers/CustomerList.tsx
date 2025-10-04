@@ -22,6 +22,7 @@ const CustomerList: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [formKey, setFormKey] = useState(0);
   const [filterType, setFilterType] = useState<CustomerType | ''>('');
   const [filterSource, setFilterSource] = useState<CustomerSource | ''>('');
 
@@ -108,9 +109,10 @@ const CustomerList: React.FC = () => {
   const handleCreate = () => {
     setEditingCustomer(null);
     setShowForm(false); // Force close first
+    setFormKey(prev => prev + 1); // Force refresh form key
     setTimeout(() => {
       setShowForm(true); // Then open with fresh state
-    }, 0);
+    }, 100); // Increase delay to ensure local storage is updated
   };
 
   const handleEdit = (customer: Customer) => {
@@ -142,6 +144,7 @@ const CustomerList: React.FC = () => {
             // Force refresh form if it's open
             if (showForm && !editingCustomer) {
               setShowForm(false);
+              setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
               }, 100); // Add small delay to ensure local storage is updated
@@ -187,6 +190,7 @@ const CustomerList: React.FC = () => {
             // Force refresh form if it's open
             if (showForm && !editingCustomer) {
               setShowForm(false);
+              setFormKey(prev => prev + 1); // Force refresh form key
               setTimeout(() => {
                 setShowForm(true);
               }, 100); // Add small delay to ensure local storage is updated
@@ -437,7 +441,7 @@ const CustomerList: React.FC = () => {
 
       {showForm && (
         <CustomerForm
-          key={editingCustomer?.id || 'new'}
+          key={`${editingCustomer?.id || 'new'}-${formKey}`}
           customer={editingCustomer}
           onClose={() => {
             setShowForm(false);
