@@ -66,7 +66,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         code: nextCode,
         productId: '',
         packageId: '',
-        purchaseDate: new Date().toISOString().split('T')[0],
+        purchaseDate: new Date(),
         sourceNote: '',
         purchasePrice: 0,
         productInfo: '',

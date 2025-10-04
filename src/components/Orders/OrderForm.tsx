@@ -140,26 +140,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const nextCode = Database.generateNextOrderCode('DH', 4);
       setFormData({
         code: nextCode,
-        customerId: '',
-        customerName: '',
-        customerPhone: '',
-        customerEmail: '',
-        productId: '',
+        purchaseDate: new Date(),
         packageId: '',
-        inventoryItemId: '',
-        quantity: 1,
-        unitPrice: 0,
-        totalPrice: 0,
-        discount: 0,
-        finalPrice: 0,
-        paymentMethod: 'CASH',
-        paymentStatus: 'PENDING',
-        deliveryMethod: 'PICKUP',
-        deliveryAddress: '',
-        deliveryDate: '',
+        customerId: '',
+        status: 'PROCESSING',
+        paymentStatus: 'UNPAID',
+        orderInfo: '',
         notes: '',
-        status: 'PENDING',
-        email: ''
+        useCustomPrice: false,
+        customPrice: 0,
+        customFieldValues: {},
+        inventoryProfileId: ''
       });
     }
   }, []);
