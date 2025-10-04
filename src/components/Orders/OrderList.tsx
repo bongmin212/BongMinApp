@@ -142,7 +142,10 @@ const OrderList: React.FC = () => {
 
   const handleCreate = () => {
     setEditingOrder(null);
-    setShowForm(true);
+    setShowForm(false); // Force close first
+    setTimeout(() => {
+      setShowForm(true); // Then open with fresh state
+    }, 0);
   };
 
   const handleEdit = (order: Order) => {

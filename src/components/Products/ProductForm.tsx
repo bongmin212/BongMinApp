@@ -31,10 +31,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         sharedInventoryPool: !!product.sharedInventoryPool
       });
     } else {
+      // Always generate fresh code for new products
       const nextCode = Database.generateNextProductCode();
       setFormData(prev => ({ ...prev, code: nextCode }));
     }
   }, [product]);
+
+  // Force refresh code when form opens for new product
+  useEffect(() => {
+    if (!product) {
+      const nextCode = Database.generateNextProductCode();
+      setFormData(prev => ({ ...prev, code: nextCode }));
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

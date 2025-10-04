@@ -420,7 +420,13 @@ const WarehouseList: React.FC = () => {
                 <button className="btn btn-secondary" onClick={bulkUnlink}>Gỡ liên kết đã chọn</button>
               </>
             )}
-            <button className="btn btn-primary" onClick={() => { setEditingItem(null); setShowForm(true); }}>Nhập kho</button>
+            <button className="btn btn-primary" onClick={() => { 
+              setEditingItem(null); 
+              setShowForm(false); // Force close first
+              setTimeout(() => {
+                setShowForm(true); // Then open with fresh state
+              }, 0);
+            }}>Nhập kho</button>
           </div>
         </div>
       </div>
