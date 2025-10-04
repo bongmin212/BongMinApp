@@ -180,6 +180,10 @@ const OrderList: React.FC = () => {
           if (!sb) return notify('Không thể xóa đơn hàng', 'error');
           const { error } = await sb.from('orders').delete().eq('id', id);
           if (!error) {
+            // Update local storage immediately
+            const currentOrders = Database.getOrders();
+            Database.setOrders(currentOrders.filter(o => o.id !== id));
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: (() => { const o = orders.find(x => x.id === id); return `orderId=${id}; orderCode=${o?.code}`; })() });

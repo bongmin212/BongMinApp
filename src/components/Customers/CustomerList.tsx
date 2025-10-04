@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Customer, CustomerType, CustomerSource, CUSTOMER_TYPES, CUSTOMER_SOURCES } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
+import { Database } from '../../utils/database';
 import CustomerForm from './CustomerForm';
 import CustomerOrderHistory from './CustomerOrderHistory';
 import { useAuth } from '../../contexts/AuthContext';
@@ -131,6 +132,10 @@ const CustomerList: React.FC = () => {
           const snapshot = customers.find(c => c.id === id) || null;
           const { error } = await sb.from('customers').delete().eq('id', id);
           if (!error) {
+            // Update local storage immediately
+            const currentCustomers = Database.getCustomers();
+            Database.setCustomers(currentCustomers.filter(c => c.id !== id));
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
@@ -164,6 +169,10 @@ const CustomerList: React.FC = () => {
           if (!sb) return notify('Không thể xóa khách hàng', 'error');
           const { error } = await sb.from('customers').delete().in('id', selectedIds);
           if (!error) {
+            // Update local storage immediately
+            const currentCustomers = Database.getCustomers();
+            Database.setCustomers(currentCustomers.filter(c => !selectedIds.includes(c.id)));
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt khách hàng', details: `ids=${selectedIds.join(',')}` });

@@ -91,6 +91,10 @@ const PackageList: React.FC = () => {
         if (!sb) return notify('Không thể xóa gói sản phẩm', 'error');
         const { error } = await sb.from('packages').delete().eq('id', id);
         if (!error) {
+          // Update local storage immediately
+          const currentPackages = Database.getPackages();
+          Database.setPackages(currentPackages.filter(p => p.id !== id));
+          
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa gói sản phẩm', details: `packageId=${id}` });
@@ -121,6 +125,10 @@ const PackageList: React.FC = () => {
         if (!sb) return notify('Không thể xóa gói sản phẩm', 'error');
         const { error } = await sb.from('packages').delete().in('id', selectedIds);
         if (!error) {
+          // Update local storage immediately
+          const currentPackages = Database.getPackages();
+          Database.setPackages(currentPackages.filter(p => !selectedIds.includes(p.id)));
+          
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt gói', details: `ids=${selectedIds.join(',')}` });

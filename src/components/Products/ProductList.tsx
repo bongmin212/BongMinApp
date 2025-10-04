@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
+import { Database } from '../../utils/database';
 import ProductForm from './ProductForm';
 import { IconEdit, IconTrash, IconBox, IconClipboard } from '../Icons';
 // removed export button
@@ -137,6 +138,10 @@ const ProductList: React.FC = () => {
           if (!sb) return notify('Không thể xóa sản phẩm', 'error');
           const { error } = await sb.from('products').delete().eq('id', id);
           if (!error) {
+            // Update local storage immediately
+            const currentProducts = Database.getProducts();
+            Database.setProducts(currentProducts.filter(p => p.id !== id));
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa sản phẩm', details: `productId=${id}` });
@@ -170,6 +175,10 @@ const ProductList: React.FC = () => {
           if (!sb) return notify('Không thể xóa sản phẩm', 'error');
           const { error } = await sb.from('products').delete().in('id', selectedIds);
           if (!error) {
+            // Update local storage immediately
+            const currentProducts = Database.getProducts();
+            Database.setProducts(currentProducts.filter(p => !selectedIds.includes(p.id)));
+            
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}` });

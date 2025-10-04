@@ -285,6 +285,10 @@ const WarehouseList: React.FC = () => {
         if (!sb) return notify('Không thể xóa kho', 'error');
         const { error } = await sb.from('inventory').delete().in('id', deletable);
         if (!error) {
+          // Update local storage immediately
+          const currentInventory = Database.getInventory();
+          Database.setInventory(currentInventory.filter(i => !deletable.includes(i.id)));
+          
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
@@ -338,6 +342,10 @@ const WarehouseList: React.FC = () => {
         const snapshot = items.find(i => i.id === id) || null;
         const { error } = await sb.from('inventory').delete().eq('id', id);
         if (!error) {
+          // Update local storage immediately
+          const currentInventory = Database.getInventory();
+          Database.setInventory(currentInventory.filter(i => i.id !== id));
+          
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });

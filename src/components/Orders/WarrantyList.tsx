@@ -393,6 +393,10 @@ const handleDelete = (id: string) => {
 					const w = warranties.find(x => x.id === id);
 					const { error } = await sb.from('warranties').delete().eq('id', id);
 					if (!error) {
+						// Update local storage immediately
+						const currentWarranties = Database.getWarranties();
+						Database.setWarranties(currentWarranties.filter(w => w.id !== id));
+						
                         try {
                             const sb2 = getSupabase();
                             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn bảo hành', details: `warrantyId=${id}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
