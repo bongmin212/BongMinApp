@@ -90,6 +90,8 @@ const ProductList: React.FC = () => {
         code: r.code,
         name: r.name,
         description: r.description || '',
+        // ensure shared inventory pool flag is preserved when editing
+        sharedInventoryPool: !!r.shared_inventory_pool,
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       })) as Product[];

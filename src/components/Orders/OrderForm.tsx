@@ -36,6 +36,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [inventoryError, setInventoryError] = useState<string>('');
+  // Search states (debounced)
+  const [productSearch, setProductSearch] = useState('');
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
   const [newCustomerData, setNewCustomerData] = useState<{
     code: string;
     name: string;
@@ -398,6 +405,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       }
     }
   }, [order, packages]);
+
+  // Debounce search inputs (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedProductSearch(productSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [productSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCustomerSearch(customerSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [customerSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedInventorySearch(inventorySearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [inventorySearch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -980,6 +1001,39 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     return customers.find(c => c.id === formData.customerId);
   };
 
+  const getFilteredProducts = () => {
+    const q = debouncedProductSearch;
+    if (!q) return products;
+    return products.filter(p => (
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.code || '').toLowerCase().includes(q)
+    ));
+  };
+
+  const getFilteredCustomers = () => {
+    const q = debouncedCustomerSearch;
+    if (!q) return customers;
+    return customers.filter(c => {
+      const name = (c.name || '').toLowerCase();
+      const phone = String(c.phone || '').toLowerCase();
+      const email = String(c.email || '').toLowerCase();
+      const code = String(c.code || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q) || code.includes(q);
+    });
+  };
+
+  const getFilteredInventory = () => {
+    const q = debouncedInventorySearch;
+    if (!q) return availableInventory;
+    return availableInventory.filter(item => {
+      const code = String(item.code || '').toLowerCase();
+      const info = String(item.productInfo || '').toLowerCase();
+      const productName = (products.find(p => p.id === item.productId)?.name || '').toLowerCase();
+      const packageName = (packages.find(p => p.id === item.packageId)?.name || '').toLowerCase();
+      return code.includes(q) || info.includes(q) || productName.includes(q) || packageName.includes(q);
+    });
+  };
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -1079,6 +1133,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             <label className="form-label">
               Sản phẩm <span className="text-danger">*</span>
             </label>
+            <input
+              type="text"
+              className="form-control mb-2"
+              placeholder="Tìm sản phẩm theo tên/mã..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+            />
             <select
               name="product"
               className="form-control"
@@ -1086,7 +1147,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               onChange={handleProductChange}
             >
               <option value="">Chọn sản phẩm</option>
-              {products.map(product => (
+              {getFilteredProducts().map(product => (
                 <option key={product.id} value={product.id}>
                   {product.name}
                 </option>
@@ -1165,6 +1226,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               <div className="card-body">
                 <div className="form-group">
                   <label className="form-label">Chọn hàng trong kho (không bắt buộc)</label>
+                  <input
+                    type="text"
+                    className="form-control mb-2"
+                    placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
+                    value={inventorySearch}
+                    onChange={(e) => setInventorySearch(e.target.value)}
+                  />
                   <select
                     className="form-control"
                     value={selectedInventoryId}
@@ -1174,7 +1242,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     }}
                   >
                     <option value="">Không chọn</option>
-                    {availableInventory.map(item => {
+                    {getFilteredInventory().map(item => {
                       const product = products.find(p => p.id === item.productId);
                       const packageInfo = packages.find(p => p.id === item.packageId);
                       const productName = product?.name || 'Không xác định';
@@ -1369,19 +1437,28 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               Khách hàng <span className="text-danger">*</span>
             </label>
             <div className="d-flex gap-2">
-              <select
-                name="customerId"
-                className={`form-control ${errors.customerId ? 'is-invalid' : ''}`}
-                value={formData.customerId}
-                onChange={handleChange}
-              >
-                <option value="">Chọn khách hàng</option>
-                {customers.map(customer => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
-                  </option>
-                ))}
-              </select>
+              <div style={{ flex: 1 }}>
+                <input
+                  type="text"
+                  className={`form-control mb-2 ${errors.customerId ? 'is-invalid' : ''}`}
+                  placeholder="Tìm khách theo tên/SĐT/email/mã..."
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+                <select
+                  name="customerId"
+                  className={`form-control ${errors.customerId ? 'is-invalid' : ''}`}
+                  value={formData.customerId}
+                  onChange={handleChange}
+                >
+                  <option value="">Chọn khách hàng</option>
+                  {getFilteredCustomers().map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <button
                 type="button"
                 onClick={() => {
