@@ -93,7 +93,8 @@ const WarehouseList: React.FC = () => {
       linkedOrderId: r.linked_order_id || undefined,
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    })) as InventoryItem[];
+    };
+    }) as InventoryItem[];
     
     const prods = (prodRes.data || []).map((r: any) => ({
       ...r,
