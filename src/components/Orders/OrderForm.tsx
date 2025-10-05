@@ -665,8 +665,19 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 if (!selectedProfileId) {
                   notify('Vui lòng chọn slot để cấp', 'warning');
                 } else {
-                  const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
                   console.log('Current profiles:', profiles);
+                  
+                  // If profiles array is empty, generate default profiles
+                  if (profiles.length === 0 && inv.total_slots && inv.total_slots > 0) {
+                    console.log('Generating default profiles for inventory item');
+                    profiles = Array.from({ length: inv.total_slots }, (_, idx) => ({
+                      id: `slot-${idx + 1}`,
+                      label: `Slot ${idx + 1}`,
+                      isAssigned: false
+                    }));
+                  }
+                  
                   const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
                     ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
                     : p);
@@ -787,8 +798,19 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 if (!selectedProfileId) {
                   notify('Vui lòng chọn profile để cấp', 'warning');
                 } else {
-                  const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
                   console.log('Current profiles:', profiles);
+                  
+                  // If profiles array is empty, generate default profiles
+                  if (profiles.length === 0 && inv.total_slots && inv.total_slots > 0) {
+                    console.log('Generating default profiles for inventory item');
+                    profiles = Array.from({ length: inv.total_slots }, (_, idx) => ({
+                      id: `slot-${idx + 1}`,
+                      label: `Slot ${idx + 1}`,
+                      isAssigned: false
+                    }));
+                  }
+                  
                   const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
                     ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
                     : p);

@@ -78,10 +78,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
     setInventory((inventoryRes.data || []) as any[]);
   };
 
-  const customerCode = (() => {
-    const idx = Database.getCustomers().findIndex(c => c.id === customer.id);
-    return `KH${idx + 1}`;
-  })();
+  const customerCode = customer.code || 'KH001';
 
   const getPackageInfo = (packageId: string) => {
     const pkg = packages.find(p => p.id === packageId);
