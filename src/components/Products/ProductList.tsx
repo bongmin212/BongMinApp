@@ -286,7 +286,7 @@ const ProductList: React.FC = () => {
                 { header: 'Mô tả', key: 'description', width: 60 },
                 { header: 'Ngày tạo', key: 'createdAt', width: 14 },
               ], 'products_filtered.xlsx', 'Sản phẩm');
-            }}>Xuất Excel (kết quả đã lọc ≤ 1000)</button>
+            }}>Xuất Excel (kết quả đã lọc)</button>
             <button
               onClick={handleCreate}
               className="btn btn-primary"

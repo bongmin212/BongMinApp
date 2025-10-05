@@ -502,6 +502,78 @@ const WarehouseList: React.FC = () => {
     });
   };
 
+  const bulkRenewal = () => {
+    const renewables = pageItems.filter(i => selectedIds.includes(i.id));
+    if (renewables.length === 0) return;
+    
+    setConfirmState({
+      message: `Gia hạn ${renewables.length} kho hàng đã chọn?`,
+      onConfirm: async () => {
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể gia hạn kho hàng', 'error');
+        
+        let successCount = 0;
+        let errorCount = 0;
+        const renewalDetails: string[] = [];
+        
+        for (const inv of renewables) {
+          try {
+            const product = products.find(p => p.id === inv.productId);
+            const packageInfo = packages.find(p => p.id === inv.packageId);
+            
+            // Calculate new expiry date
+            const currentExpiry = new Date(inv.expiryDate);
+            const newExpiry = new Date(currentExpiry);
+            
+            if (product?.sharedInventoryPool) {
+              // For shared pool products, add 1 month
+              newExpiry.setMonth(newExpiry.getMonth() + 1);
+            } else {
+              // For regular products, add package warranty period
+              const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+              newExpiry.setMonth(newExpiry.getMonth() + warrantyPeriod);
+            }
+            
+            const { error } = await sb.from('inventory').update({ 
+              expiry_date: newExpiry.toISOString() 
+            }).eq('id', inv.id);
+            
+            if (!error) {
+              successCount++;
+              renewalDetails.push(`${inv.code}: ${currentExpiry.toISOString().split('T')[0]} -> ${newExpiry.toISOString().split('T')[0]}`);
+            } else {
+              errorCount++;
+            }
+          } catch (err) {
+            errorCount++;
+          }
+        }
+        
+        if (successCount > 0) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ 
+              employee_id: state.user?.id || 'system', 
+              action: 'Gia hạn hàng loạt kho hàng', 
+              details: `count=${successCount}; ids=${renewables.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}` 
+            });
+          } catch {}
+        }
+        
+        if (errorCount === 0) {
+          notify(`Đã gia hạn thành công ${successCount} kho hàng`, 'success');
+        } else if (successCount > 0) {
+          notify(`Đã gia hạn thành công ${successCount} kho hàng, ${errorCount} lỗi`, 'warning');
+        } else {
+          notify('Không thể gia hạn kho hàng', 'error');
+        }
+        
+        setSelectedIds([]);
+        refresh();
+      }
+    });
+  };
+
   const statusLabel = (status: InventoryItem['status']) => {
     switch (status) {
       case 'AVAILABLE': return 'Sẵn có';
@@ -541,6 +613,7 @@ const WarehouseList: React.FC = () => {
             <button className="btn btn-light" onClick={() => exportInventoryXlsx(filteredItems, 'inventory_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
               <>
+                <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>
                 <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn</button>
                 <button className="btn btn-secondary" onClick={bulkUnlink}>Gỡ liên kết đã chọn</button>
               </>
