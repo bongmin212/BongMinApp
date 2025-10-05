@@ -578,10 +578,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           console.log('Order ID:', order.id);
           console.log('Update data:', updateData);
           
-          const { error } = await sb
+          const { data: updateResult, error } = await sb
             .from('orders')
             .update(updateData)
-            .eq('id', order.id);
+            .eq('id', order.id)
+            .select('*')
+            .single();
           
           if (error) {
             console.error('Supabase update error:', error);
@@ -589,7 +591,36 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             return;
           }
           
-          if (!error) {
+          if (updateResult) {
+            // Convert Supabase response to our Order format and update local storage
+            const updatedOrder: Order = {
+              id: updateResult.id,
+              code: updateResult.code,
+              purchaseDate: updateResult.purchase_date ? new Date(updateResult.purchase_date) : new Date(),
+              expiryDate: updateResult.expiry_date ? new Date(updateResult.expiry_date) : new Date(),
+              packageId: updateResult.package_id,
+              customerId: updateResult.customer_id,
+              status: updateResult.status,
+              paymentStatus: updateResult.payment_status,
+              orderInfo: updateResult.order_info,
+              notes: updateResult.notes,
+              inventoryItemId: updateResult.inventory_item_id,
+              inventoryProfileId: updateResult.inventory_profile_id,
+              useCustomPrice: updateResult.use_custom_price,
+              customPrice: updateResult.custom_price,
+              customFieldValues: updateResult.custom_field_values,
+              createdBy: updateResult.created_by || state.user?.id || 'system',
+              createdAt: updateResult.created_at ? new Date(updateResult.created_at) : new Date(),
+              updatedAt: updateResult.updated_at ? new Date(updateResult.updated_at) : new Date()
+            };
+            
+            // Update local storage
+            const currentOrders = Database.getOrders();
+            const orderIndex = currentOrders.findIndex(o => o.id === order.id);
+            if (orderIndex !== -1) {
+              currentOrders[orderIndex] = updatedOrder;
+              Database.setOrders(currentOrders);
+            }
             // Update inventory link/profile if changed
             const prevInventoryId = order.inventoryItemId;
             const nextInventoryId = selectedInventoryId || undefined;
@@ -640,8 +671,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             } catch {}
             notify('Cập nhật đơn hàng thành công', 'success');
             onSuccess();
-          } else {
-            notify('Không thể cập nhật đơn hàng', 'error');
           }
         } catch (updateError) {
           const errorMessage = updateError instanceof Error ? updateError.message : 'Có lỗi xảy ra khi cập nhật đơn hàng';
@@ -674,7 +703,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           inventory_profile_id: orderData.inventoryProfileId || null,
           use_custom_price: orderData.useCustomPrice || false,
           custom_price: orderData.customPrice || null,
-          custom_field_values: orderData.customFieldValues || null
+          custom_field_values: orderData.customFieldValues || null,
+          created_by: state.user?.id || 'system'
         };
         console.log('Insert data:', insertData);
         
@@ -684,13 +714,28 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           .select('*')
           .single();
         if (createErr || !createData) throw new Error(createErr?.message || 'Tạo đơn thất bại');
-        const created = {
-          ...createData,
+        
+        // Convert Supabase response to our Order format
+        const created: Order = {
           id: createData.id,
           code: createData.code,
-          createdAt: new Date(createData.created_at),
-          updatedAt: new Date(createData.updated_at)
-        } as Order;
+          purchaseDate: createData.purchase_date ? new Date(createData.purchase_date) : new Date(),
+          expiryDate: createData.expiry_date ? new Date(createData.expiry_date) : new Date(),
+          packageId: createData.package_id,
+          customerId: createData.customer_id,
+          status: createData.status,
+          paymentStatus: createData.payment_status,
+          orderInfo: createData.order_info,
+          notes: createData.notes,
+          inventoryItemId: createData.inventory_item_id,
+          inventoryProfileId: createData.inventory_profile_id,
+          useCustomPrice: createData.use_custom_price,
+          customPrice: createData.custom_price,
+          customFieldValues: createData.custom_field_values,
+          createdBy: createData.created_by || state.user?.id || 'system',
+          createdAt: createData.created_at ? new Date(createData.created_at) : new Date(),
+          updatedAt: createData.updated_at ? new Date(createData.updated_at) : new Date()
+        };
         
         // Update local storage immediately to avoid code conflicts
         const currentOrders = Database.getOrders();

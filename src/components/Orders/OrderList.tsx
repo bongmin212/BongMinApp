@@ -117,18 +117,21 @@ const OrderList: React.FC = () => {
       // Debug logging to see what we're getting from Supabase
       console.log('Raw order from Supabase:', r);
       return {
-        ...r,
-        customerId: r.customer_id || r.customerId,
-        packageId: r.package_id || r.packageId,
-        paymentStatus: r.payment_status || r.paymentStatus,
-        orderInfo: r.order_info || r.orderInfo,
-        inventoryItemId: r.inventory_item_id || r.inventoryItemId,
-        inventoryProfileId: r.inventory_profile_id || r.inventoryProfileId,
-        useCustomPrice: r.use_custom_price || r.useCustomPrice,
-        customPrice: r.custom_price || r.customPrice,
-        customFieldValues: r.custom_field_values || r.customFieldValues,
-        purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
-        expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
+        id: r.id,
+        code: r.code,
+        customerId: r.customer_id,
+        packageId: r.package_id,
+        status: r.status,
+        paymentStatus: r.payment_status,
+        orderInfo: r.order_info,
+        notes: r.notes,
+        inventoryItemId: r.inventory_item_id,
+        inventoryProfileId: r.inventory_profile_id,
+        useCustomPrice: r.use_custom_price || false,
+        customPrice: r.custom_price,
+        customFieldValues: r.custom_field_values,
+        purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+        expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
