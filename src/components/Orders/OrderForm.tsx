@@ -533,25 +533,37 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         try {
           const sb = getSupabase();
           if (!sb) throw new Error('Supabase not configured');
+          const updateData = {
+            code: orderData.code,
+            purchase_date: orderData.purchaseDate instanceof Date ? orderData.purchaseDate.toISOString() : orderData.purchaseDate,
+            package_id: orderData.packageId,
+            customer_id: orderData.customerId,
+            status: orderData.status,
+            payment_status: orderData.paymentStatus,
+            order_info: orderData.orderInfo || null,
+            notes: orderData.notes || null,
+            expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
+            inventory_item_id: orderData.inventoryItemId || null,
+            inventory_profile_id: orderData.inventoryProfileId || null,
+            use_custom_price: orderData.useCustomPrice || false,
+            custom_price: orderData.customPrice || null,
+            custom_field_values: orderData.customFieldValues || null
+          };
+          console.log('=== ORDER UPDATE DEBUG ===');
+          console.log('Order ID:', order.id);
+          console.log('Update data:', updateData);
+          
           const { error } = await sb
             .from('orders')
-            .update({
-              code: orderData.code,
-              purchase_date: orderData.purchaseDate,
-              package_id: orderData.packageId,
-              customer_id: orderData.customerId,
-              status: orderData.status,
-              payment_status: orderData.paymentStatus,
-              order_info: orderData.orderInfo,
-              notes: orderData.notes,
-              expiry_date: orderData.expiryDate,
-              inventory_item_id: orderData.inventoryItemId,
-              inventory_profile_id: orderData.inventoryProfileId,
-              use_custom_price: orderData.useCustomPrice,
-              custom_price: orderData.customPrice,
-              custom_field_values: orderData.customFieldValues
-            })
+            .update(updateData)
             .eq('id', order.id);
+          
+          if (error) {
+            console.error('Supabase update error:', error);
+            notify(`Lỗi cập nhật: ${error.message}`, 'error');
+            return;
+          }
+          
           if (!error) {
             // Update inventory link/profile if changed
             const prevInventoryId = order.inventoryItemId;
@@ -625,19 +637,19 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         
         const insertData = {
           code: orderData.code,
-          purchase_date: orderData.purchaseDate,
+          purchase_date: orderData.purchaseDate instanceof Date ? orderData.purchaseDate.toISOString() : orderData.purchaseDate,
           package_id: orderData.packageId,
           customer_id: orderData.customerId,
           status: orderData.status,
           payment_status: orderData.paymentStatus,
-          order_info: orderData.orderInfo,
-          notes: orderData.notes,
-          expiry_date: orderData.expiryDate,
-          inventory_item_id: orderData.inventoryItemId,
-          inventory_profile_id: orderData.inventoryProfileId,
-          use_custom_price: orderData.useCustomPrice,
-          custom_price: orderData.customPrice,
-          custom_field_values: orderData.customFieldValues
+          order_info: orderData.orderInfo || null,
+          notes: orderData.notes || null,
+          expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
+          inventory_item_id: orderData.inventoryItemId || null,
+          inventory_profile_id: orderData.inventoryProfileId || null,
+          use_custom_price: orderData.useCustomPrice || false,
+          custom_price: orderData.customPrice || null,
+          custom_field_values: orderData.customFieldValues || null
         };
         console.log('Insert data:', insertData);
         
