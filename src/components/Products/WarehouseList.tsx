@@ -655,6 +655,19 @@ const WarehouseList: React.FC = () => {
     return <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setFilterProduct('');
+    setFilterPackage('');
+    setFilterStatus('');
+    setDateFrom('');
+    setDateTo('');
+    setOnlyAccounts(false);
+    setOnlyFreeSlots(false);
+    setPage(1);
+  };
+
   return (
     <div className="card">
       <div className="card-header">
@@ -751,6 +764,9 @@ const WarehouseList: React.FC = () => {
               <option value="0">Tất cả slot</option>
               <option value="1">Chỉ còn slot trống</option>
             </select>
+          </div>
+          <div>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>

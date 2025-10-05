@@ -266,6 +266,14 @@ const CustomerList: React.FC = () => {
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Khách hàng');
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setFilterType('');
+    setFilterSource('');
+    setPage(1);
+  };
+
   return (
     <div className="card">
       <div className="card-header">
@@ -327,6 +335,9 @@ const CustomerList: React.FC = () => {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>

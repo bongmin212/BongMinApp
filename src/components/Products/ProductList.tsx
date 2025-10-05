@@ -254,6 +254,12 @@ const ProductList: React.FC = () => {
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Sản phẩm');
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setPage(1);
+  };
+
 
   return (
     <div className="card">
@@ -300,13 +306,20 @@ const ProductList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <input
-          type="text"
-          className="form-control"
-          placeholder="Tìm kiếm sản phẩm..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+          <div>
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Tìm kiếm sản phẩm..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
+          </div>
+        </div>
       </div>
 
       {paginatedProducts.length === 0 ? (

@@ -343,6 +343,13 @@ const ActivityLogList: React.FC = () => {
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Hoạt động');
   };
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setSelectedEmployee('');
+    setPage(1);
+  };
+
   if (!isManager()) {
     return (
       <div className="card">
@@ -392,6 +399,9 @@ const ActivityLogList: React.FC = () => {
               <button className="btn btn-light" onClick={() => exportLogsXlsx(pageItems, 'activity_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
               <button className="btn btn-light" onClick={() => exportLogsXlsx(filteredLogs, 'activity_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
             </div>
+          </div>
+          <div>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>

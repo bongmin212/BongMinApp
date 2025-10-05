@@ -877,6 +877,18 @@ const OrderList: React.FC = () => {
     });
   }, [customerMap, packageMap, productMap]);
 
+  const resetFilters = () => {
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
+    setFilterStatus('');
+    setFilterPayment('');
+    setDateFrom('');
+    setDateTo('');
+    setExpiryFilter('');
+    setOnlyExpiringNotSent(false);
+    setPage(1);
+  };
+
   return (
     <div className="card">
       <div className="card-header">
@@ -989,6 +1001,9 @@ const OrderList: React.FC = () => {
               onChange={(e) => setDateTo(e.target.value)}
               placeholder="Đến ngày"
             />
+          </div>
+          <div>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>

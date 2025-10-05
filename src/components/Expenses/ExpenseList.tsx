@@ -223,6 +223,17 @@ const ExpenseList: React.FC = () => {
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Chi phí');
   };
 
+  const resetFilters = () => {
+    setSearchQuery('');
+    setDebouncedSearchQuery('');
+    setFilterType('');
+    setDateFrom('');
+    setDateTo('');
+    setMinAmount('');
+    setMaxAmount('');
+    setPage(1);
+  };
+
   if (loading) {
     return <div className="loading">Đang tải...</div>;
   }
@@ -327,9 +338,9 @@ const ExpenseList: React.FC = () => {
           <div>
             <button
               className="btn btn-light w-100"
-              onClick={() => { setSearchQuery(''); setFilterType(''); setDateFrom(''); setDateTo(''); setMinAmount(''); setMaxAmount(''); }}
+              onClick={resetFilters}
             >
-              Xóa
+              Reset bộ lọc
             </button>
           </div>
         </div>

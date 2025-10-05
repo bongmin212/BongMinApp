@@ -365,6 +365,15 @@ const WarrantyList: React.FC = () => {
       }
     });
   };
+
+  const resetFilters = () => {
+    setSearchCode('');
+    setDebouncedSearchCode('');
+    setSearchCustomer('');
+    setDebouncedSearchCustomer('');
+    setSearchStatus('');
+    setPage(1);
+  };
   const bulkSetStatus = (status: string) => {
     if (selectedIds.length === 0) return;
     (async () => {
@@ -477,6 +486,10 @@ const handleDelete = (id: string) => {
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">&nbsp;</label>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>
