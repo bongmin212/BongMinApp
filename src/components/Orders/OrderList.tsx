@@ -126,7 +126,7 @@ const OrderList: React.FC = () => {
         orderInfo: r.order_info,
         notes: r.notes,
         inventoryItemId: r.inventory_item_id,
-        inventoryProfileId: r.inventory_prc,
+        inventoryProfileId: r.inventory_profile_id,
         useCustomPrice: r.use_custom_price || false,
         customPrice: r.custom_price,
         customFieldValues: r.custom_field_values,
