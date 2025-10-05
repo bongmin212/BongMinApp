@@ -64,9 +64,17 @@ export function subscribeRealtime(): Unsubscribe {
       }
       case 'inventory': {
         const items = Database.getInventory();
-        if (payload.eventType === 'INSERT') Database.setInventory([...items, newRow]);
-        else if (payload.eventType === 'UPDATE') Database.setInventory(items.map(x => x.id === newRow.id ? newRow : x));
-        else if (payload.eventType === 'DELETE') Database.setInventory(items.filter(x => x.id !== (oldRow?.id || payload.old?.id)));
+        if (payload.eventType === 'INSERT') {
+          Database.setInventory([...items, newRow]);
+        } else if (payload.eventType === 'UPDATE') {
+          Database.setInventory(items.map(x => x.id === newRow.id ? newRow : x));
+          try {
+            // Propagate inventory changes to linked orders so orderInfo stays in sync
+            Database.refreshOrdersForInventory(newRow.id);
+          } catch {}
+        } else if (payload.eventType === 'DELETE') {
+          Database.setInventory(items.filter(x => x.id !== (oldRow?.id || payload.old?.id)));
+        }
         break;
       }
       case 'warranties': {

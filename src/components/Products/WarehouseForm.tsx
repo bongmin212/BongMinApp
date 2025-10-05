@@ -204,6 +204,27 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           })
           .eq('id', item.id);
         if (error) throw new Error(error.message || 'Không thể cập nhật kho');
+        // Optimistically update local inventory and propagate to linked orders
+        try {
+          const current = Database.getInventory();
+          const next = current.map((it) => it.id === item.id
+            ? {
+                ...it,
+                code: formData.code,
+                productId: selectedProduct,
+                packageId: formData.packageId,
+                purchaseDate: new Date(formData.purchaseDate),
+                sourceNote: formData.sourceNote,
+                purchasePrice: formData.purchasePrice,
+                productInfo: formData.productInfo,
+                notes: formData.notes,
+                accountData: formData.accountData,
+                updatedAt: new Date()
+              }
+            : it);
+          Database.setInventory(next as any);
+          Database.refreshOrdersForInventory(item.id);
+        } catch {}
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Sửa kho', details: `inventoryId=${item.id}; code=${formData.code}` });
