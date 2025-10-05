@@ -30,6 +30,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [priceDisplay, setPriceDisplay] = useState<{ costPrice: string; ctvPrice: string; retailPrice: string }>({ costPrice: '0', ctvPrice: '0', retailPrice: '0' });
+  const [sharedConfigLocked, setSharedConfigLocked] = useState<boolean>(false);
+  const [firstPackageId, setFirstPackageId] = useState<string | null>(null);
 
   useEffect(() => {
     const allProducts = Database.getProducts();
@@ -54,6 +56,30 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         ctvPrice: new Intl.NumberFormat('vi-VN').format(pkg.ctvPrice),
         retailPrice: new Intl.NumberFormat('vi-VN').format(pkg.retailPrice)
       });
+      // Determine lock state for existing package (cannot edit shared-config if not first in shared pool)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const pr = await sb.from('products').select('id, shared_inventory_pool').eq('id', pkg.productId).maybeSingle();
+          const shared = !!(pr.data && pr.data.shared_inventory_pool);
+          if (!shared) {
+            setSharedConfigLocked(false);
+            setFirstPackageId(null);
+            return;
+          }
+          const first = await sb
+            .from('packages')
+            .select('id')
+            .eq('product_id', pkg.productId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          const firstId = first.data?.id || null;
+          setFirstPackageId(firstId);
+          setSharedConfigLocked(!!firstId && firstId !== pkg.id);
+        } catch {}
+      })();
     } else {
       // Always generate fresh code for new package (from Supabase)
       (async () => {
@@ -133,6 +159,60 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     }
   }, []);
 
+  // When selecting product for a NEW package, auto-copy shared settings from the first package if product uses shared pool
+  useEffect(() => {
+    if (!formData.productId) {
+      setSharedConfigLocked(false);
+      setFirstPackageId(null);
+      return;
+    }
+    (async () => {
+      try {
+        const sb = getSupabase();
+        if (!sb) return;
+        // Check if product uses shared pool
+        const pr = await sb.from('products').select('id, shared_inventory_pool').eq('id', formData.productId).maybeSingle();
+        const shared = !!(pr.data && pr.data.shared_inventory_pool);
+        if (!shared) {
+          setSharedConfigLocked(false);
+          setFirstPackageId(null);
+          return;
+        }
+        // Find first package for this product
+        const first = await sb
+          .from('packages')
+          .select('id, custom_fields, is_account_based, account_columns, default_slots')
+          .eq('product_id', formData.productId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (first.data) {
+          setFirstPackageId(first.data.id);
+          // If creating a new package (no pkg), lock and copy from first
+          if (!pkg) {
+            setSharedConfigLocked(true);
+            setFormData(prev => ({
+              ...prev,
+              customFields: (first.data as any).custom_fields || [],
+              isAccountBased: !!(first.data as any).is_account_based,
+              accountColumns: (first.data as any).account_columns || [],
+              defaultSlots: (first.data as any).default_slots ?? (prev.isAccountBased ? (prev.defaultSlots ?? 5) : undefined)
+            }));
+          } else {
+            // Editing existing: lock if not the first
+            setSharedConfigLocked(first.data.id !== pkg.id);
+          }
+        } else {
+          // No existing packages for this product → first package can edit freely
+          setFirstPackageId(null);
+          setSharedConfigLocked(false);
+        }
+      } catch {
+        // leave as-is on error
+      }
+    })();
+  }, [formData.productId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -204,11 +284,15 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         });
 
         try {
-          // Enforce defaultSlots rules before saving
+          // Enforce defaultSlots rules before saving and lock shared-config if applicable
           const normalizedForm = {
             ...formData,
-            defaultSlots: formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined
-          };
+            // If shared-config is locked for this package, preserve existing values
+            customFields: sharedConfigLocked ? (pkg.customFields || []) : (formData.customFields || []),
+            isAccountBased: sharedConfigLocked ? !!pkg.isAccountBased : !!formData.isAccountBased,
+            accountColumns: sharedConfigLocked ? (pkg.accountColumns || []) : (formData.accountColumns || []),
+            defaultSlots: (sharedConfigLocked ? (pkg.defaultSlots) : (formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined))
+          } as PackageFormData;
           const sb = getSupabase();
           if (!sb) throw new Error('Supabase not configured');
           const { error } = await sb
@@ -572,9 +656,12 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
           <div className="card mt-3">
             <div className="card-header d-flex justify-content-between align-items-center">
               <h5 className="mb-0">Trường tùy chỉnh</h5>
-              <button type="button" className="btn btn-sm btn-outline-primary" onClick={addCustomField}>+ Thêm trường</button>
+              <button type="button" className="btn btn-sm btn-outline-primary" onClick={addCustomField} disabled={sharedConfigLocked} title={sharedConfigLocked ? 'Đang dùng cấu hình chung từ gói đầu tiên' : undefined}>+ Thêm trường</button>
             </div>
             <div className="card-body">
+              {sharedConfigLocked && (
+                <div className="alert alert-info py-2">Cấu hình trường tùy chỉnh đang bị khóa theo gói đầu tiên của sản phẩm.</div>
+              )}
               {(formData.customFields || []).length === 0 && (
                 <div className="text-muted">Chưa có trường nào. Nhấn "Thêm trường" để tạo.</div>
               )}
@@ -587,6 +674,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                       className="form-control"
                       value={field.title}
                       onChange={(e) => updateCustomField(field.id, { title: e.target.value })}
+                      disabled={sharedConfigLocked}
                       placeholder={"Ví dụ: Email Youtube"}
                     />
                   </div>
@@ -597,11 +685,12 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                       className="form-control"
                       value={field.placeholder || ''}
                       onChange={(e) => updateCustomField(field.id, { placeholder: e.target.value })}
+                      disabled={sharedConfigLocked}
                       placeholder={"Ví dụ: user@gmail.com"}
                     />
                   </div>
                   <div className="col-md-2 d-flex">
-                    <button type="button" className="btn btn-outline-danger ms-auto" onClick={() => removeCustomField(field.id)}>Xóa</button>
+                    <button type="button" className="btn btn-outline-danger ms-auto" onClick={() => removeCustomField(field.id)} disabled={sharedConfigLocked}>Xóa</button>
                   </div>
                 </div>
               ))}
@@ -617,12 +706,16 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                   id="pkg_isAccountBased"
                   checked={!!formData.isAccountBased}
                   onChange={(e) => setFormData(prev => ({ ...prev, isAccountBased: e.target.checked }))}
+                  disabled={sharedConfigLocked}
                 />
                 <label htmlFor="pkg_isAccountBased" className="mb-0">Bật quản lý slot ở kho</label>
               </div>
             </div>
             {formData.isAccountBased && (
               <div className="card-body">
+                {sharedConfigLocked && (
+                  <div className="alert alert-info py-2">Cấu hình tài khoản nhiều slot đang bị khóa theo gói đầu tiên của sản phẩm.</div>
+                )}
                 <div className="form-group">
                   <label className="form-label">Số slot mặc định</label>
                   <input
@@ -630,6 +723,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     className="form-control"
                     value={formData.defaultSlots ?? ''}
                     onChange={(e) => setFormData(prev => ({ ...prev, defaultSlots: e.target.value ? Number(e.target.value) : undefined }))}
+                    disabled={sharedConfigLocked}
                     min={1}
                     placeholder="vd: 5"
                   />
@@ -644,6 +738,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                         ...prev,
                         accountColumns: [...(prev.accountColumns || []), { id: `col-${Date.now()}`, title: '', includeInOrderInfo: true }]
                       }))}
+                      disabled={sharedConfigLocked}
                     >Thêm cột</button>
                   </div>
                   {(formData.accountColumns || []).map((col, idx) => (
@@ -657,6 +752,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                           ...prev,
                           accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, title: e.target.value } : c)
                         }))}
+                        disabled={sharedConfigLocked}
                       />
                       <div className="d-flex align-items-center gap-1">
                         <input
@@ -666,6 +762,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                             ...prev,
                             accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, includeInOrderInfo: e.target.checked } : c)
                           }))}
+                          disabled={sharedConfigLocked}
                         />
                         <span style={{ whiteSpace: 'nowrap' }}>Import</span>
                       </div>
@@ -676,6 +773,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                           ...prev,
                           accountColumns: (prev.accountColumns || []).filter(c => c.id !== col.id)
                         }))}
+                        disabled={sharedConfigLocked}
                       >Xóa</button>
                     </div>
                   ))}

@@ -899,7 +899,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const sb = getSupabase();
       if (!sb) throw new Error('Supabase not configured');
       
-      const { error: insertError } = await sb
+      const { data: createdCustomer, error: insertError } = await sb
         .from('customers')
         .insert({
           code: nextCode,
@@ -910,23 +910,25 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           source: newCustomerData.source,
           source_detail: newCustomerData.sourceDetail,
           notes: newCustomerData.notes
-        });
+        })
+        .select('*')
+        .single();
       
-      if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
+      if (insertError || !createdCustomer) throw new Error(insertError?.message || 'Không thể tạo khách hàng');
       
-      // Update local storage immediately
+      // Update local storage immediately with the real UUID from Supabase
       const newCustomer: Customer = {
-        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-        code: nextCode,
-        name: newCustomerData.name,
-        type: newCustomerData.type,
-        phone: newCustomerData.phone,
-        email: newCustomerData.email,
-        source: newCustomerData.source as CustomerSource | undefined,
-        sourceDetail: newCustomerData.sourceDetail,
-        notes: newCustomerData.notes,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        id: createdCustomer.id,
+        code: createdCustomer.code,
+        name: createdCustomer.name,
+        type: createdCustomer.type,
+        phone: createdCustomer.phone,
+        email: createdCustomer.email,
+        source: createdCustomer.source as CustomerSource | undefined,
+        sourceDetail: createdCustomer.source_detail || '',
+        notes: createdCustomer.notes,
+        createdAt: createdCustomer.created_at ? new Date(createdCustomer.created_at) : new Date(),
+        updatedAt: createdCustomer.updated_at ? new Date(createdCustomer.updated_at) : new Date()
       };
       
       const currentCustomers = Database.getCustomers();
