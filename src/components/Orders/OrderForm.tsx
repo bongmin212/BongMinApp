@@ -371,6 +371,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   }, [selectedInventoryId]);
 
   // Auto-pick first available slot for account-based inventory when none selected
+  // Default behavior: selects the first slot that is either unassigned OR already assigned to this order
   useEffect(() => {
     if (!selectedInventoryId) return;
     const inv = availableInventory.find(i => i.id === selectedInventoryId);
@@ -381,7 +382,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       setSelectedProfileId('');
       return;
     }
-    setSelectedProfileId(prev => options.some(p => p.id === prev) ? prev : options[0].id);
+    // If no slot is currently selected, or the currently selected slot is not available, pick the first available slot
+    setSelectedProfileId(prev => {
+      const isCurrentSlotAvailable = options.some(p => p.id === prev);
+      return isCurrentSlotAvailable ? prev : options[0].id;
+    });
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
 
   // Ensure selected product is correct on edit so package select isn't disabled
@@ -564,6 +569,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             notes: orderData.notes || null,
             expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
             inventory_item_id: orderData.inventoryItemId || null,
+            inventory_profile_id: orderData.inventoryProfileId || null,
             use_custom_price: orderData.useCustomPrice || false,
             custom_price: orderData.customPrice || null,
             custom_field_values: orderData.customFieldValues || null
@@ -665,6 +671,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           notes: orderData.notes || null,
           expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
           inventory_item_id: orderData.inventoryItemId || null,
+          inventory_profile_id: orderData.inventoryProfileId || null,
           use_custom_price: orderData.useCustomPrice || false,
           custom_price: orderData.customPrice || null,
           custom_field_values: orderData.customFieldValues || null
