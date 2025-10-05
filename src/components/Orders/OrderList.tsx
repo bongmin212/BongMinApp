@@ -715,7 +715,7 @@ const OrderList: React.FC = () => {
 
       return true;
     });
-  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, packageMap, productMap, customerNameLower, productNameLower, packageNameLower]);
+  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, productNameLower, packageNameLower]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
@@ -955,7 +955,7 @@ const OrderList: React.FC = () => {
               onChange={(e) => setOnlyExpiringNotSent(e.target.value === 'NOT_SENT')}
             >
               <option value="">Tất cả gửi gia hạn</option>
-              <option value="NOT_SENT">Chưa gửi gia hạn (chỉ sắp hết hạn)</option>
+              <option value="NOT_SENT">Chưa gửi gia hạn</option>
             </select>
           </div>
           <div>
