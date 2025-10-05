@@ -577,6 +577,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           console.log('=== ORDER UPDATE DEBUG ===');
           console.log('Order ID:', order.id);
           console.log('Update data:', updateData);
+          console.log('inventory_profile_id being sent:', orderData.inventoryProfileId);
           
           const { data: updateResult, error } = await sb
             .from('orders')
@@ -587,6 +588,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           
           if (error) {
             console.error('Supabase update error:', error);
+            console.error('Error details:', JSON.stringify(error, null, 2));
             notify(`Lỗi cập nhật: ${error.message}`, 'error');
             return;
           }
@@ -688,6 +690,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         console.log('inventoryProfileId:', orderData.inventoryProfileId, 'Type:', typeof orderData.inventoryProfileId);
         console.log('selectedInventoryId:', selectedInventoryId, 'Type:', typeof selectedInventoryId);
         console.log('selectedProfileId:', selectedProfileId, 'Type:', typeof selectedProfileId);
+        console.log('inventory_profile_id being sent:', orderData.inventoryProfileId);
         
         const insertData = {
           code: orderData.code,
@@ -713,7 +716,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           .insert(insertData)
           .select('*')
           .single();
-        if (createErr || !createData) throw new Error(createErr?.message || 'Tạo đơn thất bại');
+        if (createErr || !createData) {
+          console.error('Supabase create error:', createErr);
+          console.error('Error details:', JSON.stringify(createErr, null, 2));
+          throw new Error(createErr?.message || 'Tạo đơn thất bại');
+        }
         
         // Convert Supabase response to our Order format
         const created: Order = {
