@@ -586,6 +586,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             .select('*')
             .single();
           
+          console.log('Update result:', updateResult);
+          console.log('Update error:', error);
+          
           if (error) {
             console.error('Supabase update error:', error);
             console.error('Error details:', JSON.stringify(error, null, 2));
