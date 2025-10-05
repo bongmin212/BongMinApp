@@ -330,7 +330,7 @@ const WarehouseList: React.FC = () => {
 
       return matchesSearch && matchesProduct && matchesPackage && matchesStatus && pFromOk && pToOk && accountsOk && freeOk;
     });
-  }, [items, filterProduct, filterPackage, filterStatus, searchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+  }, [items, filterProduct, filterPackage, filterStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
