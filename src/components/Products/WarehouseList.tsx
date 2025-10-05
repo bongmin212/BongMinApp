@@ -32,6 +32,58 @@ const WarehouseList: React.FC = () => {
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
 
+  const releaseStuckProfiles = async (inventoryId: string) => {
+    const sb = getSupabase();
+    if (!sb) { notify('Không thể giải phóng slot kẹt', 'error'); return; }
+    try {
+      const { data: inv } = await sb.from('inventory').select('*').eq('id', inventoryId).single();
+      if (!inv || !inv.is_account_based) return;
+      const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+      const assignedIds: string[] = profiles.filter((p: any) => p.assignedOrderId).map((p: any) => p.assignedOrderId);
+      if (assignedIds.length === 0) return;
+      const { data: existing } = await sb.from('orders').select('id').in('id', assignedIds);
+      const existingSet = new Set((existing || []).map((r: any) => r.id));
+      const nextProfiles = profiles.map((p: any) => (
+        p.assignedOrderId && !existingSet.has(p.assignedOrderId)
+          ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+          : p
+      ));
+      // Only update if changed
+      const changed = JSON.stringify(nextProfiles) !== JSON.stringify(profiles);
+      if (changed) {
+        await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Giải phóng slot kẹt', details: `inventoryId=${inventoryId}` });
+        } catch {}
+        notify('Đã quét và giải phóng slot kẹt', 'success');
+        refresh();
+      } else {
+        notify('Không phát hiện slot kẹt', 'info');
+      }
+    } catch {
+      notify('Không thể quét slot kẹt', 'error');
+    }
+  };
+
+  const releaseSingleProfile = async (inventoryId: string, profileId: string) => {
+    const sb = getSupabase();
+    if (!sb) { notify('Không thể giải phóng slot', 'error'); return; }
+    try {
+      const { data: inv } = await sb.from('inventory').select('*').eq('id', inventoryId).single();
+      if (!inv || !inv.is_account_based) return;
+      const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+      const nextProfiles = profiles.map((p: any) => (
+        p.id === profileId ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
+      ));
+      await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
+      notify('Đã giải phóng slot', 'success');
+      refresh();
+    } catch {
+      notify('Không thể giải phóng slot', 'error');
+    }
+  };
+
   const refresh = async () => {
     const sb = getSupabase();
     if (!sb) return;
@@ -851,6 +903,9 @@ const WarehouseList: React.FC = () => {
                                     <button className="btn btn-sm btn-light" onClick={() => { setProfilesModal(null); setViewingOrder(order); }}>
                                       Xem đơn hàng
                                     </button>
+                                  )}
+                                  {!order && p.isAssigned && (
+                                    <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
                                   )}
                                 </div>
                               </td>
