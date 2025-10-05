@@ -113,17 +113,68 @@ const OrderList: React.FC = () => {
       sb.from('products').select('*'),
       sb.from('inventory').select('*')
     ]);
-    const allOrders = (ordersRes.data || []).map((r: any) => ({
-      ...r,
-      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
-      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    })) as Order[];
+    const allOrders = (ordersRes.data || []).map((r: any) => {
+      // Debug logging to see what we're getting from Supabase
+      console.log('Raw order from Supabase:', r);
+      return {
+        ...r,
+        customerId: r.customer_id || r.customerId,
+        packageId: r.package_id || r.packageId,
+        paymentStatus: r.payment_status || r.paymentStatus,
+        orderInfo: r.order_info || r.orderInfo,
+        inventoryItemId: r.inventory_item_id || r.inventoryItemId,
+        inventoryProfileId: r.inventory_profile_id || r.inventoryProfileId,
+        useCustomPrice: r.use_custom_price || r.useCustomPrice,
+        customPrice: r.custom_price || r.customPrice,
+        customFieldValues: r.custom_field_values || r.customFieldValues,
+        purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
+        expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
+    }) as Order[];
     setOrders(allOrders);
-    setCustomers((customersRes.data || []) as Customer[]);
-    setPackages((packagesRes.data || []) as ProductPackage[]);
-    setProducts((productsRes.data || []) as Product[]);
+    
+    const allCustomers = (customersRes.data || []).map((r: any) => {
+      console.log('Raw customer from Supabase:', r);
+      return {
+        ...r,
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
+    }) as Customer[];
+    
+    const allPackages = (packagesRes.data || []).map((r: any) => {
+      console.log('Raw package from Supabase:', r);
+      return {
+        ...r,
+        productId: r.product_id || r.productId,
+        warrantyPeriod: r.warranty_period || r.warrantyPeriod,
+        costPrice: r.cost_price || r.costPrice,
+        ctvPrice: r.ctv_price || r.ctvPrice,
+        retailPrice: r.retail_price || r.retailPrice,
+        customFields: r.custom_fields || r.customFields,
+        isAccountBased: r.is_account_based || r.isAccountBased,
+        accountColumns: r.account_columns || r.accountColumns,
+        defaultSlots: r.default_slots || r.defaultSlots,
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
+    }) as ProductPackage[];
+    
+    const allProducts = (productsRes.data || []).map((r: any) => {
+      console.log('Raw product from Supabase:', r);
+      return {
+        ...r,
+        sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
+    }) as Product[];
+    
+    setCustomers(allCustomers);
+    setPackages(allPackages);
+    setProducts(allProducts);
     setInventory((inventoryRes.data || []) as any[]);
   };
 
@@ -365,14 +416,19 @@ const OrderList: React.FC = () => {
   }, [packages]);
 
   const getCustomerName = (customerId: string) => {
+    console.log('Looking up customer:', customerId, 'in map with keys:', Array.from(customerMap.keys()));
     const customer = customerMap.get(customerId);
+    console.log('Found customer:', customer);
     return customer ? customer.name : 'Không xác định';
   };
 
   const getPackageInfo = (packageId: string) => {
+    console.log('Looking up package:', packageId, 'in map with keys:', Array.from(packageMap.keys()));
     const pkg = packageMap.get(packageId);
+    console.log('Found package:', pkg);
     if (!pkg) return null;
     const product = productMap.get(pkg.productId);
+    console.log('Found product for package:', product);
     return { package: pkg, product };
   };
 
@@ -410,7 +466,8 @@ const OrderList: React.FC = () => {
     }
   };
 
-  const getPaymentShortLabel = (value: PaymentStatus) => {
+  const getPaymentShortLabel = (value: PaymentStatus | undefined | null) => {
+    if (!value) return 'Chưa TT';
     switch (value) {
       case 'PAID':
         return 'Đã TT';
@@ -419,11 +476,12 @@ const OrderList: React.FC = () => {
       case 'REFUNDED':
         return 'Hoàn';
       default:
-        return getPaymentLabel(value);
+        return 'Chưa TT';
     }
   };
 
-  const getPaymentClass = (value: PaymentStatus) => {
+  const getPaymentClass = (value: PaymentStatus | undefined | null) => {
+    if (!value) return 'status-processing';
     switch (value) {
       case 'PAID':
         return 'status-completed';
@@ -491,7 +549,7 @@ const OrderList: React.FC = () => {
 
       // Status & payment
       if (filterStatus && order.status !== filterStatus) return false;
-      if (filterPayment && (order as any).paymentStatus !== filterPayment) return false;
+      if (filterPayment && order.paymentStatus !== filterPayment) return false;
 
       // Date range
       const purchaseTs = new Date(order.purchaseDate).getTime();
@@ -545,7 +603,7 @@ const OrderList: React.FC = () => {
         purchaseDate: new Date(o.purchaseDate).toLocaleDateString('vi-VN'),
         expiryDate: new Date(o.expiryDate).toLocaleDateString('vi-VN'),
         status: getStatusLabel(o.status),
-        payment: getPaymentLabel((o as any).paymentStatus || 'UNPAID'),
+        payment: getPaymentLabel(o.paymentStatus || 'UNPAID'),
         price: getOrderPrice(o)
       };
     });
@@ -576,7 +634,7 @@ const OrderList: React.FC = () => {
   };
 
   const getTotalRevenue = useMemo(() => {
-    const paidCompleted = filteredOrders.filter(order => order.status === 'COMPLETED' && (order as any).paymentStatus === 'PAID');
+    const paidCompleted = filteredOrders.filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID');
     let sum = 0;
     for (let i = 0; i < paidCompleted.length; i++) {
       sum += getOrderPrice(paidCompleted[i]);
@@ -639,11 +697,11 @@ const OrderList: React.FC = () => {
           </td>
           <td>
             <span
-              className={`status-badge ${getPaymentClass((order as any).paymentStatus)}`}
+              className={`status-badge ${getPaymentClass(order.paymentStatus)}`}
               style={{ padding: '2px 6px', fontSize: 12, lineHeight: 1 }}
-              title={getPaymentLabel((order as any).paymentStatus) || 'Chưa thanh toán'}
+              title={getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán'}
             >
-              {getPaymentShortLabel((order as any).paymentStatus)}
+              {getPaymentShortLabel(order.paymentStatus)}
             </span>
           </td>
           <td>{formatPrice(getOrderPrice(order))}</td>
@@ -837,7 +895,7 @@ const OrderList: React.FC = () => {
               <div><strong>Ngày mua:</strong> {formatDate(viewingOrder.purchaseDate)}</div>
               <div><strong>Ngày hết hạn:</strong> {formatDate(viewingOrder.expiryDate)}</div>
               <div><strong>Trạng thái:</strong> {getStatusLabel(viewingOrder.status)}</div>
-              <div><strong>Thanh toán:</strong> {PAYMENT_STATUSES.find(p => p.value === (viewingOrder as any).paymentStatus)?.label || 'Chưa thanh toán'}</div>
+              <div><strong>Thanh toán:</strong> {PAYMENT_STATUSES.find(p => p.value === viewingOrder.paymentStatus)?.label || 'Chưa thanh toán'}</div>
                       {(() => {
                         const info = buildFullOrderInfo(viewingOrder);
                         if (!info.lines.length) return null;
@@ -951,7 +1009,7 @@ const OrderList: React.FC = () => {
                       useCustomPrice: false,
                       customPrice: 0,
                       note: '',
-                      paymentStatus: (viewingOrder as any).paymentStatus || 'UNPAID'
+                      paymentStatus: viewingOrder.paymentStatus || 'UNPAID'
                     });
                   }}
                 >
@@ -967,7 +1025,7 @@ const OrderList: React.FC = () => {
                   const productName = pkgInfo?.product?.name || 'Không xác định';
                   const packageName = pkgInfo?.package?.name || 'Không xác định';
                   const statusLabel = getStatusLabel(o.status);
-                  const paymentLabel = getPaymentLabel((o as any).paymentStatus || 'UNPAID') || 'Chưa thanh toán';
+                  const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
                   const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
                   const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
                   const info = buildFullOrderInfo(o);
@@ -1129,7 +1187,7 @@ const OrderList: React.FC = () => {
                   lines.push(`- Ngày mua: ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`);
                   lines.push(`- Ngày hết hạn: ${new Date(o.expiryDate).toLocaleDateString('vi-VN')}`);
                   lines.push(`- Trạng thái: ${getStatusLabel(o.status)}`);
-                  lines.push(`- Thanh toán: ${getPaymentLabel((o as any).paymentStatus || 'UNPAID')}`);
+                  lines.push(`- Thanh toán: ${getPaymentLabel(o.paymentStatus || 'UNPAID')}`);
                   lines.push(`- Giá hiện tại: ${formatPrice(getOrderPrice(o))}`);
                   // Append order info lines under a header
                   {
