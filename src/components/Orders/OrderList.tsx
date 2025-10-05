@@ -114,8 +114,8 @@ const OrderList: React.FC = () => {
       sb.from('inventory').select('*')
     ]);
     const allOrders = (ordersRes.data || []).map((r: any) => {
-      // Debug logging to see what we're getting from Supabase
       console.log('Raw order from Supabase:', r);
+      console.log('Order inventory_profile_id:', r.inventory_profile_id);
       return {
         id: r.id,
         code: r.code,
@@ -377,7 +377,10 @@ const OrderList: React.FC = () => {
   const handleFormSubmit = () => {
     setShowForm(false);
     setEditingOrder(null);
-    loadData();
+    // Add small delay to ensure Supabase has committed the transaction
+    setTimeout(() => {
+      loadData();
+    }, 500);
   };
 
   // Memoized lookup maps to avoid O(n) array scans for each row
