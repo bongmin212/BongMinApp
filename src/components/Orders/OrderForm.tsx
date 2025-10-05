@@ -712,14 +712,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
       
       // Update local storage immediately
-      const newCustomer = {
+      const newCustomer: Customer = {
         id: Date.now().toString(36) + Math.random().toString(36).substr(2),
         code: nextCode,
         name: newCustomerData.name,
         type: newCustomerData.type,
         phone: newCustomerData.phone,
         email: newCustomerData.email,
-        source: newCustomerData.source,
+        source: newCustomerData.source as CustomerSource | undefined,
         sourceDetail: newCustomerData.sourceDetail,
         notes: newCustomerData.notes,
         createdAt: new Date(),
