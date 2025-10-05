@@ -360,17 +360,18 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                 
                 if (!inv) return 'Không liên kết';
                 const code = inv.code ?? '';
-                const pDate = new Date(inv.purchaseDate).toLocaleDateString('vi-VN');
-                const eDate = new Date(inv.expiryDate).toLocaleDateString('vi-VN');
-                const status = inv.status;
-                const statusLabel =
-                  status === 'SOLD' ? 'Đã bán' :
-                  status === 'AVAILABLE' ? 'Có sẵn' :
-                  status === 'RESERVED' ? 'Đã giữ' :
-                  status === 'EXPIRED' ? 'Hết hạn' : status;
-                const header = `${code || 'Không có'} | Nhập: ${pDate} | HSD: ${eDate} | ${statusLabel}`;
+                const pDate = inv.purchaseDate ? new Date(inv.purchaseDate).toISOString().split('T')[0] : 'N/A';
+                const eDate = inv.expiryDate ? new Date(inv.expiryDate).toISOString().split('T')[0] : 'N/A';
+                
+                // Get product and package info for display
+                const product = products.find(p => p.id === inv.productId);
+                const packageInfo = packages.find(p => p.id === inv.packageId);
+                const productName = product?.name || 'Không xác định';
+                const packageName = packageInfo?.name || 'Không xác định';
+                
+                // Format like the warehouse dropdown: #KHO001 | email | product | package | Nhập: date | HSD: date
+                const header = `#${code || 'Không có'} | ${inv.productInfo || ''} | ${productName} | ${packageName} | Nhập: ${pDate} | HSD: ${eDate}`;
                 const extra: string[] = [];
-                if (inv.productInfo) extra.push(`| Thông tin sản phẩm: ${inv.productInfo}`);
                 if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
                 if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
                 
