@@ -544,7 +544,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             notes: orderData.notes || null,
             expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
             inventory_item_id: orderData.inventoryItemId || null,
-            inventory_profile_id: orderData.inventoryProfileId || null,
             use_custom_price: orderData.useCustomPrice || false,
             custom_price: orderData.customPrice || null,
             custom_field_values: orderData.customFieldValues || null
@@ -646,7 +645,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           notes: orderData.notes || null,
           expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
           inventory_item_id: orderData.inventoryItemId || null,
-          inventory_profile_id: orderData.inventoryProfileId || null,
           use_custom_price: orderData.useCustomPrice || false,
           custom_price: orderData.customPrice || null,
           custom_field_values: orderData.customFieldValues || null
@@ -1022,33 +1020,100 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     const item = availableInventory.find(i => i.id === selectedInventoryId);
                     if (!item) return null;
                     return (
-                      <div className="mt-2 p-2 border rounded bg-light">
-                        {item.productInfo && <div><strong>Thông tin SP:</strong> {item.productInfo}</div>}
-                        {item.sourceNote && <div><strong>Nguồn nhập:</strong> {item.sourceNote}</div>}
-                        {typeof item.purchasePrice === 'number' && (
-                          <div><strong>Giá nhập:</strong> {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchasePrice)}</div>
-                        )}
-                        <div><strong>Trạng thái:</strong> {item.status}</div>
-                        {item.isAccountBased && (
-                          <div className="mt-2">
-                            <label className="form-label">Chọn slot để cấp</label>
-                            <select
-                              className="form-control"
-                              value={selectedProfileId}
-                              onChange={(e) => {
-                                console.log('Profile selection changed to:', e.target.value);
-                                setSelectedProfileId(e.target.value);
-                              }}
-                              required
-                            >
-                              <option value="">-- Chọn slot --</option>
-                              {(item.profiles || []).filter(p => !p.isAssigned || p.assignedOrderId === (order?.id || '')).map(p => (
-                                <option key={p.id} value={p.id}>{p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}</option>
-                              ))}
-                            </select>
-                            <div className="small text-muted mt-1">Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.</div>
+                      <div className="mt-3">
+                        <div className="card">
+                          <div className="card-header">
+                            <h6 className="mb-0">📦 Thông tin chi tiết kho hàng</h6>
                           </div>
-                        )}
+                          <div className="card-body">
+                            <div className="row">
+                              <div className="col-md-6">
+                                <div className="mb-2">
+                                  <strong>Mã kho:</strong> <span className="badge bg-primary">{item.code}</span>
+                                </div>
+                                <div className="mb-2">
+                                  <strong>Trạng thái:</strong> 
+                                  <span className={`badge ms-1 ${
+                                    item.status === 'AVAILABLE' ? 'bg-success' :
+                                    item.status === 'SOLD' ? 'bg-danger' :
+                                    item.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
+                                  }`}>
+                                    {item.status === 'AVAILABLE' ? 'Có sẵn' :
+                                     item.status === 'SOLD' ? 'Đã bán' :
+                                     item.status === 'RESERVED' ? 'Đã giữ' : item.status}
+                                  </span>
+                                </div>
+                                <div className="mb-2">
+                                  <strong>Ngày nhập:</strong> {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
+                                </div>
+                                <div className="mb-2">
+                                  <strong>Hạn sử dụng:</strong> {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('vi-VN') : 'N/A'}
+                                </div>
+                              </div>
+                              <div className="col-md-6">
+                                {typeof item.purchasePrice === 'number' && (
+                                  <div className="mb-2">
+                                    <strong>Giá nhập:</strong> 
+                                    <span className="text-success fw-bold">
+                                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchasePrice)}
+                                    </span>
+                                  </div>
+                                )}
+                                {item.sourceNote && (
+                                  <div className="mb-2">
+                                    <strong>Nguồn nhập:</strong> <em>{item.sourceNote}</em>
+                                  </div>
+                                )}
+                                {item.isAccountBased && (
+                                  <div className="mb-2">
+                                    <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
+                                  </div>
+                                )}
+                                {item.notes && (
+                                  <div className="mb-2">
+                                    <strong>Ghi chú:</strong> <small className="text-muted">{item.notes}</small>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {item.productInfo && (
+                              <div className="mt-3">
+                                <strong>Thông tin sản phẩm:</strong>
+                                <div className="mt-1 p-2 bg-light rounded">
+                                  <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{item.productInfo}</pre>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {item.isAccountBased && (
+                              <div className="mt-3">
+                                <label className="form-label">
+                                  <strong>Chọn slot để cấp</strong>
+                                </label>
+                                <select
+                                  className="form-control"
+                                  value={selectedProfileId}
+                                  onChange={(e) => {
+                                    console.log('Profile selection changed to:', e.target.value);
+                                    setSelectedProfileId(e.target.value);
+                                  }}
+                                  required
+                                >
+                                  <option value="">-- Chọn slot --</option>
+                                  {(item.profiles || []).filter(p => !p.isAssigned || p.assignedOrderId === (order?.id || '')).map(p => (
+                                    <option key={p.id} value={p.id}>
+                                      {p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="small text-muted mt-1">
+                                  Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   })()}
