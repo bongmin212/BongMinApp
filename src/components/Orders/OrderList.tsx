@@ -79,6 +79,7 @@ const OrderList: React.FC = () => {
       const from = params.get('from') || '';
       const to = params.get('to') || '';
       const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
+      const notSent = params.get('onlyExpiringNotSent') === '1';
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || '10'), 10);
       setSearchTerm(q);
@@ -88,6 +89,7 @@ const OrderList: React.FC = () => {
       setDateFrom(from);
       setDateTo(to);
       setExpiryFilter(expiry);
+      setOnlyExpiringNotSent(!!notSent);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
     } catch {}
@@ -116,6 +118,7 @@ const OrderList: React.FC = () => {
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
       if (expiryFilter) params.set('expiry', expiryFilter); else params.delete('expiry');
+      if (onlyExpiringNotSent) params.set('onlyExpiringNotSent', '1'); else params.delete('onlyExpiringNotSent');
       params.set('page', String(page));
       params.set('limit', String(limit));
       const s = params.toString();
@@ -934,14 +937,15 @@ const OrderList: React.FC = () => {
               <option value="ACTIVE">Còn hạn (&gt; 7 ngày)</option>
             </select>
           </div>
-          <div className="d-flex align-items-center">
-            <input
-              id="onlyExpiringNotSent"
-              type="checkbox"
-              checked={onlyExpiringNotSent}
-              onChange={(e) => setOnlyExpiringNotSent(e.target.checked)}
-            />
-            <label htmlFor="onlyExpiringNotSent" className="mb-0" style={{ marginLeft: 8 }}>Chưa gửi gia hạn (chỉ sắp hết hạn)</label>
+          <div>
+            <select
+              className="form-control"
+              value={onlyExpiringNotSent ? 'NOT_SENT' : ''}
+              onChange={(e) => setOnlyExpiringNotSent(e.target.value === 'NOT_SENT')}
+            >
+              <option value="">Tất cả gửi gia hạn</option>
+              <option value="NOT_SENT">Chưa gửi gia hạn (chỉ sắp hết hạn)</option>
+            </select>
           </div>
           <div>
             <select
