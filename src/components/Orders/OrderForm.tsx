@@ -546,6 +546,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               notes: orderData.notes,
               expiry_date: orderData.expiryDate,
               inventory_item_id: orderData.inventoryItemId,
+              inventory_profile_id: orderData.inventoryProfileId,
               use_custom_price: orderData.useCustomPrice,
               custom_price: orderData.customPrice,
               custom_field_values: orderData.customFieldValues
@@ -618,6 +619,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         console.log('packageId:', orderData.packageId, 'Type:', typeof orderData.packageId);
         console.log('customerId:', orderData.customerId, 'Type:', typeof orderData.customerId);
         console.log('inventoryItemId:', orderData.inventoryItemId, 'Type:', typeof orderData.inventoryItemId);
+        console.log('inventoryProfileId:', orderData.inventoryProfileId, 'Type:', typeof orderData.inventoryProfileId);
+        console.log('selectedInventoryId:', selectedInventoryId, 'Type:', typeof selectedInventoryId);
+        console.log('selectedProfileId:', selectedProfileId, 'Type:', typeof selectedProfileId);
         
         const insertData = {
           code: orderData.code,
@@ -630,6 +634,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           notes: orderData.notes,
           expiry_date: orderData.expiryDate,
           inventory_item_id: orderData.inventoryItemId,
+          inventory_profile_id: orderData.inventoryProfileId,
           use_custom_price: orderData.useCustomPrice,
           custom_price: orderData.customPrice,
           custom_field_values: orderData.customFieldValues
@@ -988,7 +993,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   <select
                     className="form-control"
                     value={selectedInventoryId}
-                    onChange={(e) => setSelectedInventoryId(e.target.value)}
+                    onChange={(e) => {
+                      console.log('Inventory selection changed to:', e.target.value);
+                      setSelectedInventoryId(e.target.value);
+                    }}
                   >
                     <option value="">Không chọn</option>
                     {availableInventory.map(item => (
@@ -1015,7 +1023,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                             <select
                               className="form-control"
                               value={selectedProfileId}
-                              onChange={(e) => setSelectedProfileId(e.target.value)}
+                              onChange={(e) => {
+                                console.log('Profile selection changed to:', e.target.value);
+                                setSelectedProfileId(e.target.value);
+                              }}
                               required
                             >
                               <option value="">-- Chọn slot --</option>
