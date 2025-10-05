@@ -46,22 +46,33 @@ const OrderList: React.FC = () => {
 
   // Mark renewal message sent (Supabase-backed)
   const markRenewalMessageSent = async (orderId: string) => {
+    // Optimistic update in component state
+    const prevOrders = orders;
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: state.user?.id || 'system' } : o));
+
     const sb = getSupabase();
-    if (!sb) return notify('Không thể cập nhật trạng thái gửi gia hạn', 'error');
-    const now = new Date().toISOString();
+    if (!sb) {
+      // Revert on failure to get client
+      setOrders(prevOrders);
+      return notify('Không thể cập nhật trạng thái gửi gia hạn', 'error');
+    }
+    const nowIso = new Date().toISOString();
     const { error } = await sb.from('orders').update({
       renewal_message_sent: true,
-      renewal_message_sent_at: now,
+      renewal_message_sent_at: nowIso,
       renewal_message_sent_by: state.user?.id || null
     }).eq('id', orderId);
-    if (error) return notify('Không thể cập nhật trạng thái gửi gia hạn', 'error');
+    if (error) {
+      // Revert optimistic update if DB write fails
+      setOrders(prevOrders);
+      return notify('Không thể cập nhật trạng thái gửi gia hạn', 'error');
+    }
     try {
       const sb2 = getSupabase();
       if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu đã gửi tin nhắn gia hạn', details: `orderId=${orderId}` });
     } catch {}
-    // Local mirror for immediate UI
-    Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: state.user?.id || 'system' } as any);
-    loadData();
+    // Mirror into local DB for consistency and trigger any dependent recomputations
+    Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(nowIso), renewalMessageSentBy: state.user?.id || 'system' } as any);
     notify('Đã đánh dấu gửi tin nhắn gia hạn', 'success');
   };
 
