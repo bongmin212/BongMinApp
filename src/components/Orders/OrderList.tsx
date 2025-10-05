@@ -26,6 +26,7 @@ const OrderList: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
+  const [onlyExpiringNotSent, setOnlyExpiringNotSent] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -42,6 +43,27 @@ const OrderList: React.FC = () => {
     note: string;
     paymentStatus: PaymentStatus;
   }>(null);
+
+  // Mark renewal message sent (Supabase-backed)
+  const markRenewalMessageSent = async (orderId: string) => {
+    const sb = getSupabase();
+    if (!sb) return notify('Không thể cập nhật trạng thái gửi gia hạn', 'error');
+    const now = new Date().toISOString();
+    const { error } = await sb.from('orders').update({
+      renewal_message_sent: true,
+      renewal_message_sent_at: now,
+      renewal_message_sent_by: state.user?.id || null
+    }).eq('id', orderId);
+    if (error) return notify('Không thể cập nhật trạng thái gửi gia hạn', 'error');
+    try {
+      const sb2 = getSupabase();
+      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu đã gửi tin nhắn gia hạn', details: `orderId=${orderId}` });
+    } catch {}
+    // Local mirror for immediate UI
+    Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: state.user?.id || 'system' } as any);
+    loadData();
+    notify('Đã đánh dấu gửi tin nhắn gia hạn', 'success');
+  };
 
   useEffect(() => {
     loadData();
@@ -80,7 +102,7 @@ const OrderList: React.FC = () => {
   // Reset page on filter/search changes (debounced)
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent]);
 
   // No localStorage persistence
 
@@ -100,7 +122,7 @@ const OrderList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, page, limit]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, page, limit, onlyExpiringNotSent]);
 
   const loadData = async () => {
     const sb = getSupabase();
@@ -132,7 +154,10 @@ const OrderList: React.FC = () => {
         purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
         expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
+        renewalMessageSent: !!r.renewal_message_sent,
+        renewalMessageSentAt: r.renewal_message_sent_at ? new Date(r.renewal_message_sent_at) : undefined,
+        renewalMessageSentBy: r.renewal_message_sent_by || undefined
       };
     }) as Order[];
     setOrders(allOrders);
@@ -629,12 +654,15 @@ const OrderList: React.FC = () => {
       // Search
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
+      const detailsTextLower = buildFullOrderInfo(order).text.toLowerCase();
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
         (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
-        ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch);
+        ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch) ||
+        (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
+        detailsTextLower.includes(normalizedSearch);
 
       if (!matchesSearch) return false;
 
@@ -662,6 +690,13 @@ const OrderList: React.FC = () => {
         ) {
           return false;
         }
+      }
+
+      // Only expiring and not yet sent renewal message
+      if (onlyExpiringNotSent) {
+        const daysToExpiry = Math.ceil((expiryTs - nowTs) / 86400000);
+        const isExpiring = daysToExpiry >= 0 && daysToExpiry <= 7;
+        if (!(isExpiring && !((order as any).renewalMessageSent))) return false;
       }
 
       return true;
@@ -766,7 +801,12 @@ const OrderList: React.FC = () => {
               onChange={(e) => handleToggleSelect(order.id, e.target.checked)}
             />
           </td>
-          <td>{order.code || `#${index + 1}`}</td>
+          <td>
+            <div>{order.code || `#${index + 1}`}</div>
+            {order.renewalMessageSent && (
+              <small className="badge bg-info" style={{ display: 'inline-block', marginTop: 4 }}>Đã gửi gia hạn</small>
+            )}
+          </td>
           <td>{formatDate(order.purchaseDate)}</td>
           <td>
             <div>{getCustomerName(order.customerId)}</div>
@@ -776,7 +816,14 @@ const OrderList: React.FC = () => {
           </td>
           <td>{packageInfo?.product?.name || 'Không xác định'}</td>
           <td>{packageInfo?.package?.name || 'Không xác định'}</td>
-          <td>{formatDate(order.expiryDate)}</td>
+          <td>
+            <div>{formatDate(order.expiryDate)}</div>
+            {(() => {
+              const daysLeft = Math.ceil((new Date(order.expiryDate).getTime() - Date.now()) / 86400000);
+              if (daysLeft >= 0 && daysLeft <= 7) return <small className="text-warning">Sắp hết hạn</small>;
+              return null;
+            })()}
+          </td>
           <td>
             <span
               className={`status-badge ${getStatusClass(order.status)}`}
@@ -886,6 +933,15 @@ const OrderList: React.FC = () => {
               <option value="EXPIRED">Đã hết hạn</option>
               <option value="ACTIVE">Còn hạn (&gt; 7 ngày)</option>
             </select>
+          </div>
+          <div className="d-flex align-items-center">
+            <input
+              id="onlyExpiringNotSent"
+              type="checkbox"
+              checked={onlyExpiringNotSent}
+              onChange={(e) => setOnlyExpiringNotSent(e.target.checked)}
+            />
+            <label htmlFor="onlyExpiringNotSent" className="mb-0" style={{ marginLeft: 8 }}>Chưa gửi gia hạn (chỉ sắp hết hạn)</label>
           </div>
           <div>
             <select
@@ -1193,6 +1249,32 @@ const OrderList: React.FC = () => {
                 return (
                   <div className="p-2">
                     <div><strong>Mã đơn:</strong> {o.code}</div>
+                    {(() => {
+                      const c = customers.find(cu => cu.id === o.customerId);
+                      if (!c) return null;
+                      const links: Array<{label: string; url: string}> = [];
+                      if (c.phone) links.push({ label: 'Zalo', url: `https://zalo.me/${encodeURIComponent(c.phone)}` });
+                      if (c.phone) links.push({ label: 'Tel', url: `tel:${c.phone}` });
+                      if (c.email) links.push({ label: 'Email', url: `mailto:${c.email}` });
+                      return (
+                        <div style={{ marginTop: 6 }}>
+                          <strong>Khách hàng:</strong> {c.name}
+                          {(c.phone || c.email) && (
+                            <>
+                              {' '}
+                              <small className="text-muted">({[c.phone, c.email].filter(Boolean).join(' · ')})</small>
+                            </>
+                          )}
+                          {links.length > 0 && (
+                            <div className="d-flex gap-2 mt-1" style={{ flexWrap: 'wrap' as any }}>
+                              {links.map((l, idx) => (
+                                <a key={idx} href={l.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-light">{l.label}</a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div><strong>Hết hạn hiện tại:</strong> {currentExpiry.toLocaleDateString('vi-VN')}</div>
                     <div className="form-group">
                       <label className="form-label">Gói gia hạn</label>
@@ -1203,6 +1285,8 @@ const OrderList: React.FC = () => {
                       >
                         {packages
                           .filter(p => p.productId === (getPackageInfo(o.packageId)?.product?.id || ''))
+                          .slice()
+                          .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
                           .map(p => (
                             <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
@@ -1336,6 +1420,15 @@ const OrderList: React.FC = () => {
                 }}
               >
                 Copy tin nhắn gia hạn
+              </button>
+              <button
+                className="btn btn-outline-success"
+                onClick={() => {
+                  if (!renewState) return;
+                  markRenewalMessageSent(renewState.order.id);
+                }}
+              >
+                Đã gửi tin nhắn gia hạn
               </button>
               <button
                 className="btn btn-primary"

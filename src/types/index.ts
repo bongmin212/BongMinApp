@@ -76,6 +76,10 @@ export interface Order {
   customFieldValues?: Record<string, string>; // key = PackageCustomField.id -> value nhập khi tạo đơn
   // Gia hạn
   renewals?: OrderRenewal[]; // lịch sử gia hạn
+  // UI/CRM flags
+  renewalMessageSent?: boolean; // Đã gửi tin nhắn gia hạn cho đơn này
+  renewalMessageSentBy?: string; // nhân viên đã gửi
+  renewalMessageSentAt?: Date; // thời điểm đã gửi
 }
 
 export type EmployeeRole = 'MANAGER' | 'EMPLOYEE';
