@@ -232,6 +232,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       let items = (data || []).map((i: any) => {
         const item = {
           ...i,
+          productId: i.product_id,
+          packageId: i.package_id,
           purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(),
           expiryDate: i.expiry_date ? new Date(i.expiry_date) : undefined,
           createdAt: i.created_at ? new Date(i.created_at) : new Date(),
@@ -271,6 +273,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         if (linked) {
           const linkedMapped = {
             ...linked,
+            productId: linked.product_id,
+            packageId: linked.package_id,
             purchaseDate: linked.purchase_date ? new Date(linked.purchase_date) : new Date(),
             expiryDate: linked.expiry_date ? new Date(linked.expiry_date) : undefined,
             createdAt: linked.created_at ? new Date(linked.created_at) : new Date(),
@@ -298,6 +302,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           const l = byOrder[0];
           const mapped = {
             ...l,
+            productId: l.product_id,
+            packageId: l.package_id,
             purchaseDate: l.purchase_date ? new Date(l.purchase_date) : new Date(),
             expiryDate: l.expiry_date ? new Date(l.expiry_date) : undefined,
             createdAt: l.created_at ? new Date(l.created_at) : new Date(),
