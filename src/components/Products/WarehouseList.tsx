@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { InventoryItem, Product, ProductPackage, Order, Customer, ORDER_STATUSES, PAYMENT_STATUSES } from '../../types';
+import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
 import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
