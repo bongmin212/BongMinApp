@@ -447,7 +447,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       // Calculate expiry date
       const purchaseDate = new Date(formData.purchaseDate);
       const expiryDate = new Date(purchaseDate);
-      expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
+      
+      // For shared pool products, use 1 month default if no specific expiry
+      const product = products.find(p => p.id === selectedPackage.productId);
+      const isSharedPool = product?.sharedInventoryPool;
+      
+      if (isSharedPool && selectedInventoryId) {
+        // For shared pool products with inventory, use 1 month default
+        expiryDate.setMonth(expiryDate.getMonth() + 1);
+      } else {
+        // Use package warranty period for regular products
+        expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
+      }
 
       const customFieldValues = (() => {
         const values = formData.customFieldValues || {};
@@ -901,10 +912,25 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               const pkg = getSelectedPackage();
               if (!pkg) return null;
               const preview = new Date(formData.purchaseDate);
-              preview.setMonth(preview.getMonth() + pkg.warrantyPeriod);
+              
+              // Check if this is a shared pool product
+              const product = products.find(p => p.id === pkg.productId);
+              const isSharedPool = product?.sharedInventoryPool;
+              
+              if (isSharedPool && selectedInventoryId) {
+                // For shared pool products with inventory, use 1 month default
+                preview.setMonth(preview.getMonth() + 1);
+              } else {
+                // Use package warranty period for regular products
+                preview.setMonth(preview.getMonth() + pkg.warrantyPeriod);
+              }
+              
               return (
                 <div className="text-muted small mt-1">
                   Hết hạn (dự kiến): {preview.toLocaleDateString('vi-VN')}
+                  {isSharedPool && selectedInventoryId && (
+                    <span className="text-info"> (Pool chung - 1 tháng)</span>
+                  )}
                 </div>
               );
             })()}
@@ -1009,16 +1035,31 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     }}
                   >
                     <option value="">Không chọn</option>
-                    {availableInventory.map(item => (
-                      <option key={item.id} value={item.id}>
-                        #{item.code} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : 'N/A'}
-                      </option>
-                    ))}
+                    {availableInventory.map(item => {
+                      const product = products.find(p => p.id === item.productId);
+                      const packageInfo = packages.find(p => p.id === item.packageId);
+                      const productName = product?.name || 'Không xác định';
+                      const packageName = packageInfo?.name || 'Không xác định';
+                      const expiryDate = item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : 'N/A';
+                      
+                      return (
+                        <option key={item.id} value={item.id}>
+                          #{item.code} | {productName} | {packageName} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
+                        </option>
+                      );
+                    })}
                   </select>
                   <div className="small text-muted mt-1">Nếu chọn, đơn sẽ sử dụng hàng trong kho và tự đánh dấu là đã bán.</div>
                   {!!selectedInventoryId && (() => {
                     const item = availableInventory.find(i => i.id === selectedInventoryId);
                     if (!item) return null;
+                    
+                    const product = products.find(p => p.id === item.productId);
+                    const packageInfo = packages.find(p => p.id === item.packageId);
+                    const productName = product?.name || 'Không xác định';
+                    const packageName = packageInfo?.name || 'Không xác định';
+                    const isSharedPool = product?.sharedInventoryPool;
+                    
                     return (
                       <div className="mt-3">
                         <div className="card">
@@ -1030,6 +1071,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                               <div className="col-md-6">
                                 <div className="mb-2">
                                   <strong>Mã kho:</strong> <span className="badge bg-primary">{item.code}</span>
+                                </div>
+                                <div className="mb-2">
+                                  <strong>Sản phẩm:</strong> <span className="text-primary fw-bold">{productName}</span>
+                                </div>
+                                <div className="mb-2">
+                                  <strong>Gói/Pool:</strong> 
+                                  <span className="badge bg-info ms-1">
+                                    {isSharedPool ? 'Pool chung' : packageName}
+                                  </span>
                                 </div>
                                 <div className="mb-2">
                                   <strong>Trạng thái:</strong> 
@@ -1047,7 +1097,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                   <strong>Ngày nhập:</strong> {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
                                 </div>
                                 <div className="mb-2">
-                                  <strong>Hạn sử dụng:</strong> {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('vi-VN') : 'N/A'}
+                                  <strong>Hạn sử dụng:</strong> 
+                                  {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('vi-VN') : 
+                                   isSharedPool ? '1 tháng (mặc định)' : 'N/A'}
                                 </div>
                               </div>
                               <div className="col-md-6">
