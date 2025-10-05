@@ -215,7 +215,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           .from('inventory')
           .insert({
             code: ensuredCode,
-            product_id: selectedProduct,
+            product_id: formData.productId,
             package_id: formData.packageId,
             purchase_date: formData.purchaseDate.toISOString().split('T')[0],
             source_note: formData.sourceNote,
@@ -242,7 +242,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         const newInventoryItem = {
           id: Date.now().toString(36) + Math.random().toString(36).substr(2),
           code: ensuredCode,
-          productId: selectedProduct,
+          productId: formData.productId,
           packageId: formData.packageId,
           purchaseDate,
           expiryDate,
@@ -306,7 +306,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               value={selectedProduct}
               onChange={(e) => {
                 setSelectedProduct(e.target.value);
-                setFormData(prev => ({ ...prev, packageId: '' }));
+                setFormData(prev => ({ ...prev, productId: e.target.value, packageId: '' }));
               }}
               disabled={isLockedProduct}
             >
