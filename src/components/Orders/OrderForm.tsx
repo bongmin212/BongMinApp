@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Order, Customer, ProductPackage, Product, OrderFormData, ORDER_STATUSES, PAYMENT_STATUSES, InventoryItem, OrderStatus } from '../../types';
+import { Order, Customer, ProductPackage, Product, OrderFormData, ORDER_STATUSES, PAYMENT_STATUSES, InventoryItem, OrderStatus, CUSTOMER_TYPES, CUSTOMER_SOURCES, CustomerSource } from '../../types';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
@@ -42,12 +42,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     type: 'CTV' | 'RETAIL';
     phone: string;
     email: string;
+    source?: string;
+    sourceDetail: string;
+    notes: string;
   }>({
     code: '',
     name: '',
     type: 'RETAIL',
     phone: '',
-    email: ''
+    email: '',
+    source: 'WEB',
+    sourceDetail: '',
+    notes: ''
   });
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
@@ -677,18 +683,52 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     }));
   };
 
-  const handleCreateNewCustomer = () => {
-    if (!newCustomerData.code.trim()) {
-      notify('Vui lòng nhập mã khách hàng', 'warning');
-      return;
-    }
+  const handleCreateNewCustomer = async () => {
     if (!newCustomerData.name.trim()) {
       notify('Vui lòng nhập tên khách hàng', 'warning');
       return;
     }
 
+    // Auto-generate customer code
+    const nextCode = Database.generateNextCustomerCode();
+    
     try {
-      const newCustomer = Database.saveCustomer(newCustomerData);
+      const sb = getSupabase();
+      if (!sb) throw new Error('Supabase not configured');
+      
+      const { error: insertError } = await sb
+        .from('customers')
+        .insert({
+          code: nextCode,
+          name: newCustomerData.name,
+          type: newCustomerData.type,
+          phone: newCustomerData.phone,
+          email: newCustomerData.email,
+          source: newCustomerData.source,
+          source_detail: newCustomerData.sourceDetail,
+          notes: newCustomerData.notes
+        });
+      
+      if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
+      
+      // Update local storage immediately
+      const newCustomer = {
+        id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+        code: nextCode,
+        name: newCustomerData.name,
+        type: newCustomerData.type,
+        phone: newCustomerData.phone,
+        email: newCustomerData.email,
+        source: newCustomerData.source,
+        sourceDetail: newCustomerData.sourceDetail,
+        notes: newCustomerData.notes,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const currentCustomers = Database.getCustomers();
+      Database.setCustomers([...currentCustomers, newCustomer]);
+      
       setCustomers(prev => [...prev, newCustomer]);
       setFormData(prev => ({
         ...prev,
@@ -700,11 +740,25 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         name: '',
         type: 'RETAIL',
         phone: '',
-        email: ''
+        email: '',
+        source: 'WEB',
+        sourceDetail: '',
+        notes: ''
       });
+      
+      try {
+        const sb2 = getSupabase();
+        if (sb2) await sb2.from('activity_logs').insert({ 
+          employee_id: state.user?.id || 'system', 
+          action: 'Tạo khách hàng', 
+          details: `customerCode=${nextCode}; name=${newCustomerData.name}` 
+        });
+      } catch {}
+      
       notify('Tạo khách hàng mới thành công', 'success');
     } catch (error) {
-      notify('Có lỗi xảy ra khi tạo khách hàng mới', 'error');
+      const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi tạo khách hàng mới';
+      notify(errorMessage, 'error');
     }
   };
 
@@ -924,6 +978,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                               onChange={(e) => setSelectedProfileId(e.target.value)}
                               required
                             >
+                              <option value="">-- Chọn slot --</option>
                               {(item.profiles || []).filter(p => !p.isAssigned || p.assignedOrderId === (order?.id || '')).map(p => (
                                 <option key={p.id} value={p.id}>{p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}</option>
                               ))}
@@ -959,7 +1014,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               </select>
               <button
                 type="button"
-                onClick={() => setShowNewCustomerForm(!showNewCustomerForm)}
+                onClick={() => {
+                  const newShowState = !showNewCustomerForm;
+                  setShowNewCustomerForm(newShowState);
+                  if (newShowState) {
+                    // Auto-generate customer code when opening form
+                    const nextCode = Database.generateNextCustomerCode();
+                    setNewCustomerData(prev => ({
+                      ...prev,
+                      code: nextCode
+                    }));
+                  }
+                }}
                 className="btn btn-secondary"
               >
                 Tạo mới
@@ -991,60 +1057,60 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 <h5>Tạo khách hàng mới</h5>
               </div>
               <div className="card-body">
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label className="form-label">Mã khách hàng</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={newCustomerData.code}
-                        onChange={(e) => setNewCustomerData(prev => ({
-                          ...prev,
-                          code: e.target.value
-                        }))}
-                        placeholder="Nhập mã khách hàng (ví dụ: KH001)"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label className="form-label">Tên khách hàng</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={newCustomerData.name}
-                        onChange={(e) => setNewCustomerData(prev => ({
-                          ...prev,
-                          name: e.target.value
-                        }))}
-                        placeholder="Nhập tên khách hàng"
-                      />
-                    </div>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    Mã khách hàng <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newCustomerData.code}
+                    readOnly
+                    disabled
+                    aria-disabled
+                    title={'Mã tự động tạo - không chỉnh sửa'}
+                    style={{ opacity: 0.6 } as React.CSSProperties}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Tên khách hàng <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newCustomerData.name}
+                    onChange={(e) => setNewCustomerData(prev => ({
+                      ...prev,
+                      name: e.target.value
+                    }))}
+                    placeholder="Nhập tên khách hàng"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    Loại khách hàng <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    className="form-control"
+                    value={newCustomerData.type}
+                    onChange={(e) => setNewCustomerData(prev => ({
+                      ...prev,
+                      type: e.target.value as 'CTV' | 'RETAIL'
+                    }))}
+                  >
+                    {CUSTOMER_TYPES.map(type => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="row">
                   <div className="col-md-6">
                     <div className="form-group">
-                      <label className="form-label">Loại khách</label>
-                      <select
-                        className="form-control"
-                        value={newCustomerData.type}
-                        onChange={(e) => setNewCustomerData(prev => ({
-                          ...prev,
-                          type: e.target.value as 'CTV' | 'RETAIL'
-                        }))}
-                      >
-                        <option value="RETAIL">Khách lẻ</option>
-                        <option value="CTV">Cộng tác viên</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label className="form-label">SĐT</label>
+                      <label className="form-label">Số điện thoại</label>
                       <input
                         type="tel"
                         className="form-control"
@@ -1072,6 +1138,59 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Nguồn khách hàng</label>
+                  <select
+                    className="form-control"
+                    value={newCustomerData.source || ''}
+                    onChange={(e) => {
+                      const value = e.target.value as CustomerSource | '';
+                      setNewCustomerData(prev => ({
+                        ...prev,
+                        source: value || undefined,
+                        sourceDetail: '' // Reset source detail when source changes
+                      }));
+                    }}
+                  >
+                    <option value="">Chọn nguồn khách hàng</option>
+                    {CUSTOMER_SOURCES.map(source => (
+                      <option key={source.value} value={source.value}>
+                        {source.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {newCustomerData.source && (
+                  <div className="form-group">
+                    <label className="form-label">Chi tiết nguồn</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={newCustomerData.sourceDetail}
+                      onChange={(e) => setNewCustomerData(prev => ({
+                        ...prev,
+                        sourceDetail: e.target.value
+                      }))}
+                      placeholder={`Nhập chi tiết về nguồn ${CUSTOMER_SOURCES.find(s => s.value === newCustomerData.source)?.label}`}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Ghi chú</label>
+                  <textarea
+                    className="form-control"
+                    value={newCustomerData.notes}
+                    onChange={(e) => setNewCustomerData(prev => ({
+                      ...prev,
+                      notes: e.target.value
+                    }))}
+                    placeholder="Nhập ghi chú thêm"
+                    rows={3}
+                  />
                 </div>
                 <button
                   type="button"
