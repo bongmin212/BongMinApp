@@ -1060,6 +1060,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     const packageName = packageInfo?.name || 'Không xác định';
                     const isSharedPool = product?.sharedInventoryPool;
                     
+                    // Debug logging
+                    console.log('=== INVENTORY CARD DEBUG ===');
+                    console.log('Item:', item);
+                    console.log('Product ID:', item.productId);
+                    console.log('Package ID:', item.packageId);
+                    console.log('Found product:', product);
+                    console.log('Found package:', packageInfo);
+                    console.log('Product name:', productName);
+                    console.log('Package name:', packageName);
+                    console.log('Is shared pool:', isSharedPool);
+                    
                     return (
                       <div className="mt-3">
                         <div className="card">

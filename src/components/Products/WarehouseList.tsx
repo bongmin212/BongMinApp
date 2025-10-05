@@ -42,13 +42,33 @@ const WarehouseList: React.FC = () => {
       sb.from('packages').select('*').order('created_at', { ascending: true }),
       sb.from('customers').select('*').order('created_at', { ascending: true })
     ]);
-    const inv = (invRes.data || []).map((r: any) => ({
-      id: r.id,
-      code: r.code,
-      productId: r.product_id,
-      packageId: r.package_id,
-      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
-      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+    const inv = (invRes.data || []).map((r: any) => {
+      const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
+      let expiryDate = r.expiry_date ? new Date(r.expiry_date) : null;
+      
+      // If no expiry date, calculate based on product type
+      if (!expiryDate) {
+        const product = (prodRes.data || []).find((p: any) => p.id === r.product_id);
+        if (product?.shared_inventory_pool) {
+          // Shared pool products: 1 month default
+          expiryDate = new Date(purchaseDate);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        } else {
+          // Regular products: use package warranty period
+          const packageInfo = (pkgRes.data || []).find((p: any) => p.id === r.package_id);
+          const warrantyPeriod = packageInfo?.warranty_period || 1;
+          expiryDate = new Date(purchaseDate);
+          expiryDate.setMonth(expiryDate.getMonth() + warrantyPeriod);
+        }
+      }
+      
+      return {
+        id: r.id,
+        code: r.code,
+        productId: r.product_id,
+        packageId: r.package_id,
+        purchaseDate,
+        expiryDate,
       sourceNote: r.source_note || '',
       purchasePrice: r.purchase_price,
       productInfo: r.product_info || '',
@@ -74,8 +94,29 @@ const WarehouseList: React.FC = () => {
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as InventoryItem[];
-    const prods = (prodRes.data || []) as Product[];
-    const pkgs = (pkgRes.data || []) as ProductPackage[];
+    
+    const prods = (prodRes.data || []).map((r: any) => ({
+      ...r,
+      sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Product[];
+    
+    const pkgs = (pkgRes.data || []).map((r: any) => ({
+      ...r,
+      productId: r.product_id || r.productId,
+      warrantyPeriod: r.warranty_period || r.warrantyPeriod,
+      costPrice: r.cost_price || r.costPrice,
+      ctvPrice: r.ctv_price || r.ctvPrice,
+      retailPrice: r.retail_price || r.retailPrice,
+      customFields: r.custom_fields || r.customFields,
+      isAccountBased: r.is_account_based || r.isAccountBased,
+      accountColumns: r.account_columns || r.accountColumns,
+      defaultSlots: r.default_slots || r.defaultSlots,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as ProductPackage[];
+    
     const custs = (custRes.data || []) as Customer[];
     setItems(inv);
     setProducts(prods);
