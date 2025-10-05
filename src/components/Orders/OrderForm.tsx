@@ -1046,11 +1046,32 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       const packageInfo = packages.find(p => p.id === item.packageId);
                       const productName = product?.name || 'Không xác định';
                       const packageName = packageInfo?.name || 'Không xác định';
-                      const expiryDate = item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : 'N/A';
+                      const expiryDate = (() => {
+                        if (item.expiryDate) {
+                          return new Date(item.expiryDate).toISOString().split('T')[0];
+                        }
+                        // Calculate expiry date based on product type
+                        const product = products.find(p => p.id === item.productId);
+                        if (product?.sharedInventoryPool) {
+                          // For shared pool products, use 1 month from purchase date
+                          const purchaseDate = new Date(item.purchaseDate);
+                          const expiry = new Date(purchaseDate);
+                          expiry.setMonth(expiry.getMonth() + 1);
+                          return expiry.toISOString().split('T')[0];
+                        } else {
+                          // For regular products, use package warranty period
+                          const packageInfo = packages.find(p => p.id === item.packageId);
+                          const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+                          const purchaseDate = new Date(item.purchaseDate);
+                          const expiry = new Date(purchaseDate);
+                          expiry.setMonth(expiry.getMonth() + warrantyPeriod);
+                          return expiry.toISOString().split('T')[0];
+                        }
+                      })();
                       
                       return (
                         <option key={item.id} value={item.id}>
-                          #{item.code} | {productName} | {packageName} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
+                          #{item.code} | {item.productInfo || ''} | {productName} | {packageName} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
                         </option>
                       );
                     })}
@@ -1115,8 +1136,27 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 </div>
                                 <div className="mb-2">
                                   <strong>Hạn sử dụng:</strong> 
-                                  {item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('vi-VN') : 
-                                   isSharedPool ? '1 tháng (mặc định)' : 'N/A'}
+                                  {(() => {
+                                    if (item.expiryDate) {
+                                      return ' ' + new Date(item.expiryDate).toLocaleDateString('vi-VN');
+                                    }
+                                    // Calculate expiry date based on product type
+                                    if (isSharedPool) {
+                                      // For shared pool products, use 1 month from purchase date
+                                      const purchaseDate = new Date(item.purchaseDate);
+                                      const expiry = new Date(purchaseDate);
+                                      expiry.setMonth(expiry.getMonth() + 1);
+                                      return ' ' + expiry.toLocaleDateString('vi-VN');
+                                    } else {
+                                      // For regular products, use package warranty period
+                                      const packageInfo = packages.find(p => p.id === item.packageId);
+                                      const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+                                      const purchaseDate = new Date(item.purchaseDate);
+                                      const expiry = new Date(purchaseDate);
+                                      expiry.setMonth(expiry.getMonth() + warrantyPeriod);
+                                      return ' ' + expiry.toLocaleDateString('vi-VN');
+                                    }
+                                  })()}
                                 </div>
                               </div>
                               <div className="col-md-6">

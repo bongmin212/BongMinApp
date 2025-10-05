@@ -454,25 +454,81 @@ const WarehouseList: React.FC = () => {
     });
   };
 
+  const renewInventory = (id: string) => {
+    const inv = items.find(i => i.id === id);
+    if (!inv) return;
+    
+    const product = products.find(p => p.id === inv.productId);
+    const packageInfo = packages.find(p => p.id === inv.packageId);
+    
+    setConfirmState({
+      message: `Gia hạn kho hàng ${inv.code}?`,
+      onConfirm: async () => {
+        const sb = getSupabase();
+        if (!sb) return notify('Không thể gia hạn kho hàng', 'error');
+        
+        // Calculate new expiry date
+        const currentExpiry = new Date(inv.expiryDate);
+        const newExpiry = new Date(currentExpiry);
+        
+        if (product?.sharedInventoryPool) {
+          // For shared pool products, add 1 month
+          newExpiry.setMonth(newExpiry.getMonth() + 1);
+        } else {
+          // For regular products, add package warranty period
+          const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+          newExpiry.setMonth(newExpiry.getMonth() + warrantyPeriod);
+        }
+        
+        const { error } = await sb.from('inventory').update({ 
+          expiry_date: newExpiry.toISOString() 
+        }).eq('id', id);
+        
+        if (!error) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ 
+              employee_id: state.user?.id || 'system', 
+              action: 'Gia hạn kho hàng', 
+              details: `inventoryId=${id}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}` 
+            });
+          } catch {}
+          notify('Đã gia hạn kho hàng thành công', 'success');
+          refresh();
+        } else {
+          notify('Không thể gia hạn kho hàng', 'error');
+        }
+      }
+    });
+  };
+
   const statusLabel = (status: InventoryItem['status']) => {
     switch (status) {
       case 'AVAILABLE': return 'Sẵn có';
-      case 'RESERVED': return 'Đã giữ';
       case 'SOLD': return 'Đã bán';
       case 'EXPIRED': return 'Hết hạn';
       default: return status;
     }
   };
 
-  const statusBadge = (status: InventoryItem['status']) => {
-    const cls = status === 'AVAILABLE'
+  const getActualStatus = (item: InventoryItem) => {
+    // Check if item is expired
+    const now = new Date();
+    const expiryDate = new Date(item.expiryDate);
+    if (expiryDate < now) {
+      return 'EXPIRED';
+    }
+    return item.status;
+  };
+
+  const statusBadge = (item: InventoryItem) => {
+    const actualStatus = getActualStatus(item);
+    const cls = actualStatus === 'AVAILABLE'
       ? 'status-completed'
-      : status === 'RESERVED'
-      ? 'status-processing'
-      : status === 'SOLD'
+      : actualStatus === 'SOLD'
       ? 'status-completed'
       : 'status-cancelled';
-    return <span className={`status-badge ${cls}`}>{statusLabel(status)}</span>;
+    return <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
   };
 
   return (
@@ -529,7 +585,6 @@ const WarehouseList: React.FC = () => {
             <select className="form-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">Trạng thái</option>
               <option value="AVAILABLE">Sẵn có</option>
-              <option value="RESERVED">Đã giữ</option>
               <option value="SOLD">Đã bán</option>
               <option value="EXPIRED">Hết hạn</option>
             </select>
@@ -620,8 +675,8 @@ const WarehouseList: React.FC = () => {
                     }
                     return packageMap.get(i.packageId) || i.packageId;
                   })()}</td>
-                  <td>{new Date(i.purchaseDate).toISOString().split('T')[0]}</td>
-                  <td>{new Date(i.expiryDate).toISOString().split('T')[0]}</td>
+                  <td>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
+                  <td>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
                   <td>{i.sourceNote || '-'}</td>
                   <td>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td style={{ maxWidth: 260 }}>
@@ -630,7 +685,7 @@ const WarehouseList: React.FC = () => {
                   <td style={{ maxWidth: 200 }}>
                     <div className="line-clamp-2" title={i.notes || ''}>{i.notes || '-'}</div>
                   </td>
-                  <td>{statusBadge(i.status)}</td>
+                  <td>{statusBadge(i)}</td>
                   <td>
                     {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
                       const used = (i.profiles || []).filter(p => p.isAssigned).length;
@@ -645,6 +700,7 @@ const WarehouseList: React.FC = () => {
                   <td>
                     <div className="d-flex gap-2">
                       <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
+                      <button className="btn btn-sm btn-success" onClick={() => renewInventory(i.id)}>Gia hạn</button>
                       {i.status === 'AVAILABLE' && (
                         <button className="btn btn-sm btn-danger" onClick={() => remove(i.id)}>Xóa</button>
                       )}
@@ -808,7 +864,6 @@ const WarehouseList: React.FC = () => {
                         const statusLabel =
                           status === 'SOLD' ? 'Đã bán' :
                           status === 'AVAILABLE' ? 'Có sẵn' :
-                          status === 'RESERVED' ? 'Đã giữ' :
                           status === 'EXPIRED' ? 'Hết hạn' : status;
                         const header = `${code || 'Không có'} | Nhập: ${pDate} | HSD: ${eDate} | ${statusLabel}`;
                         const extra: string[] = [];
