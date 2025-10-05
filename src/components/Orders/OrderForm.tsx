@@ -654,19 +654,39 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             } catch {}
 
             if (nextInventoryId) {
+              console.log('=== INVENTORY UPDATE DEBUG ===');
+              console.log('nextInventoryId:', nextInventoryId);
+              console.log('selectedProfileId:', selectedProfileId);
+              
               const { data: inv } = await sb.from('inventory').select('*').eq('id', nextInventoryId).single();
+              console.log('Found inventory item:', inv);
+              
               if (inv && inv.is_account_based) {
                 if (!selectedProfileId) {
                   notify('Vui lòng chọn slot để cấp', 'warning');
                 } else {
                   const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  console.log('Current profiles:', profiles);
                   const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
                     ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
                     : p);
-                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', nextInventoryId);
+                  console.log('Updated profiles:', nextProfiles);
+                  
+                  const { error: updateError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', nextInventoryId);
+                  if (updateError) {
+                    console.error('Error updating inventory profiles:', updateError);
+                  } else {
+                    console.log('Successfully updated inventory profiles');
+                  }
                 }
               } else {
-                await sb.from('inventory').update({ status: 'SOLD', linked_order_id: order.id }).eq('id', nextInventoryId);
+                console.log('Updating classic inventory link');
+                const { error: updateError } = await sb.from('inventory').update({ status: 'SOLD', linked_order_id: order.id }).eq('id', nextInventoryId);
+                if (updateError) {
+                  console.error('Error updating inventory link:', updateError);
+                } else {
+                  console.log('Successfully updated inventory link');
+                }
               }
             }
             const base = [`orderId=${order.id}; orderCode=${order.code}`];
@@ -755,22 +775,45 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           try {
             const sb2 = getSupabase();
             if (sb2) {
+              console.log('=== CREATE ORDER INVENTORY UPDATE DEBUG ===');
+              console.log('selectedInventoryId:', selectedInventoryId);
+              console.log('selectedProfileId:', selectedProfileId);
+              console.log('created order id:', created.id);
+              
               const { data: inv } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
+              console.log('Found inventory item:', inv);
+              
               if (inv && inv.is_account_based) {
                 if (!selectedProfileId) {
                   notify('Vui lòng chọn profile để cấp', 'warning');
                 } else {
                   const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  console.log('Current profiles:', profiles);
                   const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
                     ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
                     : p);
-                  await sb2.from('inventory').update({ profiles: nextProfiles }).eq('id', selectedInventoryId);
+                  console.log('Updated profiles:', nextProfiles);
+                  
+                  const { error: updateError } = await sb2.from('inventory').update({ profiles: nextProfiles }).eq('id', selectedInventoryId);
+                  if (updateError) {
+                    console.error('Error updating inventory profiles:', updateError);
+                  } else {
+                    console.log('Successfully updated inventory profiles');
+                  }
                 }
               } else {
-                await sb2.from('inventory').update({ status: 'SOLD', linked_order_id: created.id }).eq('id', selectedInventoryId);
+                console.log('Updating classic inventory link');
+                const { error: updateError } = await sb2.from('inventory').update({ status: 'SOLD', linked_order_id: created.id }).eq('id', selectedInventoryId);
+                if (updateError) {
+                  console.error('Error updating inventory link:', updateError);
+                } else {
+                  console.log('Successfully updated inventory link');
+                }
               }
             }
-          } catch {}
+          } catch (error) {
+            console.error('Error in inventory update:', error);
+          }
         }
         try {
           const sb2 = getSupabase();

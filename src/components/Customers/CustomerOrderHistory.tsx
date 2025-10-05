@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Customer, Order, ProductPackage, Product, ORDER_STATUSES, PAYMENT_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 
 interface CustomerOrderHistoryProps {
   customer: Customer;
@@ -11,20 +12,70 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
   const [orders, setOrders] = useState<Order[]>([]);
   const [packages, setPackages] = useState<ProductPackage[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     loadData();
   }, [customer.id]);
 
-  const loadData = () => {
-    const customerOrders = Database.getOrdersByCustomer(customer.id);
-    const allPackages = Database.getPackages();
-    const allProducts = Database.getProducts();
+  const loadData = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
     
-    setOrders(customerOrders);
+    const [ordersRes, packagesRes, productsRes, inventoryRes] = await Promise.all([
+      sb.from('orders').select('*').eq('customer_id', customer.id),
+      sb.from('packages').select('*'),
+      sb.from('products').select('*'),
+      sb.from('inventory').select('*')
+    ]);
+    
+    const allOrders = (ordersRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      customerId: r.customer_id,
+      packageId: r.package_id,
+      status: r.status,
+      paymentStatus: r.payment_status,
+      orderInfo: r.order_info,
+      notes: r.notes,
+      inventoryItemId: r.inventory_item_id,
+      inventoryProfileId: r.inventory_profile_id,
+      useCustomPrice: r.use_custom_price || false,
+      customPrice: r.custom_price,
+      customFieldValues: r.custom_field_values,
+      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Order[];
+    
+    const allPackages = (packagesRes.data || []).map((r: any) => ({
+      ...r,
+      productId: r.product_id || r.productId,
+      warrantyPeriod: r.warranty_period || r.warrantyPeriod,
+      costPrice: r.cost_price || r.costPrice,
+      ctvPrice: r.ctv_price || r.ctvPrice,
+      retailPrice: r.retail_price || r.retailPrice,
+      customFields: r.custom_fields || r.customFields,
+      isAccountBased: r.is_account_based || r.isAccountBased,
+      accountColumns: r.account_columns || r.accountColumns,
+      defaultSlots: r.default_slots || r.defaultSlots,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as ProductPackage[];
+    
+    const allProducts = (productsRes.data || []).map((r: any) => ({
+      ...r,
+      sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Product[];
+    
+    setOrders(allOrders);
     setPackages(allPackages);
     setProducts(allProducts);
+    setInventory((inventoryRes.data || []) as any[]);
   };
 
   const customerCode = (() => {
@@ -71,23 +122,53 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
     }).format(price);
   };
 
+  const getOrderPrice = (order: Order) => {
+    const packageInfo = getPackageInfo(order.packageId);
+    if (!packageInfo) return 0;
+    // Respect custom price if set
+    if (order.useCustomPrice && typeof order.customPrice === 'number' && order.customPrice > 0) {
+      return order.customPrice;
+    }
+    return customer.type === 'CTV'
+      ? packageInfo.package.ctvPrice
+      : packageInfo.package.retailPrice;
+  };
+
   const getTotalSpent = () => {
     return orders
       .filter(order => order.status === 'COMPLETED')
       .reduce((total, order) => {
-        const packageInfo = getPackageInfo(order.packageId);
-        if (packageInfo) {
-          const price = customer.type === 'CTV' 
-            ? packageInfo.package.ctvPrice 
-            : packageInfo.package.retailPrice;
-          return total + price;
-        }
-        return total;
+        return total + getOrderPrice(order);
       }, 0);
   };
 
   const getCompletedOrdersCount = () => {
     return orders.filter(order => order.status === 'COMPLETED').length;
+  };
+
+  const buildFullOrderInfo = (order: Order): { lines: string[]; text: string } => {
+    let baseLines = String((order as any).orderInfo || '')
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    const pkg = getPackageInfo(order.packageId)?.package;
+    const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
+    if (pkg && Array.isArray(pkg.customFields) && pkg.customFields.length) {
+      pkg.customFields.forEach(cf => {
+        const val = custom[cf.id];
+        if (val !== undefined && String(val).trim()) {
+          baseLines.push(`${cf.title}: ${val}`);
+        }
+      });
+    }
+    // Filter out unwanted info lines (internal-only): any Slot: ...
+    baseLines = baseLines.filter(line => {
+      const normalized = line.toLowerCase();
+      if (normalized.startsWith('slot:')) return false; // e.g., "Slot: Slot 1" or "Slot: 1/5"
+      return true;
+    });
+    const text = baseLines.join('\n');
+    return { lines: baseLines, text };
   };
 
   return (
@@ -154,6 +235,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                   <th style={{ width: 160 }}>Gói</th>
                   <th style={{ width: 130 }}>Ngày hết hạn</th>
                   <th style={{ width: 140 }}>Trạng thái</th>
+                  <th style={{ width: 120 }}>Thanh toán</th>
                   <th style={{ width: 120 }}>Giá</th>
                   <th>Ghi chú</th>
                   <th style={{ width: 90 }}>Thao tác</th>
@@ -164,15 +246,11 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                   const packageInfo = getPackageInfo(order.packageId);
                   if (!packageInfo) return null;
 
-                  const price = customer.type === 'CTV' 
-                    ? packageInfo.package.ctvPrice 
-                    : packageInfo.package.retailPrice;
-
                   const cellStyle: React.CSSProperties = { padding: '12px 16px', verticalAlign: 'middle' };
 
                   return (
                     <tr key={order.id}>
-                      <td style={cellStyle}>#{index + 1}</td>
+                      <td style={cellStyle}>{order.code || `#${index + 1}`}</td>
                       <td style={cellStyle}>{formatDate(order.purchaseDate)}</td>
                       <td style={cellStyle}>{packageInfo.product?.name || 'Không xác định'}</td>
                       <td style={cellStyle}>{packageInfo.package.name}</td>
@@ -182,7 +260,30 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                           {getStatusLabel(order.status)}
                         </span>
                       </td>
-                      <td style={cellStyle}>{formatPrice(price)}</td>
+                      <td style={cellStyle}>
+                        <span className={`status-badge ${(() => {
+                          const paymentStatus = (order as any).paymentStatus;
+                          if (!paymentStatus) return 'status-processing';
+                          switch (paymentStatus) {
+                            case 'PAID': return 'status-completed';
+                            case 'REFUNDED': return 'status-cancelled';
+                            case 'UNPAID':
+                            default: return 'status-processing';
+                          }
+                        })()}`}>
+                          {(() => {
+                            const paymentStatus = (order as any).paymentStatus;
+                            if (!paymentStatus) return 'Chưa TT';
+                            switch (paymentStatus) {
+                              case 'PAID': return 'Đã TT';
+                              case 'REFUNDED': return 'Hoàn';
+                              case 'UNPAID':
+                              default: return 'Chưa TT';
+                            }
+                          })()}
+                        </span>
+                      </td>
+                      <td style={cellStyle}>{formatPrice(getOrderPrice(order))}</td>
                       <td style={cellStyle}>{order.notes || '-'}</td>
                       <td style={cellStyle}>
                         <button
@@ -219,6 +320,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <button type="button" className="close" onClick={() => setViewingOrder(null)}>×</button>
           </div>
           <div className="mb-3">
+            <div><strong>Mã đơn hàng:</strong> {viewingOrder!.code}</div>
             <div><strong>Khách hàng:</strong> {customer.name}</div>
             <div><strong>Sản phẩm:</strong> {getPackageInfo(viewingOrder!.packageId)?.product?.name || 'Không xác định'}</div>
             <div><strong>Gói:</strong> {getPackageInfo(viewingOrder!.packageId)?.package?.name || 'Không xác định'}</div>
@@ -226,23 +328,44 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <div><strong>Ngày hết hạn:</strong> {formatDate(viewingOrder!.expiryDate)}</div>
             <div><strong>Trạng thái:</strong> {getStatusLabel(viewingOrder!.status)}</div>
             <div><strong>Thanh toán:</strong> {PAYMENT_STATUSES.find(p => p.value === (viewingOrder as any).paymentStatus)?.label || 'Chưa thanh toán'}</div>
-            {(viewingOrder as any).orderInfo && (
-              <div><strong>Thông tin đơn hàng:</strong> {(viewingOrder as any).orderInfo}</div>
-            )}
+            {(() => {
+              const info = buildFullOrderInfo(viewingOrder!);
+              if (!info.lines.length) return null;
+              return (
+                <div>
+                  <strong>Thông tin đơn hàng:</strong>
+                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{info.text}</pre>
+                </div>
+              );
+            })()}
             <div>
               <strong>Kho hàng:</strong>{' '}
               {(() => {
                 const inv = (() => {
+                  // First try to find by inventoryItemId if it exists
                   if (viewingOrder!.inventoryItemId) {
-                    return Database.getInventory().find(i => i.id === viewingOrder!.inventoryItemId);
+                    const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
+                    if (found) {
+                      // Accept if classic link matches
+                      if (found.linked_order_id === viewingOrder!.id) return found;
+                      // For account-based items, accept if any profile is assigned to this order
+                      if (found.is_account_based && (found.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder!.id)) {
+                        return found;
+                      }
+                    }
                   }
-                  return Database.getInventory().find(i => i.linkedOrderId === viewingOrder!.id);
+                  // Fallback 1: find by linkedOrderId (classic single-item link)
+                  const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder!.id);
+                  if (byLinked) return byLinked;
+                  // Fallback 2: account-based items where a profile is assigned to this order
+                  return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder!.id));
                 })();
+                
                 if (!inv) return 'Không liên kết';
-                const code = inv!.code ?? '';
-                const pDate = new Date(inv!.purchaseDate).toLocaleDateString('vi-VN');
-                const eDate = new Date(inv!.expiryDate).toLocaleDateString('vi-VN');
-                const status = inv!.status;
+                const code = inv.code ?? '';
+                const pDate = new Date(inv.purchaseDate).toLocaleDateString('vi-VN');
+                const eDate = new Date(inv.expiryDate).toLocaleDateString('vi-VN');
+                const status = inv.status;
                 const statusLabel =
                   status === 'SOLD' ? 'Đã bán' :
                   status === 'AVAILABLE' ? 'Có sẵn' :
@@ -250,9 +373,19 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                   status === 'EXPIRED' ? 'Hết hạn' : status;
                 const header = `${code || 'Không có'} | Nhập: ${pDate} | HSD: ${eDate} | ${statusLabel}`;
                 const extra: string[] = [];
-                if (inv!.productInfo) extra.push(`| Thông tin sản phẩm: ${inv!.productInfo}`);
-                if (inv!.sourceNote) extra.push(`Nguồn: ${inv!.sourceNote}`);
-                if (typeof inv!.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv!.purchasePrice as number)}`);
+                if (inv.productInfo) extra.push(`| Thông tin sản phẩm: ${inv.productInfo}`);
+                if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
+                if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
+                
+                // Add profile information if this is an account-based item
+                if (inv.is_account_based && (viewingOrder as any).inventoryProfileId) {
+                  const profileId = (viewingOrder as any).inventoryProfileId;
+                  const profile = (inv.profiles || []).find((p: any) => p.id === profileId);
+                  if (profile) {
+                    extra.push(`| Slot: ${profile.label} (${profile.isAssigned ? 'Đã cấp' : 'Chưa cấp'})`);
+                  }
+                }
+                
                 return [header, ...extra].join(' \n ');
               })()}
             </div>
