@@ -613,23 +613,32 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         // Create new order via Supabase
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
+        // Debug logging
+        console.log('=== ORDER CREATION DEBUG ===');
+        console.log('packageId:', orderData.packageId, 'Type:', typeof orderData.packageId);
+        console.log('customerId:', orderData.customerId, 'Type:', typeof orderData.customerId);
+        console.log('inventoryItemId:', orderData.inventoryItemId, 'Type:', typeof orderData.inventoryItemId);
+        
+        const insertData = {
+          code: orderData.code,
+          purchase_date: orderData.purchaseDate,
+          package_id: orderData.packageId,
+          customer_id: orderData.customerId,
+          status: orderData.status,
+          payment_status: orderData.paymentStatus,
+          order_info: orderData.orderInfo,
+          notes: orderData.notes,
+          expiry_date: orderData.expiryDate,
+          inventory_item_id: orderData.inventoryItemId,
+          use_custom_price: orderData.useCustomPrice,
+          custom_price: orderData.customPrice,
+          custom_field_values: orderData.customFieldValues
+        };
+        console.log('Insert data:', insertData);
+        
         const { data: createData, error: createErr } = await sb
           .from('orders')
-          .insert({
-            code: orderData.code,
-            purchase_date: orderData.purchaseDate,
-            package_id: orderData.packageId,
-            customer_id: orderData.customerId,
-            status: orderData.status,
-            payment_status: orderData.paymentStatus,
-            order_info: orderData.orderInfo,
-            notes: orderData.notes,
-            expiry_date: orderData.expiryDate,
-            inventory_item_id: orderData.inventoryItemId,
-            use_custom_price: orderData.useCustomPrice,
-            custom_price: orderData.customPrice,
-            custom_field_values: orderData.customFieldValues
-          })
+          .insert(insertData)
           .select('*')
           .single();
         if (createErr || !createData) throw new Error(createErr?.message || 'Tạo đơn thất bại');

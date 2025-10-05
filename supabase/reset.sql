@@ -92,12 +92,17 @@ create table public.orders (
   product_id uuid references public.products(id) on delete set null,
   package_id uuid references public.packages(id) on delete set null,
   inventory_item_id uuid references public.inventory(id) on delete set null,
+  purchase_date timestamptz not null,
   order_info text,
+  status text default 'PROCESSING',
   payment_status text default 'UNPAID',
   expiry_date timestamptz,
   renewals jsonb,
   notes text,
   created_by text,
+  use_custom_price boolean default false,
+  custom_price numeric default 0,
+  custom_field_values jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
