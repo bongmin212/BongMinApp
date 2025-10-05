@@ -290,6 +290,36 @@ const OrderList: React.FC = () => {
         (async () => {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa đơn hàng', 'error');
+          try {
+            // Release any linked inventory or assigned account-based profiles in Supabase before deleting the order
+            // 1) Classic link: inventory.linked_order_id === order.id
+            const { data: classicLinked } = await sb
+              .from('inventory')
+              .select('id')
+              .eq('linked_order_id', id);
+            const classicIds = (classicLinked || []).map((r: any) => r.id);
+            if (classicIds.length) {
+              await sb
+                .from('inventory')
+                .update({ status: 'AVAILABLE', linked_order_id: null })
+                .in('id', classicIds);
+            }
+
+            // 2) Account-based profiles: clear any profile assigned to this order
+            const { data: accountItems } = await sb
+              .from('inventory')
+              .select('*')
+              .eq('is_account_based', true);
+            const toUpdate = (accountItems || []).filter((it: any) => Array.isArray(it.profiles) && it.profiles.some((p: any) => p.assignedOrderId === id));
+            for (const it of toUpdate) {
+              const nextProfiles = (Array.isArray(it.profiles) ? it.profiles : []).map((p: any) => (
+                p.assignedOrderId === id
+                  ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                  : p
+              ));
+              await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+            }
+          } catch {}
           const { error } = await sb.from('orders').delete().eq('id', id);
           if (!error) {
             // Update local storage immediately

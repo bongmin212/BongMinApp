@@ -1667,7 +1667,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             <label className="form-label">Thông tin đơn hàng</label>
             <textarea
               name="orderInfo"
-              className="form-control"
+              className="form-control text-muted"
               value={(() => {
                 const item = selectedInventoryId ? availableInventory.find(i => i.id === selectedInventoryId) : undefined;
                 if (!item) return '';
@@ -1680,6 +1680,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               })()}
               readOnly
               disabled
+              style={{ opacity: 0.6, background: '#f8f9fa' } as React.CSSProperties}
+              title={'Thông tin được lấy tự động từ kho - không chỉnh sửa'}
               placeholder="Ví dụ: mã kích hoạt/serial/tài khoản bàn giao..."
               rows={3}
             />
@@ -1719,38 +1721,38 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   setConfirmState({
                     message: msg,
                     onConfirm: async () => {
-                      // Resolve inventory to release (classic or account-based)
-                      const inv = (() => {
-                        if (order.inventoryItemId) {
-                          const found = Database.getInventory().find(i => i.id === order.inventoryItemId);
-                          if (found) {
-                            if (found.linkedOrderId === order.id) return found;
-                            if (found.isAccountBased && (found.profiles || []).some(p => p.assignedOrderId === order.id)) return found;
+                      // Release links in Supabase to ensure slot counts drop server-side
+                      try {
+                        const sb = getSupabase();
+                        if (sb) {
+                          // Classic link: clear linked_order_id and set AVAILABLE
+                          const { data: classicLinked } = await sb
+                            .from('inventory')
+                            .select('id')
+                            .eq('linked_order_id', order.id);
+                          const classicIds = (classicLinked || []).map((r: any) => r.id);
+                          if (classicIds.length) {
+                            await sb
+                              .from('inventory')
+                              .update({ status: 'AVAILABLE', linked_order_id: null })
+                              .in('id', classicIds);
+                          }
+                          // Account-based: clear any profiles assigned to this order
+                          const { data: accountItems } = await sb
+                            .from('inventory')
+                            .select('*')
+                            .eq('is_account_based', true);
+                          const toUpdate = (accountItems || []).filter((it: any) => Array.isArray(it.profiles) && it.profiles.some((p: any) => p.assignedOrderId === order.id));
+                          for (const it of toUpdate) {
+                            const nextProfiles = (Array.isArray(it.profiles) ? it.profiles : []).map((p: any) => (
+                              p.assignedOrderId === order.id
+                                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                                : p
+                            ));
+                            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
                           }
                         }
-                        const byLinked = Database.getInventory().find(i => i.linkedOrderId === order.id);
-                        if (byLinked) return byLinked;
-                        return Database.getInventory().find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === order.id));
-                      })();
-
-                      if (inv) {
-                        if (inv.isAccountBased) {
-                          const assignedProfile = (inv.profiles || []).find(p => p.assignedOrderId === order.id);
-                          if (assignedProfile) {
-                            Database.releaseProfile(inv.id, assignedProfile.id);
-                          }
-                          // Also detach classic link if any
-                          if (inv.linkedOrderId === order.id) {
-                            Database.releaseInventoryItem(inv.id);
-                          }
-                        } else {
-                          Database.releaseInventoryItem(inv.id);
-                        }
-                        try {
-                          const sb2 = getSupabase();
-                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho khỏi đơn', details: `orderId=${order.id}; inventoryId=${inv.id}` });
-                        } catch {}
-                      }
+                      } catch {}
                       const success = Database.deleteOrder(order.id);
                       if (success) {
                         try {
