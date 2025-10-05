@@ -58,7 +58,18 @@ const WarehouseList: React.FC = () => {
       accountColumns: r.account_columns || [],
       accountData: r.account_data || {},
       totalSlots: r.total_slots || 0,
-      profiles: Array.isArray(r.profiles) ? r.profiles : [],
+      profiles: (() => {
+        const profiles = Array.isArray(r.profiles) ? r.profiles : [];
+        // Generate missing profiles for account-based inventory
+        if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
+          return Array.from({ length: r.total_slots || 0 }, (_, idx) => ({
+            id: `slot-${idx + 1}`,
+            label: `Slot ${idx + 1}`,
+            isAssigned: false
+          }));
+        }
+        return profiles;
+      })(),
       linkedOrderId: r.linked_order_id || undefined,
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()

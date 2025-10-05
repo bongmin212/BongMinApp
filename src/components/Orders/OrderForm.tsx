@@ -51,7 +51,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     type: 'RETAIL',
     phone: '',
     email: '',
-    source: 'WEB',
+    source: undefined,
     sourceDetail: '',
     notes: ''
   });
@@ -229,18 +229,31 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         query = query.eq('package_id', formData.packageId);
       }
       const { data } = await query.order('created_at', { ascending: true });
-      let items = (data || []).map((i: any) => ({
-        ...i,
-        purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(),
-        expiryDate: i.expiry_date ? new Date(i.expiry_date) : undefined,
-        createdAt: i.created_at ? new Date(i.created_at) : new Date(),
-        updatedAt: i.updated_at ? new Date(i.updated_at) : new Date(),
-        isAccountBased: i.is_account_based,
-        accountColumns: i.account_columns,
-        accountData: i.account_data,
-        totalSlots: i.total_slots,
-        profiles: i.profiles
-      })) as InventoryItem[];
+      let items = (data || []).map((i: any) => {
+        const item = {
+          ...i,
+          purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(),
+          expiryDate: i.expiry_date ? new Date(i.expiry_date) : undefined,
+          createdAt: i.created_at ? new Date(i.created_at) : new Date(),
+          updatedAt: i.updated_at ? new Date(i.updated_at) : new Date(),
+          isAccountBased: i.is_account_based,
+          accountColumns: i.account_columns,
+          accountData: i.account_data,
+          totalSlots: i.total_slots,
+          profiles: i.profiles
+        } as InventoryItem;
+        
+        // Generate missing profiles for account-based inventory
+        if (item.isAccountBased && (!item.profiles || item.profiles.length === 0) && item.totalSlots && item.totalSlots > 0) {
+          item.profiles = Array.from({ length: item.totalSlots }, (_, idx) => ({
+            id: `slot-${idx + 1}`,
+            label: `Slot ${idx + 1}`,
+            isAssigned: false
+          }));
+        }
+        
+        return item;
+      }) as InventoryItem[];
       // Filter availability
       items = items.filter((i: any) => {
         if (i.isAccountBased) {
@@ -268,6 +281,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             totalSlots: linked.total_slots,
             profiles: linked.profiles
           } as any;
+          
+          // Generate missing profiles for account-based inventory
+          if (linkedMapped.isAccountBased && (!linkedMapped.profiles || linkedMapped.profiles.length === 0) && linkedMapped.totalSlots && linkedMapped.totalSlots > 0) {
+            linkedMapped.profiles = Array.from({ length: linkedMapped.totalSlots }, (_, idx) => ({
+              id: `slot-${idx + 1}`,
+              label: `Slot ${idx + 1}`,
+              isAssigned: false
+            }));
+          }
           merged = [linkedMapped as InventoryItem, ...items.filter(i => i.id !== linkedMapped.id)];
         }
       } else if (order) {
@@ -286,6 +308,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             totalSlots: l.total_slots,
             profiles: l.profiles
           } as any;
+          
+          // Generate missing profiles for account-based inventory
+          if (mapped.isAccountBased && (!mapped.profiles || mapped.profiles.length === 0) && mapped.totalSlots && mapped.totalSlots > 0) {
+            mapped.profiles = Array.from({ length: mapped.totalSlots }, (_, idx) => ({
+              id: `slot-${idx + 1}`,
+              label: `Slot ${idx + 1}`,
+              isAssigned: false
+            }));
+          }
           merged = [mapped as InventoryItem, ...items.filter(i => i.id !== mapped.id)];
         }
       }
@@ -741,7 +772,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         type: 'RETAIL',
         phone: '',
         email: '',
-        source: 'WEB',
+        source: undefined,
         sourceDetail: '',
         notes: ''
       });

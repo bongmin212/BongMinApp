@@ -53,7 +53,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             type: 'RETAIL',
             phone: '',
             email: '',
-            source: 'WEB',
+            source: undefined,
             sourceDetail: '',
             notes: ''
           });
@@ -66,7 +66,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             type: 'RETAIL',
             phone: '',
             email: '',
-            source: 'WEB',
+            source: undefined,
             sourceDetail: '',
             notes: ''
           });
