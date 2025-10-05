@@ -975,12 +975,7 @@ const OrderList: React.FC = () => {
                     if (viewingOrder.inventoryItemId) {
                       const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
                       if (found) {
-                        // Accept if classic link matches
-                        if (found.linked_order_id === viewingOrder.id) return found;
-                        // For account-based items, accept if any profile is assigned to this order
-                        if (found.is_account_based && (found.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id)) {
-                          return found;
-                        }
+                        return found; // If inventoryItemId exists, use it regardless of other conditions
                       }
                     }
                     // Fallback 1: find by linkedOrderId (classic single-item link)
@@ -1010,6 +1005,23 @@ const OrderList: React.FC = () => {
                   const extra: string[] = [];
                   if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
                   if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
+                  
+                  // Add profile information if this is an account-based item
+                  if (inv.isAccountBased) {
+                    if ((viewingOrder as any).inventoryProfileId) {
+                      const profileId = (viewingOrder as any).inventoryProfileId;
+                      const profile = (inv.profiles || []).find((p: any) => p.id === profileId);
+                      if (profile) {
+                        extra.push(`| Slot: ${profile.label} (${profile.isAssigned ? 'Đã cấp' : 'Chưa cấp'})`);
+                      }
+                    } else {
+                      // Show slot count if no specific profile is assigned
+                      const assignedSlots = (inv.profiles || []).filter((p: any) => p.isAssigned).length;
+                      const totalSlots = inv.totalSlots || (inv.profiles || []).length;
+                      extra.push(`| Slots: ${assignedSlots}/${totalSlots} đã cấp`);
+                    }
+                  }
+                  
                   return [header, ...extra].join(' \n ');
                 })()}
               </div>

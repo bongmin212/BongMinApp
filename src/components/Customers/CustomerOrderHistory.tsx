@@ -75,7 +75,63 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
     setOrders(allOrders);
     setPackages(allPackages);
     setProducts(allProducts);
-    setInventory((inventoryRes.data || []) as any[]);
+    
+    // Process inventory data properly like in WarehouseList
+    const processedInventory = (inventoryRes.data || []).map((r: any) => {
+      const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
+      let expiryDate = r.expiry_date ? new Date(r.expiry_date) : null;
+      
+      // If no expiry date, calculate based on product type
+      if (!expiryDate) {
+        const product = allProducts.find((p: any) => p.id === r.product_id);
+        if (product?.sharedInventoryPool) {
+          // Shared pool products: 1 month default
+          expiryDate = new Date(purchaseDate);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        } else {
+          // Regular products: use package warranty period
+          const packageInfo = allPackages.find((p: any) => p.id === r.package_id);
+          const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+          expiryDate = new Date(purchaseDate);
+          expiryDate.setMonth(expiryDate.getMonth() + warrantyPeriod);
+        }
+      }
+      
+      return {
+        id: r.id,
+        code: r.code,
+        productId: r.product_id,
+        packageId: r.package_id,
+        purchaseDate,
+        expiryDate,
+        sourceNote: r.source_note || '',
+        purchasePrice: r.purchase_price,
+        productInfo: r.product_info || '',
+        notes: r.notes || '',
+        status: r.status,
+        isAccountBased: !!r.is_account_based,
+        accountColumns: r.account_columns || [],
+        accountData: r.account_data || {},
+        totalSlots: r.total_slots || 0,
+        profiles: (() => {
+          const profiles = Array.isArray(r.profiles) ? r.profiles : [];
+          // Generate missing profiles for account-based inventory
+          if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
+            return Array.from({ length: r.total_slots || 0 }, (_, idx) => ({
+              id: `slot-${idx + 1}`,
+              label: `Slot ${idx + 1}`,
+              isAssigned: false
+            }));
+          }
+          return profiles;
+        })(),
+        linkedOrderId: r.linked_order_id || undefined,
+        linked_order_id: r.linked_order_id, // Keep both for compatibility
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
+    });
+    setInventory(processedInventory);
   };
 
   const customerCode = customer.code || 'KH001';
@@ -343,12 +399,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                   if (viewingOrder!.inventoryItemId) {
                     const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
                     if (found) {
-                      // Accept if classic link matches
-                      if (found.linked_order_id === viewingOrder!.id) return found;
-                      // For account-based items, accept if any profile is assigned to this order
-                      if (found.is_account_based && (found.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder!.id)) {
-                        return found;
-                      }
+                      return found; // If inventoryItemId exists, use it regardless of other conditions
                     }
                   }
                   // Fallback 1: find by linkedOrderId (classic single-item link)
@@ -376,11 +427,18 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                 if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
                 
                 // Add profile information if this is an account-based item
-                if (inv.is_account_based && (viewingOrder as any).inventoryProfileId) {
-                  const profileId = (viewingOrder as any).inventoryProfileId;
-                  const profile = (inv.profiles || []).find((p: any) => p.id === profileId);
-                  if (profile) {
-                    extra.push(`| Slot: ${profile.label} (${profile.isAssigned ? 'Đã cấp' : 'Chưa cấp'})`);
+                if (inv.isAccountBased) {
+                  if ((viewingOrder as any).inventoryProfileId) {
+                    const profileId = (viewingOrder as any).inventoryProfileId;
+                    const profile = (inv.profiles || []).find((p: any) => p.id === profileId);
+                    if (profile) {
+                      extra.push(`| Slot: ${profile.label} (${profile.isAssigned ? 'Đã cấp' : 'Chưa cấp'})`);
+                    }
+                  } else {
+                    // Show slot count if no specific profile is assigned
+                    const assignedSlots = (inv.profiles || []).filter((p: any) => p.isAssigned).length;
+                    const totalSlots = inv.totalSlots || (inv.profiles || []).length;
+                    extra.push(`| Slots: ${assignedSlots}/${totalSlots} đã cấp`);
                   }
                 }
                 
