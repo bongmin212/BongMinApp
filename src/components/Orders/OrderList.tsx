@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, Warranty } from '../../types';
+import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
 import OrderForm from './OrderForm';
@@ -18,7 +18,6 @@ const OrderList: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
-  const [warrantiesForOrder, setWarrantiesForOrder] = useState<Warranty[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -178,7 +177,63 @@ const OrderList: React.FC = () => {
     setCustomers(allCustomers);
     setPackages(allPackages);
     setProducts(allProducts);
-    setInventory((inventoryRes.data || []) as any[]);
+    
+    // Process inventory data properly like in WarehouseList
+    const processedInventory = (inventoryRes.data || []).map((r: any) => {
+      const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
+      let expiryDate = r.expiry_date ? new Date(r.expiry_date) : null;
+      
+      // If no expiry date, calculate based on product type
+      if (!expiryDate) {
+        const product = allProducts.find((p: any) => p.id === r.product_id);
+        if (product?.sharedInventoryPool) {
+          // Shared pool products: 1 month default
+          expiryDate = new Date(purchaseDate);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        } else {
+          // Regular products: use package warranty period
+          const packageInfo = allPackages.find((p: any) => p.id === r.package_id);
+          const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+          expiryDate = new Date(purchaseDate);
+          expiryDate.setMonth(expiryDate.getMonth() + warrantyPeriod);
+        }
+      }
+      
+      return {
+        id: r.id,
+        code: r.code,
+        productId: r.product_id,
+        packageId: r.package_id,
+        purchaseDate,
+        expiryDate,
+        sourceNote: r.source_note || '',
+        purchasePrice: r.purchase_price,
+        productInfo: r.product_info || '',
+        notes: r.notes || '',
+        status: r.status,
+        isAccountBased: !!r.is_account_based,
+        accountColumns: r.account_columns || [],
+        accountData: r.account_data || {},
+        totalSlots: r.total_slots || 0,
+        profiles: (() => {
+          const profiles = Array.isArray(r.profiles) ? r.profiles : [];
+          // Generate missing profiles for account-based inventory
+          if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
+            return Array.from({ length: r.total_slots || 0 }, (_, idx) => ({
+              id: `slot-${idx + 1}`,
+              label: `Slot ${idx + 1}`,
+              isAssigned: false
+            }));
+          }
+          return profiles;
+        })(),
+        linkedOrderId: r.linked_order_id || undefined,
+        linked_order_id: r.linked_order_id, // Keep both for compatibility
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
+    });
+    setInventory(processedInventory);
   };
 
   // Realtime subscribe
@@ -936,17 +991,23 @@ const OrderList: React.FC = () => {
                   })();
                   if (!inv) return 'Không liên kết';
                   const code = inv.code ?? '';
-                  const pDate = new Date(inv.purchaseDate).toLocaleDateString('vi-VN');
-                  const eDate = new Date(inv.expiryDate).toLocaleDateString('vi-VN');
+                  const pDate = inv.purchaseDate ? new Date(inv.purchaseDate).toISOString().split('T')[0] : 'N/A';
+                  const eDate = inv.expiryDate ? new Date(inv.expiryDate).toISOString().split('T')[0] : 'N/A';
                   const status = inv.status;
                   const statusLabel =
                     status === 'SOLD' ? 'Đã bán' :
                     status === 'AVAILABLE' ? 'Có sẵn' :
                     status === 'RESERVED' ? 'Đã giữ' :
                     status === 'EXPIRED' ? 'Hết hạn' : status;
-                  const header = `${code || 'Không có'} | Nhập: ${pDate} | HSD: ${eDate} | ${statusLabel}`;
+                  // Get product and package info for display
+                  const product = products.find(p => p.id === inv.productId);
+                  const packageInfo = packages.find(p => p.id === inv.packageId);
+                  const productName = product?.name || 'Không xác định';
+                  const packageName = packageInfo?.name || 'Không xác định';
+                  
+                  // Format like the warehouse dropdown: #KHO001 | email | product | package | Nhập: date | HSD: date
+                  const header = `#${code || 'Không có'} | ${inv.productInfo || ''} | ${productName} | ${packageName} | Nhập: ${pDate} | HSD: ${eDate}`;
                   const extra: string[] = [];
-                  if (inv.productInfo) extra.push(`| Thông tin sản phẩm: ${inv.productInfo}`);
                   if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
                   if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
                   return [header, ...extra].join(' \n ');
@@ -954,15 +1015,15 @@ const OrderList: React.FC = () => {
               </div>
               {viewingOrder.notes && <div><strong>Ghi chú:</strong> {viewingOrder.notes}</div>}
               {(() => {
-                // warranties are loaded via effectful call elsewhere; render state
+                const list = Database.getWarrantiesByOrder(viewingOrder.id);
                 return (
                   <div style={{ marginTop: '12px' }}>
                     <strong>Lịch sử bảo hành:</strong>
-                    {warrantiesForOrder.length === 0 ? (
+                    {list.length === 0 ? (
                       <div>Chưa có</div>
                     ) : (
                       <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                        {warrantiesForOrder.map((w: any) => (
+                        {list.map(w => (
                           <li key={w.id}>
                             {new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.reason} ({w.status === 'DONE' ? 'đã xong' : 'chưa xong'})
                           </li>

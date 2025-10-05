@@ -901,6 +901,7 @@ const WarehouseList: React.FC = () => {
                 const info = buildFullOrderInfo(o);
                 return (
                   <div>
+                    <div><strong>Mã đơn hàng:</strong> {o.code}</div>
                     <div><strong>Khách hàng:</strong> {customerName}</div>
                     <div><strong>Sản phẩm:</strong> {product?.name || 'Không xác định'}</div>
                     <div><strong>Gói:</strong> {pkg?.name || 'Không xác định'}</div>
@@ -919,28 +920,34 @@ const WarehouseList: React.FC = () => {
                       {(() => {
                         const inv = (() => {
                           if (o.inventoryItemId) {
-                            const found = Database.getInventory().find(i => i.id === o.inventoryItemId);
+                            const found = items.find(i => i.id === o.inventoryItemId);
                             if (found) {
                               if (found.linkedOrderId === o.id) return found;
                               if (found.isAccountBased && (found.profiles || []).some(p => p.assignedOrderId === o.id)) return found;
                             }
                           }
-                          const byLinked = Database.getInventory().find(i => i.linkedOrderId === o.id);
+                          const byLinked = items.find(i => i.linkedOrderId === o.id);
                           if (byLinked) return byLinked;
-                          return Database.getInventory().find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === o.id));
+                          return items.find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === o.id));
                         })();
                         if (!inv) return 'Không liên kết';
                         const code = inv.code ?? '';
-                        const pDate = new Date(inv.purchaseDate).toLocaleDateString('vi-VN');
-                        const eDate = new Date(inv.expiryDate).toLocaleDateString('vi-VN');
+                        const pDate = inv.purchaseDate ? new Date(inv.purchaseDate).toISOString().split('T')[0] : 'N/A';
+                        const eDate = inv.expiryDate ? new Date(inv.expiryDate).toISOString().split('T')[0] : 'N/A';
                         const status = inv.status;
                         const statusLabel =
                           status === 'SOLD' ? 'Đã bán' :
                           status === 'AVAILABLE' ? 'Có sẵn' :
                           status === 'EXPIRED' ? 'Hết hạn' : status;
-                        const header = `${code || 'Không có'} | Nhập: ${pDate} | HSD: ${eDate} | ${statusLabel}`;
+                        // Get product and package info for display
+                        const product = products.find(p => p.id === inv.productId);
+                        const packageInfo = packages.find(p => p.id === inv.packageId);
+                        const productName = product?.name || 'Không xác định';
+                        const packageName = packageInfo?.name || 'Không xác định';
+                        
+                        // Format like the warehouse dropdown: #KHO001 | email | product | package | Nhập: date | HSD: date
+                        const header = `#${code || 'Không có'} | ${inv.productInfo || ''} | ${productName} | ${packageName} | Nhập: ${pDate} | HSD: ${eDate}`;
                         const extra: string[] = [];
-                        if (inv.productInfo) extra.push(`| Thông tin sản phẩm: ${inv.productInfo}`);
                         if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
                         if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
                         return [header, ...extra].join(' \n ');
@@ -959,6 +966,37 @@ const WarehouseList: React.FC = () => {
                               {list.map(w => (
                                 <li key={w.id}>
                                   {new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.reason} ({w.status === 'DONE' ? 'đã xong' : 'chưa xong'})
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {(() => {
+                      const renewals = ((o as any).renewals || []) as Array<{
+                        id: string;
+                        months: number;
+                        packageId?: string;
+                        price?: number;
+                        useCustomPrice?: boolean;
+                        previousExpiryDate: Date;
+                        newExpiryDate: Date;
+                        note?: string;
+                        paymentStatus: PaymentStatus;
+                        createdAt: Date;
+                        createdBy: string;
+                      }>;
+                      return (
+                        <div style={{ marginTop: '12px' }}>
+                          <strong>Lịch sử gia hạn:</strong>
+                          {renewals.length === 0 ? (
+                            <div>Chưa có</div>
+                          ) : (
+                            <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
+                              {renewals.map(r => (
+                                <li key={r.id}>
+                                  {new Date(r.createdAt).toLocaleDateString('vi-VN')} · +{r.months} tháng · HSD: {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → {new Date(r.newExpiryDate).toLocaleDateString('vi-VN')} · Gói: {getPackageInfo(r.packageId || o.packageId).pkg?.name || 'Không xác định'} · Giá: {typeof r.price === 'number' ? formatPrice(r.price) : '-'} · TT: {getPaymentLabel(r.paymentStatus)}{r.note ? ` · Ghi chú: ${r.note}` : ''}
                                 </li>
                               ))}
                             </ul>
