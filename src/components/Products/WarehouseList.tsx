@@ -1010,7 +1010,10 @@ const WarehouseList: React.FC = () => {
                                     <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
                                   )}
                                   {!p.isAssigned && (p as any).needsUpdate && (
-                                    <button className="btn btn-sm btn-primary" onClick={() => clearProfileNeedsUpdate(item.id, p.id)}>Đã update</button>
+                                    <button className="btn btn-sm btn-primary" onClick={() => setConfirmState({
+                                      message: `Đánh dấu slot "${p.label}" đã update?`,
+                                      onConfirm: () => clearProfileNeedsUpdate(item.id, p.id)
+                                    })}>Đã update</button>
                                   )}
                                 </div>
                               </td>
