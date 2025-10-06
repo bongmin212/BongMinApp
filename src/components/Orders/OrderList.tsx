@@ -1058,6 +1058,29 @@ const OrderList: React.FC = () => {
         </div>
       )}
 
+      <div className="d-flex justify-content-between align-items-center mt-3">
+        <div>
+          <select
+            className="form-control"
+            style={{ width: 100 }}
+            value={limit}
+            onChange={(e) => { setLimit(parseInt(e.target.value, 10)); setPage(1); }}
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </div>
+        <div className="d-flex align-items-center gap-2">
+          <button className="btn btn-light" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>«</button>
+          <span>Trang {currentPage} / {totalPages}</span>
+          <button className="btn btn-light" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>»</button>
+        </div>
+        <div>
+          <span className="text-muted">Tổng: {total}</span>
+        </div>
+      </div>
+
       {showForm && (
         <OrderForm
           key={editingOrder?.id || 'new'}
