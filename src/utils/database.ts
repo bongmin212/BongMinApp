@@ -1116,17 +1116,14 @@ export class Database {
 
   static async createExpense(expenseData: ExpenseFormData): Promise<Expense> {
     const expenses = await this.getExpenses();
-    const providedCode = String(expenseData.code || '').trim();
-    if (!providedCode) {
-      throw new Error('Mã chi phí là bắt buộc');
-    }
-    if (expenses.some(e => e.code === providedCode)) {
-      throw new Error(`Mã chi phí "${providedCode}" đã tồn tại`);
+    const autoCode = String(expenseData.code || '').trim() || await this.generateNextExpenseCode();
+    if (expenses.some(e => e.code === autoCode)) {
+      throw new Error(`Mã chi phí "${autoCode}" đã tồn tại`);
     }
     const newExpense: Expense = {
       id: generateId(),
       ...expenseData,
-      code: providedCode,
+      code: autoCode,
       createdBy: 'system', // Default user ID
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1144,15 +1141,8 @@ export class Database {
     
     if (index === -1) throw new Error('Expense not found');
     // Prevent duplicate expense codes (excluding current expense)
-    if (expenseData.code !== undefined) {
-      const nextCode = String(expenseData.code || '').trim();
-      if (!nextCode) {
-        throw new Error('Mã chi phí là bắt buộc');
-      }
-      if (expenses.some(e => e.code === nextCode && e.id !== id)) {
-        throw new Error(`Mã chi phí "${nextCode}" đã tồn tại`);
-      }
-      expenseData.code = nextCode as any;
+    if (expenseData.code && expenses.some(e => e.code === expenseData.code && e.id !== id)) {
+      throw new Error(`Mã chi phí "${expenseData.code}" đã tồn tại`);
     }
     
     expenses[index] = {

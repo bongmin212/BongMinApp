@@ -477,6 +477,18 @@ const ExpenseForm: React.FC<{
     date: coerceDate(expense?.date ?? new Date()),
   });
 
+  // Auto-generate expense code for new records
+  useEffect(() => {
+    if (!expense) {
+      (async () => {
+        try {
+          const next = await Database.generateNextExpenseCode();
+          setFormData(prev => ({ ...prev, code: next }));
+        } catch {}
+      })();
+    }
+  }, [expense]);
+
   const formatVND = (value: number): string => {
     try {
       return new Intl.NumberFormat('vi-VN').format(value);
@@ -514,9 +526,13 @@ const ExpenseForm: React.FC<{
               type="text"
               className="form-control"
               value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-              placeholder="Nhập mã chi phí (ví dụ: CP001)"
-              required
+              onChange={() => {}}
+              placeholder="Tự tạo như CP001"
+              readOnly
+              disabled
+              aria-disabled
+              title={'Mã tự động tạo - không chỉnh sửa'}
+              style={{ opacity: 0.6 } as React.CSSProperties}
             />
           </div>
 
