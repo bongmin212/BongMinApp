@@ -722,7 +722,20 @@ const OrderList: React.FC = () => {
     const totalPagesLocal = Math.max(1, Math.ceil(totalLocal / limit));
     const currentPageLocal = Math.min(page, totalPagesLocal);
     const startLocal = (currentPageLocal - 1) * limit;
-    const paginatedLocal = filteredOrders.slice(startLocal, startLocal + limit);
+    const sortedLocal = filteredOrders
+      .slice()
+      .sort((a, b) => {
+        const getCodeNumber = (code: string | undefined | null) => {
+          if (!code) return Number.POSITIVE_INFINITY;
+          const m = String(code).match(/\d+/);
+          return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+        };
+        const na = getCodeNumber(a.code as any);
+        const nb = getCodeNumber(b.code as any);
+        if (na !== nb) return na - nb;
+        return (a.code || '').localeCompare(b.code || '');
+      });
+    const paginatedLocal = sortedLocal.slice(startLocal, startLocal + limit);
     return {
       total: totalLocal,
       totalPages: totalPagesLocal,

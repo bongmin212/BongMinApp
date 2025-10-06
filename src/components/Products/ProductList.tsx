@@ -237,7 +237,20 @@ const ProductList: React.FC = () => {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
-  const paginatedProducts = products;
+  const sortedProducts = products
+    .slice()
+    .sort((a, b) => {
+      const getNum = (code?: string | null) => {
+        if (!code) return Number.POSITIVE_INFINITY;
+        const m = String(code).match(/\d+/);
+        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+      };
+      const na = getNum(a.code as any);
+      const nb = getNum(b.code as any);
+      if (na !== nb) return na - nb;
+      return (a.code || '').localeCompare(b.code || '');
+    });
+  const paginatedProducts = sortedProducts;
 
   const exportProductsXlsx = (items: Product[], filename: string) => {
     const rows = items.map((p, idx) => ({

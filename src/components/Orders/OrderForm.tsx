@@ -1167,9 +1167,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               disabled={!selectedProduct}
             >
               <option value="">Chọn gói sản phẩm</option>
-              {getFilteredPackages().map(pkg => (
+              {getFilteredPackages()
+                .slice()
+                .sort((a, b) => {
+                  const wa = Number(a.warrantyPeriod || 0);
+                  const wb = Number(b.warrantyPeriod || 0);
+                  if (wa !== wb) return wa - wb;
+                  return (a.name || '').localeCompare(b.name || '');
+                })
+                .map(pkg => (
                 <option key={pkg.id} value={pkg.id}>
-                  {pkg.name} - {formatPrice(pkg.retailPrice)}
+                  {pkg.name} ({pkg.warrantyPeriod === 24 ? 'Vĩnh viễn' : `${pkg.warrantyPeriod} tháng`}) - {formatPrice(pkg.retailPrice)}
                 </option>
               ))}
             </select>

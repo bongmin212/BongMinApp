@@ -197,7 +197,20 @@ const PackageList: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * limit;
-  const pageItems = filteredPackages.slice(start, start + limit);
+  const sortedPackages = filteredPackages
+    .slice()
+    .sort((a, b) => {
+      const getNum = (code?: string | null) => {
+        if (!code) return Number.POSITIVE_INFINITY;
+        const m = String(code).match(/\d+/);
+        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+      };
+      const na = getNum(a.code as any);
+      const nb = getNum(b.code as any);
+      if (na !== nb) return na - nb;
+      return (a.code || '').localeCompare(b.code || '');
+    });
+  const pageItems = sortedPackages.slice(start, start + limit);
 
   return (
     <div className="card">

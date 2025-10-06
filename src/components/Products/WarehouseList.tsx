@@ -336,7 +336,20 @@ const WarehouseList: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * limit;
-  const pageItems = filteredItems.slice(start, start + limit);
+  const sortedItems = filteredItems
+    .slice()
+    .sort((a, b) => {
+      const getNum = (code?: string | null) => {
+        if (!code) return Number.POSITIVE_INFINITY;
+        const m = String(code).match(/\d+/);
+        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+      };
+      const na = getNum(a.code as any);
+      const nb = getNum(b.code as any);
+      if (na !== nb) return na - nb;
+      return (a.code || '').localeCompare(b.code || '');
+    });
+  const pageItems = sortedItems.slice(start, start + limit);
 
   const exportInventoryXlsx = (items: InventoryItem[], filename: string) => {
     const rows = items.map((i, idx) => {

@@ -241,7 +241,20 @@ const CustomerList: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * limit;
-  const paginatedCustomers = filteredCustomers.slice(start, start + limit);
+  const sortedCustomers = filteredCustomers
+    .slice()
+    .sort((a, b) => {
+      const getNum = (code?: string | null) => {
+        if (!code) return Number.POSITIVE_INFINITY;
+        const m = String(code).match(/\d+/);
+        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+      };
+      const na = getNum(a.code as any);
+      const nb = getNum(b.code as any);
+      if (na !== nb) return na - nb;
+      return (a.code || '').localeCompare(b.code || '');
+    });
+  const paginatedCustomers = sortedCustomers.slice(start, start + limit);
 
   const exportCustomersXlsx = (items: Customer[], filename: string) => {
     const rows = items.map((c, idx) => ({
