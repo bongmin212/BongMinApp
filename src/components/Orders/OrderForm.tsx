@@ -459,8 +459,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const d = formData.customExpiryDate instanceof Date ? formData.customExpiryDate : (formData.customExpiryDate ? new Date(formData.customExpiryDate as any) : undefined);
       if (!d || isNaN(d.getTime())) {
         newErrors.customExpiryDate = 'Vui lòng chọn ngày hết hạn hợp lệ';
-      } else if (d < new Date(formData.purchaseDate)) {
-        newErrors.customExpiryDate = 'Hạn phải sau hoặc bằng ngày mua';
       }
     }
 
@@ -1142,10 +1140,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   value={(formData.customExpiryDate instanceof Date && !isNaN(formData.customExpiryDate.getTime()))
                     ? formData.customExpiryDate.toISOString().split('T')[0]
                     : ''}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    customExpiryDate: e.target.value ? new Date(e.target.value) : undefined
-                  }))}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      customExpiryDate: e.target.value ? new Date(e.target.value) : undefined
+                    }));
+                    if (errors.customExpiryDate) {
+                      setErrors(prev => ({ ...prev, customExpiryDate: '' }));
+                    }
+                  }}
                 />
                 {errors.customExpiryDate && (
                   <div className="text-danger small mt-1">{errors.customExpiryDate}</div>
