@@ -87,6 +87,31 @@ const WarehouseList: React.FC = () => {
     }
   };
 
+  const clearProfileNeedsUpdate = async (inventoryId: string, profileId: string) => {
+    const sb = getSupabase();
+    if (!sb) { notify('Không thể cập nhật slot', 'error'); return; }
+    try {
+      const { data: inv } = await sb.from('inventory').select('*').eq('id', inventoryId).single();
+      if (!inv || !inv.is_account_based) return;
+      const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+      const nextProfiles = profiles.map((p: any) => (
+        p.id === profileId ? { ...p, needsUpdate: false } : p
+      ));
+      const anyNeedsUpdate = nextProfiles.some((p: any) => !!p.needsUpdate);
+      const anyAssigned = nextProfiles.some((p: any) => !!p.isAssigned);
+      const nextStatus = (!anyNeedsUpdate && !anyAssigned && inv.status === 'NEEDS_UPDATE') ? 'AVAILABLE' : undefined;
+      if (nextStatus) {
+        await sb.from('inventory').update({ profiles: nextProfiles, status: nextStatus }).eq('id', inventoryId);
+      } else {
+        await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
+      }
+      notify('Đã đánh dấu slot đã update', 'success');
+      refresh();
+    } catch {
+      notify('Không thể cập nhật slot', 'error');
+    }
+  };
+
   const refresh = async () => {
     const sb = getSupabase();
     if (!sb) return;
@@ -968,7 +993,10 @@ const WarehouseList: React.FC = () => {
                           return (
                             <tr key={p.id}>
                               <td>{p.label}</td>
-                              <td>{p.isAssigned ? 'Đang dùng' : 'Trống'}</td>
+                              <td>{(() => {
+                                if (p.isAssigned) return 'Đang dùng';
+                                return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
+                              })()}</td>
                               <td>{order ? `${order.code}` : '-'}</td>
                               <td>{p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-'}</td>
                               <td>
@@ -980,6 +1008,9 @@ const WarehouseList: React.FC = () => {
                                   )}
                                   {!order && p.isAssigned && (
                                     <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
+                                  )}
+                                  {!p.isAssigned && (p as any).needsUpdate && (
+                                    <button className="btn btn-sm btn-primary" onClick={() => clearProfileNeedsUpdate(item.id, p.id)}>Đã update</button>
                                   )}
                                 </div>
                               </td>

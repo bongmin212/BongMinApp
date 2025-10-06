@@ -118,6 +118,7 @@ export interface InventoryProfileSlot {
   assignedOrderId?: string;
   assignedAt?: Date;
   expiryAt?: Date; // mirror the linked order expiry to auto-release
+  needsUpdate?: boolean; // set true when freed due to warranty swap until manually cleared
 }
 
 export interface InventoryItem {

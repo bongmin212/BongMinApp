@@ -269,7 +269,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
                 const nextProfiles = profiles.map((p: any) => (
                   p.assignedOrderId === resolvedOrderId
-                    ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                    ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null, needsUpdate: true }
                     : p
                 ));
                 await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
@@ -363,7 +363,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
             const nextProfiles = profiles.map((p: any) => (
               p.assignedOrderId === resolvedOrderId
-                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null, needsUpdate: true }
                 : p
             ));
             await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
