@@ -211,7 +211,6 @@ const Dashboard: React.FC = () => {
         .reduce((sum, expense) => sum + expense.amount, 0);
 
       // Import cost from inventory: sum of purchase prices by month + renewals in that month
-      const inventoryItems = await Database.getInventory();
       const importCostByMonth = (inventoryItems as InventoryItem[])
         .filter(i => new Date(i.purchaseDate).getMonth() === targetMonth && new Date(i.purchaseDate).getFullYear() === targetYear)
         .reduce((s, i) => s + (i.purchasePrice || 0), 0);
