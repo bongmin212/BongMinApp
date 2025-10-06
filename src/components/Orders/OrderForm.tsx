@@ -385,26 +385,28 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     });
   }, [selectedInventoryId]);
 
-  // Auto-pick first available slot for account-based inventory when none selected
-  // Default behavior: selects the first slot that is either unassigned OR already assigned to this order
+  // Auto-pick slot for account-based inventory
+  // Preserve the slot already assigned to this order if present; otherwise select the first available
   useEffect(() => {
     if (!selectedInventoryId) return;
     const inv = availableInventory.find(i => i.id === selectedInventoryId);
     const pkg = packages.find(p => p.id === formData.packageId);
     if (!(inv?.isAccountBased || pkg?.isAccountBased)) return;
-    const options = (inv?.profiles || []).filter(p => !p.isAssigned || p.assignedOrderId === (order?.id || ''));
-    if (!options || options.length === 0) {
+    const profiles = Array.isArray(inv?.profiles) ? (inv as any).profiles : [];
+    const allowed = profiles.filter((p: any) => !p.isAssigned || p.assignedOrderId === (order?.id || ''));
+    if (!allowed.length) {
       setSelectedProfileId('');
       return;
     }
-    // Enforce exclusive use: do not auto-pick if any profile is already assigned to any order
-    const anyAssigned = (inv?.profiles || []).some(p => p.isAssigned && p.assignedOrderId && p.assignedOrderId !== (order?.id || ''));
-    if (anyAssigned) {
-      setSelectedProfileId('');
-      return;
-    }
-    // If no slot currently selected, pick the first available
-    setSelectedProfileId(prev => (options.some(p => p.id === prev) ? prev : options[0].id));
+    setSelectedProfileId(prev => {
+      // If current selection is valid, keep it
+      if (prev && allowed.some((p: any) => p.id === prev)) return prev;
+      // If order already has a profile id and it's allowed, use it
+      const existing = (order as any)?.inventoryProfileId;
+      if (existing && allowed.some((p: any) => p.id === existing)) return existing as string;
+      // Fallback to first allowed option
+      return allowed[0].id as string;
+    });
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
 
   // Ensure selected product is correct on edit so package select isn't disabled
@@ -512,20 +514,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const purchaseDate = new Date(formData.purchaseDate);
       let expiryDate = new Date(purchaseDate);
       
-      // For shared pool products, use 1 month default if no specific expiry
-      const product = products.find(p => p.id === selectedPackage.productId);
-      const isSharedPool = product?.sharedInventoryPool;
-      
       if (formData.useCustomExpiry && formData.customExpiryDate) {
         expiryDate = new Date(formData.customExpiryDate);
       } else {
-        if (isSharedPool && selectedInventoryId) {
-          // For shared pool products with inventory, use 1 month default
-          expiryDate.setMonth(expiryDate.getMonth() + 1);
-        } else {
-          // Use package warranty period for regular products
-          expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
-        }
+        // Always use selected package warranty period, even for shared pools
+        expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
       }
 
       const customFieldValues = (() => {
@@ -1134,76 +1127,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             {errors.purchaseDate && (
               <div className="text-danger small mt-1">{errors.purchaseDate}</div>
             )}
-            <div className="d-flex align-items-center gap-2 mt-2">
-              <input
-                type="checkbox"
-                id="useCustomExpiry"
-                checked={!!formData.useCustomExpiry}
-                onChange={(e) => setFormData(prev => ({
-                  ...prev,
-                  useCustomExpiry: e.target.checked,
-                  customExpiryDate: e.target.checked ? (prev.customExpiryDate || prev.purchaseDate) : undefined
-                }))}
-              />
-              <label htmlFor="useCustomExpiry" className="mb-0 ms-2">Hạn tùy chỉnh</label>
-            </div>
-            {formData.useCustomExpiry && (
-              <div className="mt-2">
-                <input
-                  type="date"
-                  className={`form-control ${errors.customExpiryDate ? 'is-invalid' : ''}`}
-                  value={(formData.customExpiryDate instanceof Date && !isNaN(formData.customExpiryDate.getTime()))
-                    ? formData.customExpiryDate.toISOString().split('T')[0]
-                    : ''}
-                  onChange={(e) => {
-                    setFormData(prev => ({
-                      ...prev,
-                      customExpiryDate: e.target.value ? new Date(e.target.value) : undefined
-                    }));
-                    if (errors.customExpiryDate) {
-                      setErrors(prev => ({ ...prev, customExpiryDate: '' }));
-                    }
-                  }}
-                />
-                {errors.customExpiryDate && (
-                  <div className="text-danger small mt-1">{errors.customExpiryDate}</div>
-                )}
-              </div>
-            )}
-            {(() => {
-              const pkg = getSelectedPackage();
-              if (!pkg) return null;
-              const preview = (() => {
-                if (formData.useCustomExpiry && formData.customExpiryDate) {
-                  return new Date(formData.customExpiryDate);
-                }
-                const d = new Date(formData.purchaseDate);
-                return d;
-              })();
-              
-              // Check if this is a shared pool product
-              const product = products.find(p => p.id === pkg.productId);
-              const isSharedPool = product?.sharedInventoryPool;
-              
-              if (!(formData.useCustomExpiry && formData.customExpiryDate)) {
-                if (isSharedPool && selectedInventoryId) {
-                  // For shared pool products with inventory, use 1 month default
-                  preview.setMonth(preview.getMonth() + 1);
-                } else {
-                  // Use package warranty period for regular products
-                  preview.setMonth(preview.getMonth() + pkg.warrantyPeriod);
-                }
-              }
-              
-              return (
-                <div className="text-muted small mt-1">
-                  Hết hạn (dự kiến): {preview.toLocaleDateString('vi-VN')}
-                  {!formData.useCustomExpiry && isSharedPool && selectedInventoryId && (
-                    <span className="text-info"> (Pool chung - 1 tháng)</span>
-                  )}
-                </div>
-              );
-            })()}
           </div>
 
           <div className="form-group">
@@ -1262,6 +1185,65 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               <div className="text-danger small mt-1">{errors.packageId}</div>
             )}
           </div>
+
+          {getSelectedPackage() && (
+            <div className="form-group">
+              <div className="d-flex align-items-center gap-2 mt-2">
+                <input
+                  type="checkbox"
+                  id="useCustomExpiry"
+                  checked={!!formData.useCustomExpiry}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    useCustomExpiry: e.target.checked,
+                    customExpiryDate: e.target.checked ? (prev.customExpiryDate || prev.purchaseDate) : undefined
+                  }))}
+                />
+                <label htmlFor="useCustomExpiry" className="mb-0 ms-2">Hạn tùy chỉnh</label>
+              </div>
+              {formData.useCustomExpiry && (
+                <div className="mt-2">
+                  <input
+                    type="date"
+                    className={`form-control ${errors.customExpiryDate ? 'is-invalid' : ''}`}
+                    value={(formData.customExpiryDate instanceof Date && !isNaN(formData.customExpiryDate.getTime()))
+                      ? formData.customExpiryDate.toISOString().split('T')[0]
+                      : ''}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        customExpiryDate: e.target.value ? new Date(e.target.value) : undefined
+                      }));
+                      if (errors.customExpiryDate) {
+                        setErrors(prev => ({ ...prev, customExpiryDate: '' }));
+                      }
+                    }}
+                  />
+                  {errors.customExpiryDate && (
+                    <div className="text-danger small mt-1">{errors.customExpiryDate}</div>
+                  )}
+                </div>
+              )}
+              {(() => {
+                const pkg = getSelectedPackage();
+                if (!pkg) return null;
+                const preview = (() => {
+                  if (formData.useCustomExpiry && formData.customExpiryDate) {
+                    return new Date(formData.customExpiryDate);
+                  }
+                  const d = new Date(formData.purchaseDate);
+                  // Always use selected package warranty period
+                  d.setMonth(d.getMonth() + (pkg?.warrantyPeriod || 0));
+                  return d;
+                })();
+                return (
+                  <div className="text-muted small mt-1">
+                    Hết hạn (dự kiến): {preview.toLocaleDateString('vi-VN')}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
 
           {getSelectedPackage() && (
             <div className="alert alert-info">
@@ -1336,23 +1318,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         if (item.expiryDate) {
                           return new Date(item.expiryDate).toISOString().split('T')[0];
                         }
-                        // Calculate expiry date based on product type
+                        // Calculate expiry date preview: if shared pool, use currently selected package's warranty
                         const product = products.find(p => p.id === item.productId);
+                        const purchaseDate = new Date(item.purchaseDate);
+                        const expiry = new Date(purchaseDate);
                         if (product?.sharedInventoryPool) {
-                          // For shared pool products, use 1 month from purchase date
-                          const purchaseDate = new Date(item.purchaseDate);
-                          const expiry = new Date(purchaseDate);
-                          expiry.setMonth(expiry.getMonth() + 1);
-                          return expiry.toISOString().split('T')[0];
+                          const selPkg = getSelectedPackage();
+                          const months = selPkg?.warrantyPeriod || 1;
+                          expiry.setMonth(expiry.getMonth() + months);
                         } else {
-                          // For regular products, use package warranty period
                           const packageInfo = packages.find(p => p.id === item.packageId);
                           const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
-                          const purchaseDate = new Date(item.purchaseDate);
-                          const expiry = new Date(purchaseDate);
                           expiry.setMonth(expiry.getMonth() + warrantyPeriod);
-                          return expiry.toISOString().split('T')[0];
                         }
+                        return expiry.toISOString().split('T')[0];
                       })();
                       
                       return (
@@ -1429,22 +1408,19 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                     if (item.expiryDate) {
                                       return ' ' + new Date(item.expiryDate).toLocaleDateString('vi-VN');
                                     }
-                                    // Calculate expiry date based on product type
+                                    // Calculate expiry date based on selection
+                                    const purchaseDate = new Date(item.purchaseDate);
+                                    const expiry = new Date(purchaseDate);
                                     if (isSharedPool) {
-                                      // For shared pool products, use 1 month from purchase date
-                                      const purchaseDate = new Date(item.purchaseDate);
-                                      const expiry = new Date(purchaseDate);
-                                      expiry.setMonth(expiry.getMonth() + 1);
-                                      return ' ' + expiry.toLocaleDateString('vi-VN');
+                                      const selPkg = getSelectedPackage();
+                                      const months = selPkg?.warrantyPeriod || 1;
+                                      expiry.setMonth(expiry.getMonth() + months);
                                     } else {
-                                      // For regular products, use package warranty period
                                       const packageInfo = packages.find(p => p.id === item.packageId);
                                       const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
-                                      const purchaseDate = new Date(item.purchaseDate);
-                                      const expiry = new Date(purchaseDate);
                                       expiry.setMonth(expiry.getMonth() + warrantyPeriod);
-                                      return ' ' + expiry.toLocaleDateString('vi-VN');
                                     }
+                                    return ' ' + expiry.toLocaleDateString('vi-VN');
                                   })()}
                                 </div>
                               </div>
