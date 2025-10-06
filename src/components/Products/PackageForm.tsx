@@ -765,15 +765,16 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                   checked={!!formData.isAccountBased}
                   onChange={(e) => setFormData(prev => ({ ...prev, isAccountBased: e.target.checked }))}
                   disabled={sharedConfigLocked}
+                  title={sharedConfigLocked ? 'Đang dùng cấu hình chung từ gói đầu tiên' : undefined}
                 />
                 <label htmlFor="pkg_isAccountBased" className="mb-0">Bật quản lý slot ở kho</label>
               </div>
             </div>
-            {formData.isAccountBased && (
-              <div className="card-body">
-                {sharedConfigLocked && (
-                  <div className="alert alert-info py-2">Cấu hình tài khoản nhiều slot đang bị khóa theo gói đầu tiên của sản phẩm.</div>
-                )}
+            <div className="card-body">
+              {sharedConfigLocked && (
+                <div className="alert alert-info py-2">Cấu hình tài khoản nhiều slot đang bị khóa theo gói đầu tiên của sản phẩm.</div>
+              )}
+              {formData.isAccountBased && (<>
                 <div className="form-group">
                   <label className="form-label">Số slot mặc định</label>
                   <input
@@ -836,8 +837,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              </>)}
+            </div>
           </div>
 
           <div className="d-flex justify-content-end gap-2 mt-3">

@@ -165,7 +165,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     }
     if (!ensuredCode.trim()) newErrors.code = 'Mã kho hàng là bắt buộc';
     if (!selectedProduct) newErrors.productId = 'Chọn sản phẩm';
-    if (!formData.packageId) newErrors.packageId = 'Chọn gói sản phẩm';
+    // Package is required unless product uses shared inventory pool
+    if (!currentProduct?.sharedInventoryPool && !formData.packageId) newErrors.packageId = 'Chọn gói sản phẩm';
     if (!formData.purchaseDate) newErrors.purchaseDate = 'Chọn ngày nhập kho';
     if (!formData.productInfo || !formData.productInfo.trim()) newErrors.productInfo = 'Nhập thông tin sản phẩm';
     if (formData.purchasePrice == null || isNaN(formData.purchasePrice) || formData.purchasePrice < 0) newErrors.purchasePrice = 'Giá mua không được âm';
@@ -194,7 +195,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           .update({
             code: formData.code,
             product_id: selectedProduct,
-            package_id: formData.packageId,
+            package_id: currentProduct?.sharedInventoryPool ? null : formData.packageId,
             purchase_date: formData.purchaseDate.toISOString().split('T')[0],
             source_note: formData.sourceNote,
             purchase_price: formData.purchasePrice,
@@ -232,13 +233,25 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         onSuccess();
       } else {
         // Create inventory row
+        // Calculate expiry date for DB to avoid NULL constraints and keep consistent
+        const expiryDateForDb = (() => {
+          const purchaseDate = new Date(formData.purchaseDate);
+          const months = currentProduct?.sharedInventoryPool
+            ? 1
+            : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const d = new Date(purchaseDate);
+          d.setMonth(d.getMonth() + months);
+          return d.toISOString();
+        })();
+
         const { error: insertError } = await sb
           .from('inventory')
           .insert({
             code: ensuredCode,
-            product_id: formData.productId,
-            package_id: formData.packageId,
+            product_id: selectedProduct,
+            package_id: currentProduct?.sharedInventoryPool ? null : formData.packageId,
             purchase_date: formData.purchaseDate.toISOString().split('T')[0],
+            expiry_date: expiryDateForDb,
             source_note: formData.sourceNote,
             purchase_price: formData.purchasePrice,
             product_info: formData.productInfo,
