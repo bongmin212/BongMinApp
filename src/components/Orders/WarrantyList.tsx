@@ -57,6 +57,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           customFieldValues: r.custom_field_values,
           purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
           expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+          createdBy: r.created_by || 'system',
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
         })));
