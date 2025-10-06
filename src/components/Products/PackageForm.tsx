@@ -250,6 +250,30 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     }
 
     try {
+      const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
+      const sbForResolve = getSupabase();
+      // Resolve productId to real UUID if local id was used
+      const resolveProductUuid = async (inputId: string): Promise<string> => {
+        if (looksLikeUuid(inputId)) return inputId;
+        const selected = products.find(p => p.id === inputId);
+        if (!sbForResolve || !selected) return inputId;
+        // Prefer code, fallback to name
+        try {
+          let productUuid: string | undefined;
+          if ((selected as any).code) {
+            const byCode = await sbForResolve.from('products').select('id').eq('code', (selected as any).code).maybeSingle();
+            productUuid = byCode.data?.id as any;
+          }
+          if (!productUuid && selected.name) {
+            const byName = await sbForResolve.from('products').select('id').eq('name', selected.name).maybeSingle();
+            productUuid = byName.data?.id as any;
+          }
+          return productUuid || inputId;
+        } catch {
+          return inputId;
+        }
+      };
+
       if (pkg) {
         // Update existing package with diff logging
         const prevSnapshot = {
@@ -284,6 +308,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         });
 
         try {
+          const productUuid = await resolveProductUuid(formData.productId);
           // Enforce defaultSlots rules before saving and lock shared-config if applicable
           const normalizedForm = {
             ...formData,
@@ -299,7 +324,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             .from('packages')
             .update({
               code: normalizedForm.code,
-              product_id: normalizedForm.productId,
+              product_id: productUuid,
               name: normalizedForm.name,
               warranty_period: normalizedForm.warrantyPeriod,
               cost_price: normalizedForm.costPrice,
@@ -329,6 +354,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         }
       } else {
         // Create new package
+        const productUuid = await resolveProductUuid(formData.productId);
         const normalizedForm = {
           ...formData,
           code: ensuredCode,
@@ -336,11 +362,11 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         };
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        const { error: insertError } = await sb
+        const { data: createdRows, error: insertError } = await sb
           .from('packages')
           .insert({
             code: normalizedForm.code,
-            product_id: normalizedForm.productId,
+            product_id: productUuid,
             name: normalizedForm.name,
             warranty_period: normalizedForm.warrantyPeriod,
             cost_price: normalizedForm.costPrice,
@@ -350,14 +376,17 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             is_account_based: !!normalizedForm.isAccountBased,
             account_columns: normalizedForm.accountColumns,
             default_slots: normalizedForm.defaultSlots
-          });
+          })
+          .select('id')
+          .limit(1);
         if (insertError) throw new Error(insertError.message || 'Không thể tạo gói sản phẩm');
+        const createdId: string | undefined = Array.isArray(createdRows) && createdRows.length > 0 ? (createdRows[0] as any).id : undefined;
         
         // Update local storage immediately to avoid code conflicts
         const newPackage = {
-          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          id: createdId || (Date.now().toString(36) + Math.random().toString(36).substr(2)),
           code: normalizedForm.code,
-          productId: normalizedForm.productId,
+          productId: productUuid,
           name: normalizedForm.name,
           warrantyPeriod: normalizedForm.warrantyPeriod,
           costPrice: normalizedForm.costPrice,
