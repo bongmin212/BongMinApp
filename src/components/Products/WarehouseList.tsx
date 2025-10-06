@@ -666,7 +666,68 @@ const WarehouseList: React.FC = () => {
       : actualStatus === 'SOLD'
       ? 'status-completed'
       : 'status-cancelled';
-    return <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
+    const content = <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
+    if (actualStatus !== 'SOLD') return content;
+    // When SOLD, allow click to view linked orders (classic and account-based)
+    return (
+      <button
+        className="btn btn-sm btn-light"
+        title="Xem đơn hàng đã liên kết"
+        onClick={async () => {
+          const sb = getSupabase();
+          if (!sb) return;
+          const orderIds: string[] = [];
+          // 1) Classic link
+          if (item.linkedOrderId) orderIds.push(item.linkedOrderId);
+          // 2) Account-based: any profiles assigned
+          const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+          profiles.forEach((p: any) => { if (p.assignedOrderId) orderIds.push(p.assignedOrderId); });
+          const unique = Array.from(new Set(orderIds));
+          if (unique.length === 0) { notify('Kho này không có đơn liên kết', 'info'); return; }
+          // Fetch orders to show, prefer local DB first
+          let found = Database.getOrders().filter(o => unique.includes(o.id));
+          if (found.length !== unique.length) {
+            const { data } = await sb.from('orders').select('*').in('id', unique);
+            if (data && data.length) {
+              const mapped = data.map((r: any) => ({
+                id: r.id,
+                code: r.code,
+                customerId: r.customer_id,
+                packageId: r.package_id,
+                status: r.status,
+                paymentStatus: r.payment_status,
+                orderInfo: r.order_info,
+                notes: r.notes,
+                inventoryItemId: r.inventory_item_id,
+                inventoryProfileId: r.inventory_profile_id,
+                useCustomPrice: r.use_custom_price || false,
+                customPrice: r.custom_price,
+                customFieldValues: r.custom_field_values,
+                purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+                expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+                createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+                updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+              }));
+              found = mapped as any;
+            }
+          }
+          if (found.length === 1) {
+            setViewingOrder(found[0]);
+            return;
+          }
+          // If multiple, open a simple chooser modal
+          setConfirmState({
+            message: `Kho này liên kết ${found.length} đơn. Mở đơn mới nhất?`,
+            onConfirm: () => {
+              const latest = found.sort((a: any, b: any) => +new Date(b.createdAt) - +new Date(a.createdAt))[0];
+              setViewingOrder(latest as any);
+            }
+          });
+        }}
+      >
+        {statusLabel(actualStatus)}
+      </button>
+    );
   };
 
   const resetFilters = () => {

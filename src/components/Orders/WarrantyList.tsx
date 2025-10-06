@@ -131,7 +131,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       }
       return selectedItem.productInfo || undefined;
     })();
-		try {
+    try {
 			// Resolve canonical UUIDs to avoid "invalid input syntax for type uuid"
 			const sb = getSupabase();
 			if (!sb) throw new Error('Supabase not configured');
@@ -200,7 +200,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					}
 				});
 
-                const { error } = await sb
+            const { error } = await sb
 					.from('warranties')
 					.update({
 						code: form.code,
@@ -215,6 +215,26 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					})
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
+
+            // If replacement inventory is chosen, reflect availability in inventory
+            if (resolvedReplacementInventoryId) {
+              const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
+              if (invRow) {
+                if (!!invRow.is_account_based) {
+                  // If account-based, mark selected profile as assigned when provided
+                  if (replacementProfileId) {
+                    const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
+                    const nextProfiles = profiles.map((p: any) => (
+                      p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
+                    ));
+                    await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', invRow.id);
+                  }
+                } else {
+                  // Classic item -> mark SOLD and link to order
+                  await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
+                }
+              }
+            }
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, ...changedEntries].join('; ') });
@@ -222,7 +242,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				notify('Cập nhật đơn bảo hành thành công', 'success');
 			} else {
 
-				const { error: insertError } = await sb
+                const { error: insertError } = await sb
 					.from('warranties')
 					.insert({
 						code: form.code,
@@ -236,6 +256,24 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 						package_id: denormPackageId || null
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
+
+                // Reflect inventory state for replacement
+                if (resolvedReplacementInventoryId) {
+                  const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
+                  if (invRow) {
+                    if (!!invRow.is_account_based) {
+                      if (replacementProfileId) {
+                        const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
+                        const nextProfiles = profiles.map((p: any) => (
+                          p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
+                        ));
+                        await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', invRow.id);
+                      }
+                    } else {
+                      await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
+                    }
+                  }
+                }
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}; status=${form.status}` });
@@ -315,7 +353,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
               const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
               if (!item) return null;
               if (item.isAccountBased) {
-                return (
+  return (
                   <div className="mt-2">
                     <label className="form-label"><strong>Chọn slot thay thế</strong></label>
                     <select
@@ -733,22 +771,20 @@ const handleDelete = (id: string) => {
         </div>
       </div>
       
-      <div className="card-body">
-        <div className="row g-3 mb-3">
-          <div className="col-md-4">
-            <label className="form-label">Tìm kiếm</label>
-            <input 
-              type="text" 
-              className="form-control" 
+      <div className="mb-3">
+        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+          <div>
+            <input
+              type="text"
+              className="form-control"
               placeholder="Nhập mã/khách hàng/sản phẩm/gói..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <div className="col-md-4">
-            <label className="form-label">Lọc theo trạng thái</label>
-            <select 
-              className="form-control" 
+          <div>
+            <select
+              className="form-control"
               value={searchStatus}
               onChange={(e) => setSearchStatus(e.target.value)}
             >
@@ -758,7 +794,7 @@ const handleDelete = (id: string) => {
               ))}
             </select>
           </div>
-          <div className="col-md-4">
+          <div style={{ gridColumn: 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày tạo"
               from={dateFrom}
@@ -766,8 +802,7 @@ const handleDelete = (id: string) => {
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
-          <div className="col-md-4">
-            <label className="form-label">&nbsp;</label>
+          <div>
             <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>

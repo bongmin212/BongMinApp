@@ -19,7 +19,7 @@ const popoverStyle: React.CSSProperties = {
   boxShadow: '0 6px 24px rgba(0,0,0,0.12)'
 };
 
-export const DateRangeInput: React.FC<DateRangeInputProps> = ({ label = 'Chọn khoảng ngày', from, to, onChange }) => {
+export const DateRangeInput: React.FC<DateRangeInputProps> = ({ label = 'Khoảng ngày', from, to, onChange }) => {
   const [open, setOpen] = React.useState(false);
   const wrapperRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -43,9 +43,8 @@ export const DateRangeInput: React.FC<DateRangeInputProps> = ({ label = 'Chọn 
 
   return (
     <div style={{ position: 'relative' }} ref={wrapperRef}>
-      <label className="form-label">{label}</label>
       <div className="form-control" onClick={() => setOpen(v => !v)} style={{ cursor: 'pointer', userSelect: 'none' }}>
-        {pretty || 'Select Date Range'}
+        {pretty || label}
       </div>
       {open && (
         <div style={popoverStyle}>
