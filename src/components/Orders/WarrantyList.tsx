@@ -156,6 +156,12 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				});
 				const sb = getSupabase();
 				if (!sb) throw new Error('Supabase not configured');
+                // resolve denormalized fields from selected order for faster filtering
+                const selectedOrder = orders.find(o => o.id === form.orderId);
+                const selectedPackage = selectedOrder ? packages.find(p => p.id === selectedOrder.packageId) : undefined;
+                const selectedProductId = selectedPackage ? selectedPackage.productId : undefined;
+                const selectedCustomerId = selectedOrder ? selectedOrder.customerId : undefined;
+
                 const { error } = await sb
 					.from('warranties')
 					.update({
@@ -163,7 +169,11 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 						order_id: form.orderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						replacement_inventory_id: form.replacementInventoryId || null
+						replacement_inventory_id: form.replacementInventoryId || null,
+						new_order_info: (form.newOrderInfo ?? autoInfo ?? null),
+						customer_id: selectedCustomerId || null,
+						product_id: selectedProductId || null,
+						package_id: selectedOrder?.packageId || null
 					})
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
@@ -175,14 +185,24 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 			} else {
 				const sb = getSupabase();
 				if (!sb) throw new Error('Supabase not configured');
-        const { error: insertError } = await sb
+				// resolve denormalized fields from selected order for faster filtering
+				const selectedOrder = orders.find(o => o.id === form.orderId);
+				const selectedPackage = selectedOrder ? packages.find(p => p.id === selectedOrder.packageId) : undefined;
+				const selectedProductId = selectedPackage ? selectedPackage.productId : undefined;
+				const selectedCustomerId = selectedOrder ? selectedOrder.customerId : undefined;
+
+				const { error: insertError } = await sb
 					.from('warranties')
 					.insert({
 						code: form.code,
 						order_id: form.orderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						replacement_inventory_id: form.replacementInventoryId || null
+						replacement_inventory_id: form.replacementInventoryId || null,
+						new_order_info: (form.newOrderInfo ?? autoInfo ?? null),
+						customer_id: selectedCustomerId || null,
+						product_id: selectedProductId || null,
+						package_id: selectedOrder?.packageId || null
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 				try {

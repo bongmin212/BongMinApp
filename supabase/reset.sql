@@ -111,13 +111,24 @@ create table public.warranties (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
   order_id uuid references public.orders(id) on delete cascade,
-  customer_id uuid references public.customers(id) on delete cascade,
-  product_id uuid references public.products(id) on delete cascade,
-  package_id uuid references public.packages(id) on delete cascade,
+  -- denormalized pointers (optional, for faster filtering/display)
+  customer_id uuid references public.customers(id) on delete set null,
+  product_id uuid references public.products(id) on delete set null,
+  package_id uuid references public.packages(id) on delete set null,
+  -- warranty details (match UI form)
+  reason text,
+  status text not null default 'PENDING',
+  replacement_inventory_id uuid references public.inventory(id) on delete set null,
+  new_order_info text,
+  created_by text,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists idx_warranties_order on public.warranties(order_id);
+create index if not exists idx_warranties_customer on public.warranties(customer_id);
+create index if not exists idx_warranties_status on public.warranties(status);
 
 create table public.activity_logs (
   id uuid primary key default gen_random_uuid(),

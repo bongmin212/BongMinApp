@@ -143,6 +143,7 @@ const ProductList: React.FC = () => {
         (async () => {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa sản phẩm', 'error');
+          const snapshot = products.find(p => p.id === id);
           const { error } = await sb.from('products').delete().eq('id', id);
           if (!error) {
             // Update local storage immediately
@@ -160,7 +161,7 @@ const ProductList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa sản phẩm', details: `productId=${id}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa sản phẩm', details: `productId=${id}; productCode=${snapshot?.code || ''}; productName=${snapshot?.name || ''}` });
             } catch {}
             loadProducts();
             notify('Xóa sản phẩm thành công', 'success');
@@ -189,6 +190,9 @@ const ProductList: React.FC = () => {
         (async () => {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa sản phẩm', 'error');
+          const snapshots = products.filter(p => selectedIds.includes(p.id));
+          const names = snapshots.map(p => p.name).filter(Boolean).join(',').slice(0, 200);
+          const codes = snapshots.map(p => p.code).filter(Boolean).join(',').slice(0, 200);
           const { error } = await sb.from('products').delete().in('id', selectedIds);
           if (!error) {
             // Update local storage immediately
@@ -206,7 +210,7 @@ const ProductList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}; names=${names}; codes=${codes}` });
             } catch {}
             setSelectedIds([]);
             loadProducts();
