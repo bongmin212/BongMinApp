@@ -23,11 +23,135 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
 
   useEffect(() => {
-    setOrders(Database.getOrders());
-    setCustomers(Database.getCustomers());
-    setPackages(Database.getPackages());
-    setProducts(Database.getProducts());
-    setInventoryItems(Database.getInventory());
+    (async () => {
+      try {
+        const sb = getSupabase();
+        if (!sb) {
+          setOrders(Database.getOrders());
+          setCustomers(Database.getCustomers());
+          setPackages(Database.getPackages());
+          setProducts(Database.getProducts());
+          setInventoryItems(Database.getInventory());
+          return;
+        }
+        const [oRes, cRes, pRes, prRes, iRes] = await Promise.all([
+          sb.from('orders').select('*'),
+          sb.from('customers').select('*'),
+          sb.from('packages').select('*'),
+          sb.from('products').select('*'),
+          sb.from('inventory').select('*')
+        ]);
+        setOrders((oRes.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          customerId: r.customer_id,
+          packageId: r.package_id,
+          status: r.status,
+          paymentStatus: r.payment_status,
+          orderInfo: r.order_info,
+          notes: r.notes,
+          inventoryItemId: r.inventory_item_id,
+          inventoryProfileId: r.inventory_profile_id,
+          useCustomPrice: r.use_custom_price || false,
+          customPrice: r.custom_price,
+          customFieldValues: r.custom_field_values,
+          purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+          expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })));
+        setCustomers((cRes.data || []).map((r: any) => ({
+          ...r,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })) as any);
+        setPackages((pRes.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          productId: r.product_id,
+          name: r.name,
+          warrantyPeriod: r.warranty_period,
+          costPrice: r.cost_price,
+          ctvPrice: r.ctv_price,
+          retailPrice: r.retail_price,
+          customFields: r.custom_fields || [],
+          isAccountBased: !!r.is_account_based,
+          accountColumns: r.account_columns || [],
+          defaultSlots: r.default_slots,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })) as any);
+        setProducts((prRes.data || []).map((r: any) => ({
+          ...r,
+          sharedInventoryPool: !!r.shared_inventory_pool,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })) as any);
+        setInventoryItems((iRes.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          productId: r.product_id,
+          packageId: r.package_id,
+          purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+          expiryDate: r.expiry_date ? new Date(r.expiry_date) : undefined,
+          sourceNote: r.source_note || '',
+          purchasePrice: r.purchase_price,
+          productInfo: r.product_info || '',
+          notes: r.notes || '',
+          status: r.status,
+          isAccountBased: !!r.is_account_based,
+          accountColumns: r.account_columns || [],
+          accountData: r.account_data || {},
+          totalSlots: r.total_slots || 0,
+          profiles: Array.isArray(r.profiles) ? r.profiles : [],
+          linkedOrderId: r.linked_order_id || undefined,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })) as any);
+      } catch {
+        setOrders(Database.getOrders());
+        setCustomers(Database.getCustomers());
+        setPackages(Database.getPackages());
+        setProducts(Database.getProducts());
+        setInventoryItems(Database.getInventory());
+      }
+    })();
+  }, []);
+
+  // Realtime inventory subscribe inside form to avoid stale slots after assign
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const ch = sb
+      .channel('realtime:warranty-form-inventory')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory' }, async () => {
+        try {
+          const { data } = await sb.from('inventory').select('*');
+          setInventoryItems((data || []).map((r: any) => ({
+            id: r.id,
+            code: r.code,
+            productId: r.product_id,
+            packageId: r.package_id,
+            purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+            expiryDate: r.expiry_date ? new Date(r.expiry_date) : undefined,
+            sourceNote: r.source_note || '',
+            purchasePrice: r.purchase_price,
+            productInfo: r.product_info || '',
+            notes: r.notes || '',
+            status: r.status,
+            isAccountBased: !!r.is_account_based,
+            accountColumns: r.account_columns || [],
+            accountData: r.account_data || {},
+            totalSlots: r.total_slots || 0,
+            profiles: Array.isArray(r.profiles) ? r.profiles : [],
+            linkedOrderId: r.linked_order_id || undefined,
+            createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+            updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+          })) as any);
+        } catch {}
+      })
+      .subscribe();
+    return () => { try { ch.unsubscribe(); } catch {} };
   }, []);
 
   // Auto-generate code for new warranty from Supabase, fallback to local
@@ -494,7 +618,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                       onChange={(e) => setReplacementProfileId(e.target.value)}
                     >
                       <option value="">-- Chọn slot --</option>
-                      {(item.profiles || []).filter(p => !p.isAssigned).map(p => (
+                      {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
                         <option key={p.id} value={p.id}>{p.label}</option>
                       ))}
                     </select>

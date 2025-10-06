@@ -272,11 +272,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         
         return item;
       }) as InventoryItem[];
-      // Filter availability (exclusive linking): allow only items with zero assignments/links
+      // Filter availability: for account-based, allow items with at least one free, non-needsUpdate slot; for classic, AVAILABLE and not linked
       items = items.filter((i: any) => {
         if (i.isAccountBased) {
-          const assigned = (i.profiles || []).filter((p: any) => p.isAssigned).length;
-          return assigned === 0; // no profile assigned → eligible
+          const profiles = Array.isArray(i.profiles) ? i.profiles : [];
+          const hasFree = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
+          return hasFree;
         }
         return i.status === 'AVAILABLE' && !i.linked_order_id;
       });
@@ -480,9 +481,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       // Enforce exclusive linking: prevent selecting an inventory item that already has any assignment/link other than this order
       if (inv) {
         if (inv.isAccountBased) {
-          const alreadyAssignedOther = (inv.profiles || []).some(p => p.isAssigned && p.assignedOrderId && p.assignedOrderId !== (order?.id || ''));
-          if (alreadyAssignedOther) {
-            newErrors["inventory"] = 'Kho (tài khoản) này đang cấp cho đơn khác';
+          // Only validate chosen slot availability; ignore other occupied slots
+          if (selectedProfileId) {
+            const chosen = (inv.profiles || []).find(p => p.id === selectedProfileId);
+            if (!chosen || (chosen as any).needsUpdate || (chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '')) {
+              newErrors["inventoryProfileId"] = 'Slot không hợp lệ, vui lòng chọn slot trống';
+            }
           }
         } else {
           if ((inv as any).linkedOrderId && (inv as any).linkedOrderId !== (order?.id || '')) {
@@ -1495,7 +1499,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                   required
                                 >
                                   <option value="">-- Chọn slot --</option>
-                                  {(item.profiles || []).filter(p => !p.isAssigned || p.assignedOrderId === (order?.id || '')).map(p => (
+                                  {(item.profiles || []).filter(p => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate).map(p => (
                                     <option key={p.id} value={p.id}>
                                       {p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}
                                     </option>
