@@ -438,11 +438,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
     // Validation
     const newErrors: {[key: string]: string} = {};
-    // Inventory selection required ONLY when creating new orders and inventory exists
-    const hasAvailableInventory = (availableInventory || []).length > 0;
-    if (!order && hasAvailableInventory && !selectedInventoryId) {
-      newErrors["inventory"] = 'Vui lòng chọn hàng trong kho (bắt buộc)';
-    }
+    // Inventory selection optional: allow creating orders without linking inventory
     if (!ensuredCode.trim()) {
       newErrors.code = 'Mã đơn hàng là bắt buộc';
     }
@@ -1557,14 +1553,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           </div>
 
           {(() => {
-            // Enforce inventory selection message only for new orders
+            // Informational message for new orders
             const hasAvailable = (availableInventory || []).length > 0;
             if (!order) {
               return (
-                <div className="alert alert-warning">
+                <div className="alert alert-info">
                   {hasAvailable
-                    ? 'Vui lòng chọn hàng trong kho để hoàn tất (bắt buộc). Nếu không chọn, đơn sẽ ở trạng thái Đang xử lý.'
-                    : 'Hiện chưa có hàng trong kho cho gói này. Đơn sẽ ở trạng thái Đang xử lý.'}
+                    ? 'Có hàng trong kho sẵn để liên kết (không bắt buộc). Nếu không chọn, đơn sẽ ở trạng thái Đang xử lý.'
+                    : 'Hiện chưa có hàng trong kho cho gói này. Bạn vẫn có thể tạo đơn (Đang xử lý).'}
                 </div>
               );
             }
