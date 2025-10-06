@@ -1304,7 +1304,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     onChange={(e) => setInventorySearch(e.target.value)}
                   />
                   <select
-                    className="form-control"
+                    className={`form-control ${errors["inventory"] ? 'is-invalid' : ''}`}
                     value={selectedInventoryId}
                     onChange={(e) => {
                       console.log('Inventory selection changed to:', e.target.value);
@@ -1347,6 +1347,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       );
                     })}
                   </select>
+                  {errors["inventory"] && (
+                    <div className="text-danger small mt-1">{errors["inventory"]}</div>
+                  )}
                   <div className="small text-muted mt-1">Nếu chọn, đơn sẽ sử dụng hàng trong kho và tự đánh dấu là đã bán.</div>
                   {!!selectedInventoryId && (() => {
                     const item = availableInventory.find(i => i.id === selectedInventoryId);
