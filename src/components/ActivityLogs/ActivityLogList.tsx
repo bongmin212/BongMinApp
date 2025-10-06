@@ -249,7 +249,7 @@ const ActivityLogList: React.FC = () => {
     } else if (kv.name) {
       // Fallback: infer label from action text when only `name=` is present
       if (actionLower.includes('sản phẩm')) parts.push(`Sản phẩm ${kv.name}`);
-      else if (actionLower.includes('gói')) parts.push(`Gói ${kv.name}`);
+      else if (actionLower.includes('gói')) parts.push(`Gói sản phẩm ${kv.name}`);
       else if (actionLower.includes('kho')) parts.push(`Kho ${kv.name}`);
       else parts.push(`Khách ${kv.name}`);
     } else if (customer) {
