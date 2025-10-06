@@ -217,15 +217,15 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 			<input className="form-control" value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} disabled />
           </div>
           <div className="mb-3">
-\t\t\t<label className="form-label">Chọn đơn hàng *</label>
-\t\t\t<input
+            <label className="form-label">Chọn đơn hàng *</label>
+            <input
               type="text"
               className="form-control mb-2"
               placeholder="Tìm theo mã/khách/sản phẩm/gói..."
               value={orderSearch}
               onChange={(e) => setOrderSearch(e.target.value)}
             />
-\t\t\t<select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
+            <select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
               <option value="">-- Chọn đơn hàng --</option>
               {filteredOrders.map(o => (
                 <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
