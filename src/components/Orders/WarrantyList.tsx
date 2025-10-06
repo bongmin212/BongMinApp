@@ -14,7 +14,12 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
   const [packages, setPackages] = useState<ProductPackage[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-	const [form, setForm] = useState<WarrantyFormData>({ code: '', orderId: '', reason: '', status: 'PENDING' });
+\tconst [form, setForm] = useState<WarrantyFormData>({ code: '', orderId: '', reason: '', status: 'PENDING' });
+  const [orderSearch, setOrderSearch] = useState('');
+  const [debouncedOrderSearch, setDebouncedOrderSearch] = useState('');
+  const [replacementProfileId, setReplacementProfileId] = useState<string>('');
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
 
 	useEffect(() => {
     setOrders(Database.getOrders());
@@ -23,6 +28,34 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
     setProducts(Database.getProducts());
     setInventoryItems(Database.getInventory());
 	}, []);
+
+  // Auto-generate code for new warranty from Supabase, fallback to local
+  useEffect(() => {
+    if (warranty) return;
+    (async () => {
+      try {
+        const sb = getSupabase();
+        if (!sb) throw new Error('no supabase');
+        const { data } = await sb.from('warranties').select('code').order('created_at', { ascending: false }).limit(2000);
+        const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+        const nextCode = Database.generateNextCodeFromList(codes, 'BH', 3);
+        setForm(prev => ({ ...prev, code: nextCode }));
+      } catch {
+        const nextCode = Database.generateNextWarrantyCode();
+        setForm(prev => ({ ...prev, code: nextCode }));
+      }
+    })();
+  }, [warranty]);
+
+  // Debounce searches
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedOrderSearch(orderSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [orderSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedInventorySearch(inventorySearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [inventorySearch]);
 
 	useEffect(() => {
 		if (warranty) {
@@ -34,6 +67,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         replacementInventoryId: warranty.replacementInventoryId,
         newOrderInfo: warranty.newOrderInfo
       });
+      setReplacementProfileId('');
 		}
 	}, [warranty]);
 
@@ -41,7 +75,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
     const customer = customers.find(c => c.id === o.customerId)?.name || 'Không xác định';
     const pkg = packages.find(p => p.id === o.packageId);
     const product = products.find(p => p?.id === pkg?.productId)?.name || '';
-    return `${customer} - ${product} / ${pkg?.name || ''} - ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`;
+    return `#${o.code || '-'} | ${customer} - ${product} / ${pkg?.name || ''} - ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`;
   };
 
   const getInventoryLabel = (item: InventoryItem) => {
@@ -52,12 +86,48 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 
   const availableInventoryItems = inventoryItems.filter(item => item.status === 'AVAILABLE');
 
+  const filteredOrders = React.useMemo(() => {
+    const q = debouncedOrderSearch;
+    if (!q) return orders;
+    return orders.filter(o => {
+      const code = String(o.code || '').toLowerCase();
+      const customer = customers.find(c => c.id === o.customerId)?.name?.toLowerCase() || '';
+      const pkg = packages.find(p => p.id === o.packageId);
+      const product = products.find(p => p?.id === pkg?.productId)?.name?.toLowerCase() || '';
+      const pkgName = String(pkg?.name || '').toLowerCase();
+      return code.includes(q) || customer.includes(q) || product.includes(q) || pkgName.includes(q);
+    });
+  }, [debouncedOrderSearch, orders, customers, packages, products]);
+
+  const filteredInventory = React.useMemo(() => {
+    const q = debouncedInventorySearch;
+    if (!q) return availableInventoryItems;
+    return availableInventoryItems.filter(item => {
+      const code = String(item.code || '').toLowerCase();
+      const info = String(item.productInfo || '').toLowerCase();
+      const productName = (products.find(p => p.id === item.productId)?.name || '').toLowerCase();
+      const packageName = (packages.find(p => p.id === item.packageId)?.name || '').toLowerCase();
+      return code.includes(q) || info.includes(q) || productName.includes(q) || packageName.includes(q);
+    });
+  }, [debouncedInventorySearch, availableInventoryItems, products, packages]);
+
 	const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.code.trim() || !form.orderId || !form.reason.trim()) {
+    if (!((form.code || '').trim()) || !form.orderId || !form.reason.trim()) {
       notify('Vui lòng nhập mã bảo hành, chọn đơn hàng và nhập lý do.', 'warning');
       return;
     }
+    // Ensure newOrderInfo auto-fills from replacement selection when account-based
+    const selectedItem = (form.replacementInventoryId ? inventoryItems.find(i => i.id === form.replacementInventoryId) : undefined) as InventoryItem | undefined;
+    const autoInfo = (() => {
+      if (!selectedItem) return undefined;
+      if (selectedItem.isAccountBased) {
+        const itemForOrder = { ...selectedItem, packageId: selectedItem.packageId } as InventoryItem;
+        const text = Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId || undefined);
+        return text || undefined;
+      }
+      return selectedItem.productInfo || undefined;
+    })();
 		try {
 			if (warranty) {
 				const prevSnapshot = {
@@ -106,16 +176,15 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 			} else {
 				const sb = getSupabase();
 				if (!sb) throw new Error('Supabase not configured');
-				const { error: insertError } = await sb
+        const { error: insertError } = await sb
 					.from('warranties')
 					.insert({
 						code: form.code,
 						order_id: form.orderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						created_by: state.user?.id || 'system',
 						replacement_inventory_id: form.replacementInventoryId || null,
-						new_order_info: form.newOrderInfo || null
+            new_order_info: (autoInfo !== undefined ? autoInfo : (form.newOrderInfo || null))
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 				try {
@@ -143,17 +212,24 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         <form onSubmit={handleSubmit}>
           <div className="mb-3">
             <label className="form-label">Mã bảo hành *</label>
-            <input className="form-control" value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="Nhập mã bảo hành (ví dụ: BH001)" required />
+            <input className="form-control" value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="Tự tạo như BH001" readOnly disabled aria-disabled title={'Mã tự động tạo - không chỉnh sửa'} style={{ opacity: 0.6 } as React.CSSProperties} />
           </div>
           <div className="mb-3">
 			<label className="form-label">Ngày tạo</label>
 			<input className="form-control" value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} disabled />
           </div>
           <div className="mb-3">
-			<label className="form-label">Chọn đơn hàng *</label>
-			<select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
+\t\t\t<label className="form-label">Chọn đơn hàng *</label>
+\t\t\t<input
+              type="text"
+              className="form-control mb-2"
+              placeholder="Tìm theo mã/khách/sản phẩm/gói..."
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+            />
+\t\t\t<select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
               <option value="">-- Chọn đơn hàng --</option>
-              {orders.map(o => (
+              {filteredOrders.map(o => (
                 <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
               ))}
             </select>
@@ -172,19 +248,57 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           </div>
           <div className="mb-3">
             <label className="form-label">Sản phẩm thay thế (tùy chọn)</label>
-            <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => setForm({ ...form, replacementInventoryId: e.target.value || undefined })}>
+            <input
+              type="text"
+              className="form-control mb-2"
+              placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
+              value={inventorySearch}
+              onChange={(e) => setInventorySearch(e.target.value)}
+            />
+            <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
               <option value="">-- Chọn sản phẩm từ kho hàng --</option>
-              {availableInventoryItems.map(item => (
-                <option key={item.id} value={item.id}>{getInventoryLabel(item)}</option>
+              {filteredInventory.map(item => (
+                <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
               ))}
             </select>
             <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
+            {!!form.replacementInventoryId && (() => {
+              const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
+              if (!item) return null;
+              if (item.isAccountBased) {
+                return (
+                  <div className="mt-2">
+                    <label className="form-label"><strong>Chọn slot thay thế</strong></label>
+                    <select
+                      className="form-control"
+                      value={replacementProfileId}
+                      onChange={(e) => setReplacementProfileId(e.target.value)}
+                    >
+                      <option value="">-- Chọn slot --</option>
+                      {(item.profiles || []).filter(p => !p.isAssigned).map(p => (
+                        <option key={p.id} value={p.id}>{p.label}</option>
+                      ))}
+                    </select>
+                    <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
           <div className="mb-3">
             <label className="form-label">Thông tin đơn hàng mới (tùy chọn)</label>
             <textarea 
               className="form-control" 
-              value={form.newOrderInfo || ''} 
+              value={(() => {
+                const item = form.replacementInventoryId ? inventoryItems.find(i => i.id === form.replacementInventoryId) : undefined;
+                if (!item) return form.newOrderInfo || '';
+                if (item.isAccountBased) {
+                  const itemForOrder = { ...item } as InventoryItem;
+                  return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId || undefined);
+                }
+                return item.productInfo || '';
+              })()} 
               onChange={e => setForm({ ...form, newOrderInfo: e.target.value || undefined })} 
               placeholder="Nhập thông tin đơn hàng mới (serial/key/tài khoản...)"
               rows={3}
