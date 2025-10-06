@@ -337,7 +337,20 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             })
             .eq('id', pkg.id);
           if (!error) {
-            const base = [`packageId=${pkg.id}; packageCode=${pkg.code}`, `productId=${nextSnapshot.productId}`];
+            // Resolve productName for friendly activity logs
+            let productName: string | undefined;
+            try {
+              const sbp = getSupabase();
+              if (sbp && productUuid) {
+                const pr = await sbp.from('products').select('name').eq('id', productUuid).maybeSingle();
+                productName = pr.data?.name as any;
+              }
+            } catch {}
+            const base = [
+              `packageId=${pkg.id}; packageCode=${pkg.code}; packageName=${nextSnapshot.name}`,
+              `productId=${productUuid}`,
+              productName ? `productName=${productName}` : ''
+            ].filter(Boolean);
             const detail = [...base, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
@@ -404,7 +417,23 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo gói sản phẩm', details: `packageCode=${normalizedForm.code}; productId=${normalizedForm.productId}; name=${normalizedForm.name}` });
+          // Resolve productName for friendly activity logs
+          let productName: string | undefined;
+          try {
+            if (sb2 && productUuid) {
+              const pr = await sb2.from('products').select('name').eq('id', productUuid).maybeSingle();
+              productName = pr.data?.name as any;
+            }
+          } catch {}
+          if (sb2) await sb2.from('activity_logs').insert({
+            employee_id: state.user?.id || 'system',
+            action: 'Tạo gói sản phẩm',
+            details: [
+              `packageId=${createdId || newPackage.id}; packageCode=${normalizedForm.code}; packageName=${normalizedForm.name}`,
+              `productId=${productUuid}`,
+              productName ? `productName=${productName}` : ''
+            ].filter(Boolean).join('; ')
+          });
         } catch {}
         notify('Thêm gói sản phẩm thành công', 'success');
         onSuccess();

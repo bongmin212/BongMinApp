@@ -87,6 +87,7 @@ const PackageList: React.FC = () => {
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
 
   const handleDelete = (id: string) => {
+    const target = packages.find(p => p.id === id);
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa gói sản phẩm này?',
       onConfirm: async () => {
@@ -108,7 +109,17 @@ const PackageList: React.FC = () => {
           
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa gói sản phẩm', details: `packageId=${id}` });
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: state.user?.id || 'system',
+              action: 'Xóa gói sản phẩm',
+              details: [
+                `packageId=${id}`,
+                target?.code ? `packageCode=${target.code}` : '',
+                target?.name ? `packageName=${target.name}` : '',
+                target?.productId ? `productId=${target.productId}` : '',
+                target?.productId ? `productName=${getProductName(target.productId)}` : ''
+              ].filter(Boolean).join('; ')
+            });
           } catch {}
           loadData();
           notify('Xóa gói sản phẩm thành công', 'success');
@@ -129,6 +140,7 @@ const PackageList: React.FC = () => {
   const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   const bulkDelete = () => {
     if (selectedIds.length === 0) return;
+    const targets = packages.filter(p => selectedIds.includes(p.id));
     setConfirmState({
       message: `Xóa ${selectedIds.length} gói sản phẩm đã chọn?`,
       onConfirm: async () => {
@@ -150,7 +162,15 @@ const PackageList: React.FC = () => {
           
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt gói', details: `ids=${selectedIds.join(',')}` });
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: state.user?.id || 'system',
+              action: 'Xóa hàng loạt gói',
+              details: [
+                `ids=${selectedIds.join(',')}`,
+                `codes=${targets.map(t => t.code).filter(Boolean).join(',')}`,
+                `names=${targets.map(t => t.name).filter(Boolean).join(',')}`
+              ].filter(Boolean).join('; ')
+            });
           } catch {}
           setSelectedIds([]);
           loadData();
