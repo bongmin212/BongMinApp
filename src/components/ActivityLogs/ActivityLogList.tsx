@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityLog, Employee, Order, Customer, Product, ProductPackage, ORDER_STATUSES, WARRANTY_STATUSES, InventoryItem } from '../../types';
+import { ActivityLog, Employee, Order, Customer, Product, ProductPackage, ORDER_STATUSES, WARRANTY_STATUSES, InventoryItem, Warranty } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { exportToXlsx } from '../../utils/excel';
@@ -18,6 +18,7 @@ const ActivityLogList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [warranties, setWarranties] = useState<Warranty[]>([]);
 
   useEffect(() => {
     loadData();
@@ -69,14 +70,15 @@ const ActivityLogList: React.FC = () => {
   const loadData = async () => {
     const sb = getSupabase();
     if (!sb) return;
-    const [logsRes, empRes, ordersRes, customersRes, productsRes, packagesRes, invRes] = await Promise.all([
+    const [logsRes, empRes, ordersRes, customersRes, productsRes, packagesRes, invRes, warrantiesRes] = await Promise.all([
       sb.from('activity_logs').select('*'),
       sb.from('employees').select('*'),
       sb.from('orders').select('*'),
       sb.from('customers').select('*'),
       sb.from('products').select('*'),
       sb.from('packages').select('*'),
-      sb.from('inventory').select('*')
+      sb.from('inventory').select('*'),
+      sb.from('warranties').select('*')
     ]);
 
     const allLogs = (logsRes.data || []).map((r: any) => ({
@@ -112,6 +114,18 @@ const ActivityLogList: React.FC = () => {
       createdAt: i.created_at ? new Date(i.created_at) : new Date(),
       updatedAt: i.updated_at ? new Date(i.updated_at) : new Date()
     })) as InventoryItem[];
+    const allWarranties = (warrantiesRes.data || []).map((w: any) => ({
+      id: w.id,
+      code: w.code,
+      createdAt: w.created_at ? new Date(w.created_at) : new Date(),
+      updatedAt: w.updated_at ? new Date(w.updated_at) : new Date(),
+      orderId: w.order_id || w.orderId,
+      reason: w.reason,
+      status: (w.status || 'PENDING').toUpperCase(),
+      createdBy: w.created_by || w.createdBy,
+      replacementInventoryId: w.replacement_inventory_id || w.replacementInventoryId,
+      newOrderInfo: w.new_order_info || w.newOrderInfo
+    })) as Warranty[];
 
     const sortedLogs = allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -127,6 +141,7 @@ const ActivityLogList: React.FC = () => {
     setProducts(allProducts);
     setPackages(allPackages);
     setInventory(allInventory);
+    setWarranties(allWarranties);
   };
 
   // Realtime updates for activity logs
@@ -177,16 +192,19 @@ const ActivityLogList: React.FC = () => {
   const getCustomerById = (id?: string) => customers.find((c) => c.id === id);
   const getEmployeeById = (id?: string) => employees.find((e) => e.id === id);
   const getInventoryById = (id?: string) => inventory.find((i) => i.id === id);
+  const getWarrantyById = (id?: string) => warranties.find((w) => w.id === id);
 
   const renderFriendlyDetails = (log: ActivityLog) => {
     const kv = parseDetails(log.details);
+    const actionLower = String(log.action || '').toLowerCase();
 
     const order = getOrderById(kv.orderId);
     const pkg = getPackageById(order?.packageId || kv.packageId);
     const product = getProductById(pkg?.productId || kv.productId);
     const customer = getCustomerById(order?.customerId || kv.customerId);
     const employee = getEmployeeById(kv.employeeId);
-    const inventoryItem = getInventoryById(kv.inventoryId);
+    const inventoryItem = getInventoryById(kv.inventoryId || kv.inventoryItemId || kv.replacementInventoryId);
+    const warranty = getWarrantyById(kv.warrantyId);
 
     const parts: string[] = [];
 
@@ -194,11 +212,20 @@ const ActivityLogList: React.FC = () => {
       const code = kv.orderCode || order?.code;
       if (code) parts.push(`Đơn ${code}`);
     }
-    if (pkg) {
-      parts.push(`Gói ${pkg.name}`);
+    if (warranty || kv.warrantyCode) {
+      const wcode = kv.warrantyCode || warranty?.code;
+      if (wcode) parts.push(`Đơn bảo hành ${wcode}`);
     }
-    if (product) {
+    if (actionLower.includes('tạo gói sản phẩm') && product && pkg) {
       parts.push(`Sản phẩm ${product.name}`);
+      parts.push(`Gói sản phẩm ${pkg.name}`);
+    } else {
+      if (pkg) {
+        parts.push(`Gói ${pkg.name}`);
+      }
+      if (product) {
+        parts.push(`Sản phẩm ${product.name}`);
+      }
     }
     // Some actions only include ids (e.g., delete employee/product/package)
     if (!order && !pkg && !product) {
@@ -221,7 +248,6 @@ const ActivityLogList: React.FC = () => {
       parts.push(`Khách ${kv.customerName}`);
     } else if (kv.name) {
       // Fallback: infer label from action text when only `name=` is present
-      const actionLower = String(log.action || '').toLowerCase();
       if (actionLower.includes('sản phẩm')) parts.push(`Sản phẩm ${kv.name}`);
       else if (actionLower.includes('gói')) parts.push(`Gói ${kv.name}`);
       else if (actionLower.includes('kho')) parts.push(`Kho ${kv.name}`);
@@ -257,6 +283,9 @@ const ActivityLogList: React.FC = () => {
           orderInfo: 'Thông tin đơn',
           notes: 'Ghi chú',
           inventoryItemId: 'Liên kết kho',
+          inventoryId: 'Liên kết kho',
+          replacementInventoryId: 'Kho thay thế',
+          warrantyId: 'Đơn bảo hành',
           customerId: 'Khách hàng',
           packageId: 'Gói',
           productId: 'Sản phẩm',
@@ -283,6 +312,14 @@ const ActivityLogList: React.FC = () => {
           beforeText = getProductById(beforeVal)?.name || beforeVal || '-';
           afterText = getProductById(afterVal)?.name || afterVal || '-';
         }
+        if (key === 'inventoryItemId' || key === 'inventoryId' || key === 'replacementInventoryId') {
+          beforeText = getInventoryById(beforeVal)?.code || (beforeVal ? beforeVal.slice(-6) : '-');
+          afterText = getInventoryById(afterVal)?.code || (afterVal ? afterVal.slice(-6) : '-');
+        }
+        if (key === 'warrantyId') {
+          beforeText = getWarrantyById(beforeVal)?.code || (beforeVal ? beforeVal.slice(-6) : '-');
+          afterText = getWarrantyById(afterVal)?.code || (afterVal ? afterVal.slice(-6) : '-');
+        }
 
         diffs.push(`${labelMap[key] || key}: ${beforeText} → ${afterText}`);
       }
@@ -295,8 +332,8 @@ const ActivityLogList: React.FC = () => {
     // Provide simpler summaries for certain actions with minimal keys
     if (parts.length === 0) {
       // Normalize inventory id keys
-      if (kv.inventoryItemId || kv.inventoryId) {
-        const invId = kv.inventoryItemId || kv.inventoryId;
+      if (kv.inventoryItemId || kv.inventoryId || kv.replacementInventoryId) {
+        const invId = kv.inventoryItemId || kv.inventoryId || kv.replacementInventoryId;
         const inv = getInventoryById(invId);
         const prodName = getProductById(kv.productId || '')?.name;
         const pkgName = getPackageById(kv.packageId || '')?.name;
@@ -304,6 +341,11 @@ const ActivityLogList: React.FC = () => {
           .filter(Boolean)
           .join(' • ');
         return `Kho ${inv?.code || (invId ? invId.slice(-6) : '-')}${info ? ' • ' + info : ''}`;
+      }
+      if (kv.warrantyId || kv.warrantyCode) {
+        const w = kv.warrantyId ? getWarrantyById(kv.warrantyId) : undefined;
+        const wcode = kv.warrantyCode || w?.code;
+        return `Đơn bảo hành ${wcode || (kv.warrantyId ? kv.warrantyId.slice(-6) : '-')}`;
       }
       return log.details || '-';
     }

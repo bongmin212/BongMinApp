@@ -869,12 +869,12 @@ const WarehouseList: React.FC = () => {
                   </td>
                   <td>
                     <div className="d-flex gap-2">
-                      <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
+                      <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(i)}>Xem</button>
                       <button className="btn btn-sm btn-success" onClick={() => renewInventory(i.id)}>Gia hạn</button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
                       {i.status === 'AVAILABLE' && (
                         <button className="btn btn-sm btn-danger" onClick={() => remove(i.id)}>Xóa</button>
                       )}
-              <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(i)}>Xem</button>
                     </div>
                   </td>
                 </tr>
