@@ -609,6 +609,7 @@ const WarehouseList: React.FC = () => {
       case 'AVAILABLE': return 'Sẵn có';
       case 'SOLD': return 'Đã bán';
       case 'EXPIRED': return 'Hết hạn';
+      case 'NEEDS_UPDATE': return 'Cần update';
       default: return status;
     }
   };
@@ -629,6 +630,8 @@ const WarehouseList: React.FC = () => {
       ? 'status-completed'
       : actualStatus === 'SOLD'
       ? 'status-completed'
+      : actualStatus === 'NEEDS_UPDATE'
+      ? 'status-processing'
       : 'status-cancelled';
     const content = <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
     if (actualStatus !== 'SOLD') return content;
@@ -764,6 +767,7 @@ const WarehouseList: React.FC = () => {
               <option value="AVAILABLE">Sẵn có</option>
               <option value="SOLD">Đã bán</option>
               <option value="EXPIRED">Hết hạn</option>
+              <option value="NEEDS_UPDATE">Cần update</option>
             </select>
           </div>
           <div style={{ gridColumn: 'span 2' }}>
@@ -855,7 +859,31 @@ const WarehouseList: React.FC = () => {
                   <td style={{ maxWidth: 200 }}>
                     <div className="line-clamp-2" title={i.notes || ''}>{i.notes || '-'}</div>
                   </td>
-                  <td>{statusBadge(i)}</td>
+                  <td>
+                    <div className="d-flex align-items-center gap-2">
+                      {statusBadge(i)}
+                      {i.status === 'NEEDS_UPDATE' && (
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={async () => {
+                            const sb = getSupabase();
+                            if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
+                            const { error } = await sb.from('inventory').update({ status: 'AVAILABLE' }).eq('id', i.id);
+                            if (error) return notify('Không thể cập nhật trạng thái', 'error');
+                            try {
+                              const sb2 = getSupabase();
+                              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; code=${i.code}` });
+                            } catch {}
+                            notify('Đã chuyển về Sẵn có', 'success');
+                            refresh();
+                          }}
+                          title="Đặt lại trạng thái Sẵn có"
+                        >
+                          Mark Sẵn có
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td>
                     {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
                       const used = (i.profiles || []).filter(p => p.isAssigned).length;

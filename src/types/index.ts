@@ -103,7 +103,7 @@ export interface ActivityLog {
 }
 
 // Warehouse / Inventory
-export type InventoryStatus = 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'EXPIRED';
+export type InventoryStatus = 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'EXPIRED' | 'NEEDS_UPDATE';
 
 export interface InventoryAccountColumn {
   id: string; // stable key

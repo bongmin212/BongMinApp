@@ -302,9 +302,9 @@ export class Database {
       }
 
       if (i.isAccountBased) {
-        const total = i.totalSlots || 0;
         const assigned = (i.profiles || []).filter(p => p.isAssigned).length;
-        return total > assigned; // at least one free slot
+        // Enforce exclusivity: account-based inventory is only considered available if no profiles are assigned at all
+        return assigned === 0;
       }
       return i.status === 'AVAILABLE';
     });

@@ -272,14 +272,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         
         return item;
       }) as InventoryItem[];
-      // Filter availability
+      // Filter availability (exclusive linking): allow only items with zero assignments/links
       items = items.filter((i: any) => {
         if (i.isAccountBased) {
-          const total = i.totalSlots || 0;
           const assigned = (i.profiles || []).filter((p: any) => p.isAssigned).length;
-          return total > assigned;
+          return assigned === 0; // no profile assigned → eligible
         }
-        return i.status === 'AVAILABLE';
+        return i.status === 'AVAILABLE' && !i.linked_order_id;
       });
 
       // Include linked inventory for editing
@@ -397,11 +396,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       setSelectedProfileId('');
       return;
     }
-    // If no slot is currently selected, or the currently selected slot is not available, pick the first available slot
-    setSelectedProfileId(prev => {
-      const isCurrentSlotAvailable = options.some(p => p.id === prev);
-      return isCurrentSlotAvailable ? prev : options[0].id;
-    });
+    // Enforce exclusive use: do not auto-pick if any profile is already assigned to any order
+    const anyAssigned = (inv?.profiles || []).some(p => p.isAssigned && p.assignedOrderId && p.assignedOrderId !== (order?.id || ''));
+    if (anyAssigned) {
+      setSelectedProfileId('');
+      return;
+    }
+    // If no slot currently selected, pick the first available
+    setSelectedProfileId(prev => (options.some(p => p.id === prev) ? prev : options[0].id));
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
 
   // Ensure selected product is correct on edit so package select isn't disabled
@@ -474,6 +476,19 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const pkg = packages.find(p => p.id === formData.packageId);
       if ((inv?.isAccountBased || pkg?.isAccountBased) && !selectedProfileId) {
         newErrors["inventoryProfileId"] = 'Vui lòng chọn slot để cấp';
+      }
+      // Enforce exclusive linking: prevent selecting an inventory item that already has any assignment/link other than this order
+      if (inv) {
+        if (inv.isAccountBased) {
+          const alreadyAssignedOther = (inv.profiles || []).some(p => p.isAssigned && p.assignedOrderId && p.assignedOrderId !== (order?.id || ''));
+          if (alreadyAssignedOther) {
+            newErrors["inventory"] = 'Kho (tài khoản) này đang cấp cho đơn khác';
+          }
+        } else {
+          if ((inv as any).linkedOrderId && (inv as any).linkedOrderId !== (order?.id || '')) {
+            newErrors["inventory"] = 'Kho này đang liên kết đơn khác';
+          }
+        }
       }
     }
 

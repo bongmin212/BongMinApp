@@ -216,10 +216,54 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
+            // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
+            try {
+              // Classic linked item(s)
+              const { data: classicLinked } = await sb
+                .from('inventory')
+                .select('id')
+                .eq('linked_order_id', resolvedOrderId);
+              const classicIds = (classicLinked || []).map((r: any) => r.id);
+              if (classicIds.length) {
+                await sb
+                  .from('inventory')
+                  .update({ status: 'NEEDS_UPDATE', linked_order_id: null })
+                  .in('id', classicIds);
+              }
+              // Account-based: any profile pointing to this order gets unassigned; also set item status to NEEDS_UPDATE if all profiles freed
+              const { data: accountItems } = await sb
+                .from('inventory')
+                .select('*')
+                .eq('is_account_based', true);
+              for (const it of (accountItems || [])) {
+                const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+                if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
+                const nextProfiles = profiles.map((p: any) => (
+                  p.assignedOrderId === resolvedOrderId
+                    ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                    : p
+                ));
+                await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+                // After unassigning, if no profiles are assigned, flip status to NEEDS_UPDATE
+                const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
+                if (!stillAssigned) {
+                  await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
+                }
+              }
+            } catch {}
+
             // If replacement inventory is chosen, reflect availability in inventory
             if (resolvedReplacementInventoryId) {
               const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
               if (invRow) {
+                // Enforce exclusive linking: cannot use inventory if it is already linked/assigned to other orders
+                if (!!invRow.is_account_based) {
+                  const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
+                  const assignedOther = profiles.some((p: any) => p.isAssigned && p.assignedOrderId && p.assignedOrderId !== resolvedOrderId);
+                  if (assignedOther) throw new Error('Kho (tài khoản) này đang cấp cho đơn khác');
+                } else {
+                  if (invRow.linked_order_id && invRow.linked_order_id !== resolvedOrderId) throw new Error('Kho này đang liên kết đơn khác');
+                }
                 if (!!invRow.is_account_based) {
                   // If account-based, mark selected profile as assigned when provided
                   if (replacementProfileId) {
@@ -227,7 +271,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                     const nextProfiles = profiles.map((p: any) => (
                       p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
                     ));
-                    await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', invRow.id);
+                    await sb.from('inventory').update({ profiles: nextProfiles, status: 'SOLD' }).eq('id', invRow.id);
                   }
                 } else {
                   // Classic item -> mark SOLD and link to order
@@ -235,6 +279,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 }
               }
             }
+
+            // Update order to point to the replacement inventory + profile and refresh order_info
+            try {
+              await sb
+                .from('orders')
+                .update({
+                  inventory_item_id: resolvedReplacementInventoryId || null,
+                  inventory_profile_id: (replacementProfileId || null),
+                  order_info: (autoInfo ?? null)
+                })
+                .eq('id', resolvedOrderId);
+            } catch {}
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, ...changedEntries].join('; ') });
@@ -242,7 +298,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				notify('Cập nhật đơn bảo hành thành công', 'success');
 			} else {
 
-                const { error: insertError } = await sb
+        const { error: insertError } = await sb
 					.from('warranties')
 					.insert({
 						code: form.code,
@@ -257,6 +313,39 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 
+        // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
+        try {
+          const { data: classicLinked } = await sb
+            .from('inventory')
+            .select('id')
+            .eq('linked_order_id', resolvedOrderId);
+          const classicIds = (classicLinked || []).map((r: any) => r.id);
+          if (classicIds.length) {
+            await sb
+              .from('inventory')
+              .update({ status: 'NEEDS_UPDATE', linked_order_id: null })
+              .in('id', classicIds);
+          }
+          const { data: accountItems } = await sb
+            .from('inventory')
+            .select('*')
+            .eq('is_account_based', true);
+          for (const it of (accountItems || [])) {
+            const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+            if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
+            const nextProfiles = profiles.map((p: any) => (
+              p.assignedOrderId === resolvedOrderId
+                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                : p
+            ));
+            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+            const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
+            if (!stillAssigned) {
+              await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
+            }
+          }
+        } catch {}
+
                 // Reflect inventory state for replacement
                 if (resolvedReplacementInventoryId) {
                   const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
@@ -267,13 +356,25 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                         const nextProfiles = profiles.map((p: any) => (
                           p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
                         ));
-                        await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', invRow.id);
+                        await sb.from('inventory').update({ profiles: nextProfiles, status: 'SOLD' }).eq('id', invRow.id);
                       }
                     } else {
                       await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
                     }
                   }
                 }
+
+        // Update order to point to the replacement inventory + profile and refresh order_info
+        try {
+          await sb
+            .from('orders')
+            .update({
+              inventory_item_id: resolvedReplacementInventoryId || null,
+              inventory_profile_id: (replacementProfileId || null),
+              order_info: (autoInfo ?? null)
+            })
+            .eq('id', resolvedOrderId);
+        } catch {}
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}; status=${form.status}` });

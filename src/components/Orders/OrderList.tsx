@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import DateRangeInput from '../Shared/DateRangeInput';
-import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
+import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, CUSTOMER_SOURCES } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
 import OrderForm from './OrderForm';
@@ -746,6 +746,71 @@ const OrderList: React.FC = () => {
     };
   }, [filteredOrders, page, limit]);
 
+  // Linkify plain text into clickable anchors (http(s) & www.)
+  const linkifyText = (text: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = [];
+    if (!text) return parts;
+    const urlRegex = /((https?:\/\/|www\.)[^\s]+)$/gi;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = urlRegex.exec(text)) !== null) {
+      const start = match.index;
+      const end = urlRegex.lastIndex;
+      if (start > lastIndex) parts.push(text.slice(lastIndex, start));
+      const raw = match[0];
+      const href = raw.startsWith('http') ? raw : `https://${raw}`;
+      parts.push(
+        <a key={`${start}-${end}`} href={href} target="_blank" rel="noreferrer">{raw}</a>
+      );
+      lastIndex = end;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts;
+  };
+
+  const renderCustomerFullInfo = (customer: Customer) => {
+    const typeLabel = customer.type === 'CTV' ? 'CTV' : 'Khách lẻ';
+    const phone = customer.phone || '';
+    const email = customer.email || '';
+    const source = customer.source ? (CUSTOMER_SOURCES.find(s => s.value === customer.source)?.label || String(customer.source)) : '';
+    return (
+      <div className="card mt-2">
+        <div className="card-header"><strong>Khách hàng</strong></div>
+        <div className="card-body">
+          <div><strong>Mã KH:</strong> {customer.code || '-'}</div>
+          <div><strong>Tên:</strong> {customer.name || '-'}</div>
+          <div><strong>Loại:</strong> {typeLabel}</div>
+          <div>
+            <strong>SĐT:</strong> {phone || '-'}
+            {phone && (
+              <>
+                {' '}· <a href={`tel:${phone}`}>Gọi</a>
+                {' '}· <a href={`https://zalo.me/${encodeURIComponent(phone)}`} target="_blank" rel="noreferrer">Zalo</a>
+              </>
+            )}
+          </div>
+          <div>
+            <strong>Email:</strong> {email || '-'}
+            {email && (
+              <>
+                {' '}· <a href={`mailto:${email}`}>Email</a>
+              </>
+            )}
+          </div>
+          {customer.source && (
+            <div><strong>Nguồn:</strong> {source}</div>
+          )}
+          {customer.sourceDetail && (
+            <div><strong>Nguồn chi tiết:</strong> {linkifyText(customer.sourceDetail)}</div>
+          )}
+          {customer.notes && (
+            <div><strong>Ghi chú:</strong> {linkifyText(customer.notes)}</div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const exportOrdersXlsx = (items: Order[], filename: string) => {
     const rows = items.map((o, idx) => {
       const pkgInfo = getPackageInfo(o.packageId);
@@ -1309,28 +1374,7 @@ const OrderList: React.FC = () => {
                     {(() => {
                       const c = customers.find(cu => cu.id === o.customerId);
                       if (!c) return null;
-                      const links: Array<{label: string; url: string}> = [];
-                      if (c.phone) links.push({ label: 'Zalo', url: `https://zalo.me/${encodeURIComponent(c.phone)}` });
-                      if (c.phone) links.push({ label: 'Tel', url: `tel:${c.phone}` });
-                      if (c.email) links.push({ label: 'Email', url: `mailto:${c.email}` });
-                      return (
-                        <div style={{ marginTop: 6 }}>
-                          <strong>Khách hàng:</strong> {c.name}
-                          {(c.phone || c.email) && (
-                            <>
-                              {' '}
-                              <small className="text-muted">({[c.phone, c.email].filter(Boolean).join(' · ')})</small>
-                            </>
-                          )}
-                          {links.length > 0 && (
-                            <div className="d-flex gap-2 mt-1" style={{ flexWrap: 'wrap' as any }}>
-                              {links.map((l, idx) => (
-                                <a key={idx} href={l.url} target="_blank" rel="noreferrer" className="btn btn-sm btn-light">{l.label}</a>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
+                      return renderCustomerFullInfo(c);
                     })()}
                     <div><strong>Hết hạn hiện tại:</strong> {currentExpiry.toLocaleDateString('vi-VN')}</div>
                     <div className="form-group">
