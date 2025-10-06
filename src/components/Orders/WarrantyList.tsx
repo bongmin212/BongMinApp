@@ -156,15 +156,14 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				});
 				const sb = getSupabase();
 				if (!sb) throw new Error('Supabase not configured');
-				const { error } = await sb
+                const { error } = await sb
 					.from('warranties')
 					.update({
 						code: form.code,
 						order_id: form.orderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						replacement_inventory_id: form.replacementInventoryId || null,
-						new_order_info: form.newOrderInfo || null
+						replacement_inventory_id: form.replacementInventoryId || null
 					})
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
@@ -183,8 +182,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 						order_id: form.orderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						replacement_inventory_id: form.replacementInventoryId || null,
-            new_order_info: (autoInfo !== undefined ? autoInfo : (form.newOrderInfo || null))
+						replacement_inventory_id: form.replacementInventoryId || null
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 				try {
