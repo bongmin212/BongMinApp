@@ -103,15 +103,14 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       } else {
         if (it.packageId !== (pkg?.id || '')) return false;
       }
-      // Status: allow ONLY AVAILABLE
+      // Status: allow ONLY AVAILABLE for classic items; for account-based, allow items with at least one free slot
+      if (it.isAccountBased) {
+        const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+        const hasFreeSlot = profiles.some((p: any) => !p.isAssigned);
+        return hasFreeSlot;
+      }
       const statusEligible = it.status === 'AVAILABLE';
       if (!statusEligible) return false;
-      // Exclusivity rules
-      if (it.isAccountBased) {
-        const assigned = (it.profiles || []).filter(p => p.isAssigned).length;
-        // Only allow items with zero assigned profiles to maintain exclusive use
-        return assigned === 0;
-      }
       // Classic stock: must not be linked to other orders
       return !it.linkedOrderId;
     });
@@ -286,18 +285,17 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             if (resolvedReplacementInventoryId) {
               const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
               if (invRow) {
-                // Enforce exclusive linking: cannot use inventory if it is already linked/assigned to other orders
-                if (!!invRow.is_account_based) {
-                  const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
-                  const assignedOther = profiles.some((p: any) => p.isAssigned && p.assignedOrderId && p.assignedOrderId !== resolvedOrderId);
-                  if (assignedOther) throw new Error('Kho (tài khoản) này đang cấp cho đơn khác');
-                } else {
+                // For classic inventory: ensure it's not linked elsewhere
+                if (!invRow.is_account_based) {
                   if (invRow.linked_order_id && invRow.linked_order_id !== resolvedOrderId) throw new Error('Kho này đang liên kết đơn khác');
                 }
                 if (!!invRow.is_account_based) {
                   // If account-based, mark selected profile as assigned when provided
                   if (replacementProfileId) {
                     const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
+                    // Validate chosen profile is free
+                    const chosen = profiles.find((p: any) => p.id === replacementProfileId);
+                    if (!chosen || chosen.isAssigned) throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
                     const nextProfiles = profiles.map((p: any) => (
                       p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
                     ));
@@ -383,6 +381,9 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                     if (!!invRow.is_account_based) {
                       if (replacementProfileId) {
                         const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
+                        // Validate chosen profile is free
+                        const chosen = profiles.find((p: any) => p.id === replacementProfileId);
+                        if (!chosen || chosen.isAssigned) throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
                         const nextProfiles = profiles.map((p: any) => (
                           p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
                         ));
