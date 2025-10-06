@@ -33,8 +33,46 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
 
   useEffect(() => {
-    setProducts(Database.getProducts());
-    setPackages(Database.getPackages());
+    (async () => {
+      try {
+        const sb = getSupabase();
+        if (!sb) {
+          setProducts(Database.getProducts());
+          setPackages(Database.getPackages());
+          return;
+        }
+        const [prodRes, pkgRes] = await Promise.all([
+          sb.from('products').select('*').order('created_at', { ascending: true }),
+          sb.from('packages').select('*').order('created_at', { ascending: true })
+        ]);
+        const prods = (prodRes.data || []).map((r: any) => ({
+          ...r,
+          sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })) as Product[];
+        const pkgs = (pkgRes.data || []).map((r: any) => ({
+          ...r,
+          productId: r.product_id || r.productId,
+          warrantyPeriod: r.warranty_period || r.warrantyPeriod,
+          costPrice: r.cost_price || r.costPrice,
+          ctvPrice: r.ctv_price || r.ctvPrice,
+          retailPrice: r.retail_price || r.retailPrice,
+          customFields: r.custom_fields || r.customFields,
+          isAccountBased: r.is_account_based || r.isAccountBased,
+          accountColumns: r.account_columns || r.accountColumns,
+          defaultSlots: r.default_slots || r.defaultSlots,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        })) as ProductPackage[];
+        setProducts(prods);
+        setPackages(pkgs);
+      } catch {
+        // Fallback to local cache
+        setProducts(Database.getProducts());
+        setPackages(Database.getPackages());
+      }
+    })();
   }, []);
 
   useEffect(() => {
