@@ -14,20 +14,20 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
   const [packages, setPackages] = useState<ProductPackage[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
-\tconst [form, setForm] = useState<WarrantyFormData>({ code: '', orderId: '', reason: '', status: 'PENDING' });
+  const [form, setForm] = useState<WarrantyFormData>({ code: '', orderId: '', reason: '', status: 'PENDING' });
   const [orderSearch, setOrderSearch] = useState('');
   const [debouncedOrderSearch, setDebouncedOrderSearch] = useState('');
   const [replacementProfileId, setReplacementProfileId] = useState<string>('');
   const [inventorySearch, setInventorySearch] = useState('');
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
 
-	useEffect(() => {
+  useEffect(() => {
     setOrders(Database.getOrders());
     setCustomers(Database.getCustomers());
     setPackages(Database.getPackages());
     setProducts(Database.getProducts());
     setInventoryItems(Database.getInventory());
-	}, []);
+  }, []);
 
   // Auto-generate code for new warranty from Supabase, fallback to local
   useEffect(() => {
@@ -57,9 +57,9 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
     return () => clearTimeout(t);
   }, [inventorySearch]);
 
-	useEffect(() => {
-		if (warranty) {
-			setForm({ 
+  useEffect(() => {
+    if (warranty) {
+      setForm({ 
         code: warranty.code, 
         orderId: warranty.orderId, 
         reason: warranty.reason, 
@@ -68,8 +68,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         newOrderInfo: warranty.newOrderInfo
       });
       setReplacementProfileId('');
-		}
-	}, [warranty]);
+    }
+  }, [warranty]);
 
   const getOrderLabel = (o: Order) => {
     const customer = customers.find(c => c.id === o.customerId)?.name || 'Không xác định';
