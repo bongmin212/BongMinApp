@@ -85,7 +85,37 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
     return `${product} / ${pkg} - ${item.productInfo || 'Không có thông tin'}`;
   };
 
-  const availableInventoryItems = inventoryItems.filter(item => item.status === 'AVAILABLE');
+  const availableInventoryItems = useMemo(() => {
+    // Show only inventory eligible to replace for the selected order
+    const selectedOrder = orders.find(o => o.id === form.orderId);
+    if (!selectedOrder) {
+      // Fallback: show broadly available items
+      return inventoryItems.filter(it => it.status === 'AVAILABLE');
+    }
+    const pkg = packages.find(p => p.id === selectedOrder.packageId);
+    const product = pkg ? products.find(pr => pr.id === pkg.productId) : undefined;
+    const sharedPoolProductId = product?.sharedInventoryPool ? product.id : undefined;
+
+    return inventoryItems.filter(it => {
+      // Pool boundary: match by product if shared pool, else exact package
+      if (sharedPoolProductId) {
+        if (it.productId !== sharedPoolProductId) return false;
+      } else {
+        if (it.packageId !== (pkg?.id || '')) return false;
+      }
+      // Status: allow AVAILABLE or NEEDS_UPDATE (stock to be reworked but selectable)
+      const statusEligible = it.status === 'AVAILABLE' || it.status === 'NEEDS_UPDATE';
+      if (!statusEligible) return false;
+      // Exclusivity rules
+      if (it.isAccountBased) {
+        const assigned = (it.profiles || []).filter(p => p.isAssigned).length;
+        // Only allow items with zero assigned profiles to maintain exclusive use
+        return assigned === 0;
+      }
+      // Classic stock: must not be linked to other orders
+      return !it.linkedOrderId;
+    });
+  }, [inventoryItems, orders, form.orderId, packages, products]);
 
   const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
 
