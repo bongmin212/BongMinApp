@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import DateRangeInput from '../Shared/DateRangeInput';
 import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
@@ -997,22 +998,12 @@ const OrderList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div>
-            <input
-              type="date"
-              className="form-control"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              placeholder="Từ ngày"
-            />
-          </div>
-          <div>
-            <input
-              type="date"
-              className="form-control"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              placeholder="Đến ngày"
+          <div style={{ gridColumn: 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày mua"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
           <div>

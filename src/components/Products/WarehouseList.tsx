@@ -5,6 +5,7 @@ import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx } from '../../utils/excel';
+import DateRangeInput from '../Shared/DateRangeInput';
 import { getSupabase } from '../../utils/supabaseClient';
 
 const WarehouseList: React.FC = () => {
@@ -740,22 +741,12 @@ const WarehouseList: React.FC = () => {
               <option value="EXPIRED">Hết hạn</option>
             </select>
           </div>
-          <div>
-            <input
-              type="date"
-              className="form-control"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              placeholder="Từ ngày"
-            />
-          </div>
-          <div>
-            <input
-              type="date"
-              className="form-control"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              placeholder="Đến ngày"
+          <div style={{ gridColumn: 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày nhập"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
           <div>

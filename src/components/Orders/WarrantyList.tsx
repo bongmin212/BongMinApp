@@ -5,6 +5,7 @@ import { Customer, Order, Product, ProductPackage, Warranty, WarrantyFormData, W
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx } from '../../utils/excel';
+import DateRangeInput from '../Shared/DateRangeInput';
 
 const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warranty?: Warranty }> = ({ onClose, onSuccess, warranty }) => {
   const { state } = useAuth();
@@ -86,6 +87,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 
   const availableInventoryItems = inventoryItems.filter(item => item.status === 'AVAILABLE');
 
+  const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
+
   const filteredOrders = React.useMemo(() => {
     const q = debouncedOrderSearch;
     if (!q) return orders;
@@ -129,6 +132,48 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       return selectedItem.productInfo || undefined;
     })();
 		try {
+			// Resolve canonical UUIDs to avoid "invalid input syntax for type uuid"
+			const sb = getSupabase();
+			if (!sb) throw new Error('Supabase not configured');
+			let resolvedOrderId = form.orderId;
+			let remoteOrder: any | null = null;
+			const localSelectedOrder = orders.find(o => o.id === form.orderId);
+			if (!looksLikeUuid(form.orderId)) {
+				const orderCode = localSelectedOrder?.code;
+				if (!orderCode) throw new Error('Không tìm thấy đơn hàng hợp lệ');
+				const { data: ro } = await sb
+					.from('orders')
+					.select('id, customer_id, product_id, package_id')
+					.eq('code', orderCode)
+					.maybeSingle();
+				if (ro?.id) {
+					resolvedOrderId = ro.id as string;
+					remoteOrder = ro;
+				}
+			}
+			// Resolve replacement inventory id if needed
+			let resolvedReplacementInventoryId = form.replacementInventoryId;
+			if (resolvedReplacementInventoryId && !looksLikeUuid(resolvedReplacementInventoryId)) {
+				const localItem = inventoryItems.find(i => i.id === resolvedReplacementInventoryId);
+				const itemCode = localItem?.code;
+				if (itemCode) {
+					const { data: invRow } = await sb
+						.from('inventory')
+						.select('id')
+						.eq('code', itemCode)
+						.maybeSingle();
+					if (invRow?.id) resolvedReplacementInventoryId = invRow.id as string;
+				}
+			}
+
+			// Denormalized pointers from remote order if available (fall back to local)
+			const denormCustomerId = (remoteOrder?.customer_id as string | undefined) || localSelectedOrder?.customerId || undefined;
+			const denormProductId = (remoteOrder?.product_id as string | undefined) || (() => {
+				const pkgId = localSelectedOrder?.packageId;
+				const pkg = packages.find(p => p.id === pkgId);
+				return pkg?.productId;
+			})() || undefined;
+			const denormPackageId = (remoteOrder?.package_id as string | undefined) || localSelectedOrder?.packageId || undefined;
 			if (warranty) {
 				const prevSnapshot = {
 					code: warranty.code || '',
@@ -154,26 +199,19 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 						changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
 					}
 				});
-				const sb = getSupabase();
-				if (!sb) throw new Error('Supabase not configured');
-                // resolve denormalized fields from selected order for faster filtering
-                const selectedOrder = orders.find(o => o.id === form.orderId);
-                const selectedPackage = selectedOrder ? packages.find(p => p.id === selectedOrder.packageId) : undefined;
-                const selectedProductId = selectedPackage ? selectedPackage.productId : undefined;
-                const selectedCustomerId = selectedOrder ? selectedOrder.customerId : undefined;
 
                 const { error } = await sb
 					.from('warranties')
 					.update({
 						code: form.code,
-						order_id: form.orderId,
+						order_id: resolvedOrderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						replacement_inventory_id: form.replacementInventoryId || null,
+						replacement_inventory_id: resolvedReplacementInventoryId || null,
 						new_order_info: (form.newOrderInfo ?? autoInfo ?? null),
-						customer_id: selectedCustomerId || null,
-						product_id: selectedProductId || null,
-						package_id: selectedOrder?.packageId || null
+						customer_id: denormCustomerId || null,
+						product_id: denormProductId || null,
+						package_id: denormPackageId || null
 					})
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
@@ -183,31 +221,24 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				} catch {}
 				notify('Cập nhật đơn bảo hành thành công', 'success');
 			} else {
-				const sb = getSupabase();
-				if (!sb) throw new Error('Supabase not configured');
-				// resolve denormalized fields from selected order for faster filtering
-				const selectedOrder = orders.find(o => o.id === form.orderId);
-				const selectedPackage = selectedOrder ? packages.find(p => p.id === selectedOrder.packageId) : undefined;
-				const selectedProductId = selectedPackage ? selectedPackage.productId : undefined;
-				const selectedCustomerId = selectedOrder ? selectedOrder.customerId : undefined;
 
 				const { error: insertError } = await sb
 					.from('warranties')
 					.insert({
 						code: form.code,
-						order_id: form.orderId,
+						order_id: resolvedOrderId,
 						reason: form.reason.trim(),
 						status: form.status,
-						replacement_inventory_id: form.replacementInventoryId || null,
+						replacement_inventory_id: resolvedReplacementInventoryId || null,
 						new_order_info: (form.newOrderInfo ?? autoInfo ?? null),
-						customer_id: selectedCustomerId || null,
-						product_id: selectedProductId || null,
-						package_id: selectedOrder?.packageId || null
+						customer_id: denormCustomerId || null,
+						product_id: denormProductId || null,
+						package_id: denormPackageId || null
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 				try {
 					const sb2 = getSupabase();
-					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${form.orderId}; status=${form.status}` });
+					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}; status=${form.status}` });
 				} catch {}
 				notify('Tạo đơn bảo hành thành công', 'success');
 			}
@@ -344,59 +375,169 @@ const WarrantyList: React.FC = () => {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [showForm, setShowForm] = useState(false);
 	const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null);
-  const [searchCode, setSearchCode] = useState('');
-  const [debouncedSearchCode, setDebouncedSearchCode] = useState('');
-  const [searchCustomer, setSearchCustomer] = useState('');
-  const [debouncedSearchCustomer, setDebouncedSearchCustomer] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchStatus, setSearchStatus] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  const load = () => {
-    setWarranties(Database.getWarranties());
-    setCustomers(Database.getCustomers());
-    setOrders(Database.getOrders());
-    setPackages(Database.getPackages());
-    setProducts(Database.getProducts());
-    setInventoryItems(Database.getInventory());
+  const load = async () => {
+    const sb = getSupabase();
+    if (!sb) {
+      setWarranties(Database.getWarranties());
+      setCustomers(Database.getCustomers());
+      setOrders(Database.getOrders());
+      setPackages(Database.getPackages());
+      setProducts(Database.getProducts());
+      setInventoryItems(Database.getInventory());
+      return;
+    }
+    const [wRes, cRes, pRes, prRes, iRes, oRes] = await Promise.all([
+      sb.from('warranties').select('*'),
+      sb.from('customers').select('*'),
+      sb.from('packages').select('*'),
+      sb.from('products').select('*'),
+      sb.from('inventory').select('*'),
+      sb.from('orders').select('*')
+    ]);
+    const allCustomers = (cRes.data || []).map((r: any) => ({
+      ...r,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Customer[];
+    const allProducts = (prRes.data || []).map((r: any) => ({
+      ...r,
+      sharedInventoryPool: !!r.shared_inventory_pool,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Product[];
+    const allPackages = (pRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      productId: r.product_id,
+      name: r.name,
+      warrantyPeriod: r.warranty_period,
+      costPrice: r.cost_price,
+      ctvPrice: r.ctv_price,
+      retailPrice: r.retail_price,
+      customFields: r.custom_fields || [],
+      isAccountBased: !!r.is_account_based,
+      accountColumns: r.account_columns || [],
+      defaultSlots: r.default_slots,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as ProductPackage[];
+    const allInventory = (iRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      productId: r.product_id,
+      packageId: r.package_id,
+      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : undefined,
+      sourceNote: r.source_note || '',
+      purchasePrice: r.purchase_price,
+      productInfo: r.product_info || '',
+      notes: r.notes || '',
+      status: r.status,
+      isAccountBased: !!r.is_account_based,
+      accountColumns: r.account_columns || [],
+      accountData: r.account_data || {},
+      totalSlots: r.total_slots || 0,
+      profiles: Array.isArray(r.profiles) ? r.profiles : [],
+      linkedOrderId: r.linked_order_id || undefined,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as InventoryItem[];
+    const allOrders = (oRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      customerId: r.customer_id,
+      packageId: r.package_id,
+      status: r.status,
+      paymentStatus: r.payment_status,
+      orderInfo: r.order_info,
+      notes: r.notes,
+      inventoryItemId: r.inventory_item_id,
+      inventoryProfileId: r.inventory_profile_id,
+      useCustomPrice: r.use_custom_price || false,
+      customPrice: r.custom_price,
+      customFieldValues: r.custom_field_values,
+      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Order[];
+    const allWarranties = (wRes.data || []).map((r: any) => ({
+      id: r.id,
+      code: r.code,
+      orderId: r.order_id,
+      reason: r.reason,
+      status: r.status,
+      replacementInventoryId: r.replacement_inventory_id || undefined,
+      newOrderInfo: r.new_order_info || undefined,
+      createdBy: r.created_by || 'system',
+      customerId: r.customer_id || undefined,
+      productId: r.product_id || undefined,
+      packageId: r.package_id || undefined,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Warranty[];
+    setCustomers(allCustomers);
+    setProducts(allProducts);
+    setPackages(allPackages);
+    setInventoryItems(allInventory);
+    setOrders(allOrders);
+    setWarranties(allWarranties);
   };
 
   useEffect(() => { load(); }, []);
+
+  // Realtime subscribe to warranties
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    const ch = sb
+      .channel('realtime:warranties')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warranties' }, () => {
+        load();
+      })
+      .subscribe();
+    return () => { try { ch.unsubscribe(); } catch {} };
+  }, []);
 
   // Initialize from URL/localStorage
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code') || '';
-      const customer = params.get('customer') || '';
+      const q = params.get('q') || '';
       const status = params.get('status') || '';
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || localStorage.getItem('warrantyList.limit') || '10'), 10);
-      setSearchCode(code);
-      setDebouncedSearchCode(code);
-      setSearchCustomer(customer);
-      setDebouncedSearchCustomer(customer);
+      const from = params.get('from') || '';
+      const to = params.get('to') || '';
+      setSearchTerm(q);
+      setDebouncedSearchTerm(q);
       setSearchStatus(status);
+      setDateFrom(from);
+      setDateTo(to);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
     } catch {}
   }, []);
 
-  // Debounce search inputs
+  // Debounce unified search input
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearchCode(searchCode), 300);
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
     return () => clearTimeout(t);
-  }, [searchCode]);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearchCustomer(searchCustomer), 300);
-    return () => clearTimeout(t);
-  }, [searchCustomer]);
+  }, [searchTerm]);
 
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchCode, debouncedSearchCustomer, searchStatus]);
+  }, [debouncedSearchTerm, searchStatus]);
 
   // Persist limit
   useEffect(() => {
@@ -407,16 +548,17 @@ const WarrantyList: React.FC = () => {
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (debouncedSearchCode) params.set('code', debouncedSearchCode); else params.delete('code');
-      if (debouncedSearchCustomer) params.set('customer', debouncedSearchCustomer); else params.delete('customer');
+      if (debouncedSearchTerm) params.set('q', debouncedSearchTerm); else params.delete('q');
       if (searchStatus) params.set('status', searchStatus); else params.delete('status');
+      if (dateFrom) params.set('from', dateFrom); else params.delete('from');
+      if (dateTo) params.set('to', dateTo); else params.delete('to');
       params.set('page', String(page));
       params.set('limit', String(limit));
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchCode, debouncedSearchCustomer, searchStatus, page, limit]);
+  }, [debouncedSearchTerm, searchStatus, page, limit, dateFrom, dateTo]);
 
   const getCustomerName = (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
@@ -441,14 +583,23 @@ const WarrantyList: React.FC = () => {
   };
 
   const filteredWarranties = useMemo(() => {
+    const q = debouncedSearchTerm.trim().toLowerCase();
     return warranties.filter(w => {
-      const matchesCode = !debouncedSearchCode || w.code.toLowerCase().includes(debouncedSearchCode.toLowerCase());
+      const codeMatch = !q || (w.code || '').toLowerCase().includes(q);
       const customerName = getCustomerName(w.orderId).toLowerCase();
-      const matchesCustomer = !debouncedSearchCustomer || customerName.includes(debouncedSearchCustomer.toLowerCase());
+      const order = orders.find(o => o.id === w.orderId);
+      const pkg = order ? packages.find(p => p.id === order.packageId) : undefined;
+      const product = pkg ? products.find(p => p.id === pkg.productId) : undefined;
+      const nameMatch = !q || customerName.includes(q) || (pkg?.name || '').toLowerCase().includes(q) || (product?.name || '').toLowerCase().includes(q);
       const matchesStatus = !searchStatus || w.status === searchStatus;
-      return matchesCode && matchesCustomer && matchesStatus;
+      // date filter by warranty createdAt
+      const createdTs = new Date(w.createdAt).getTime();
+      const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
+      const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
+      const inRange = createdTs >= fromTs && createdTs <= toTs;
+      return (codeMatch || nameMatch) && matchesStatus && inRange;
     });
-  }, [warranties, searchCode, searchCustomer, searchStatus, orders, customers]);
+  }, [warranties, debouncedSearchTerm, searchStatus, orders, customers, packages, products, dateFrom, dateTo]);
 
   const total = filteredWarranties.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -499,10 +650,8 @@ const WarrantyList: React.FC = () => {
   };
 
   const resetFilters = () => {
-    setSearchCode('');
-    setDebouncedSearchCode('');
-    setSearchCustomer('');
-    setDebouncedSearchCustomer('');
+    setSearchTerm('');
+    setDebouncedSearchTerm('');
     setSearchStatus('');
     setPage(1);
   };
@@ -587,23 +736,13 @@ const handleDelete = (id: string) => {
       <div className="card-body">
         <div className="row g-3 mb-3">
           <div className="col-md-4">
-            <label className="form-label">Tìm theo mã bảo hành</label>
+            <label className="form-label">Tìm kiếm</label>
             <input 
               type="text" 
               className="form-control" 
-              placeholder="Nhập mã bảo hành..."
-              value={searchCode}
-              onChange={(e) => setSearchCode(e.target.value)}
-            />
-          </div>
-          <div className="col-md-4">
-            <label className="form-label">Tìm theo khách hàng</label>
-            <input 
-              type="text" 
-              className="form-control" 
-              placeholder="Nhập tên khách hàng..."
-              value={searchCustomer}
-              onChange={(e) => setSearchCustomer(e.target.value)}
+              placeholder="Nhập mã/khách hàng/sản phẩm/gói..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="col-md-4">
@@ -618,6 +757,14 @@ const handleDelete = (id: string) => {
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
+          </div>
+          <div className="col-md-4">
+            <DateRangeInput
+              label="Khoảng ngày tạo"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+            />
           </div>
           <div className="col-md-4">
             <label className="form-label">&nbsp;</label>

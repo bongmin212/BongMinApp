@@ -92,6 +92,7 @@ create table public.orders (
   product_id uuid references public.products(id) on delete set null,
   package_id uuid references public.packages(id) on delete set null,
   inventory_item_id uuid references public.inventory(id) on delete set null,
+  inventory_profile_id text, -- for account-based inventory slot id
   purchase_date timestamptz not null,
   order_info text,
   status text default 'PROCESSING',
@@ -103,6 +104,10 @@ create table public.orders (
   use_custom_price boolean default false,
   custom_price numeric default 0,
   custom_field_values jsonb,
+  -- renewal notification flags
+  renewal_message_sent boolean not null default false,
+  renewal_message_sent_at timestamptz,
+  renewal_message_sent_by uuid references public.employees(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -176,6 +181,7 @@ create policy "dev full access" on public.expenses for all using (true) with che
 
 -- Helpful indexes
 create index if not exists idx_orders_customer on public.orders(customer_id);
+create index if not exists idx_orders_renewal_sent_expiry on public.orders (renewal_message_sent, expiry_date);
 create index if not exists idx_packages_product on public.packages(product_id);
 create index if not exists idx_inventory_package on public.inventory(package_id);
 

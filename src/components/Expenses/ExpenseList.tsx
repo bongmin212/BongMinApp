@@ -4,6 +4,7 @@ import { Expense, ExpenseFormData, EXPENSE_TYPES } from '../../types';
 import { IconPlus, IconEdit, IconTrash, IconReceipt } from '../Icons';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx } from '../../utils/excel';
+import DateRangeInput from '../Shared/DateRangeInput';
 
 const ExpenseList: React.FC = () => {
   const { notify } = useToast();
@@ -310,22 +311,12 @@ const ExpenseList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div>
-            <input
-              type="date"
-              className="form-control"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              placeholder="Từ ngày"
-            />
-          </div>
-          <div>
-            <input
-              type="date"
-              className="form-control"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              placeholder="Đến ngày"
+          <div style={{ gridColumn: 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
           <div>
