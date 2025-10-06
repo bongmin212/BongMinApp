@@ -220,6 +220,9 @@ export interface OrderFormData {
   customPrice?: number; // Giá tùy chỉnh
   customFieldValues?: Record<string, string>;
   inventoryProfileId?: string;
+  // Expiry overrides
+  useCustomExpiry?: boolean; // Sử dụng hạn tùy chỉnh
+  customExpiryDate?: Date; // Ngày hết hạn tùy chỉnh
 }
 
 export interface InventoryFormData {

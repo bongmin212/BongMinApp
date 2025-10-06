@@ -28,7 +28,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     notes: '',
     useCustomPrice: false,
     customPrice: 0,
-    customFieldValues: {}
+    customFieldValues: {},
+    useCustomExpiry: false,
+    customExpiryDate: undefined
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [selectedProduct, setSelectedProduct] = useState<string>('');
@@ -109,7 +111,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         notes: order.notes || '',
         useCustomPrice: order.useCustomPrice || false,
         customPrice: order.customPrice || 0,
-        customFieldValues: (order as any).customFieldValues || {}
+        customFieldValues: (order as any).customFieldValues || {},
+        useCustomExpiry: false,
+        customExpiryDate: order.expiryDate ? new Date(order.expiryDate) : undefined
       });
       if ((order as any).inventoryProfileId) {
         setSelectedProfileId((order as any).inventoryProfileId as any);
@@ -152,7 +156,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             useCustomPrice: false,
             customPrice: 0,
             customFieldValues: {},
-            inventoryProfileId: ''
+            inventoryProfileId: '',
+            useCustomExpiry: false,
+            customExpiryDate: undefined
           }));
         } catch {
           // Fallback to local storage method
@@ -170,7 +176,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             useCustomPrice: false,
             customPrice: 0,
             customFieldValues: {},
-            inventoryProfileId: ''
+            inventoryProfileId: '',
+            useCustomExpiry: false,
+            customExpiryDate: undefined
           }));
         }
       })();
@@ -447,6 +455,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     if (formData.useCustomPrice && (formData.customPrice === undefined || formData.customPrice <= 0)) {
       newErrors.customPrice = 'Vui lòng nhập giá tùy chỉnh hợp lệ';
     }
+    if (formData.useCustomExpiry) {
+      const d = formData.customExpiryDate instanceof Date ? formData.customExpiryDate : (formData.customExpiryDate ? new Date(formData.customExpiryDate as any) : undefined);
+      if (!d || isNaN(d.getTime())) {
+        newErrors.customExpiryDate = 'Vui lòng chọn ngày hết hạn hợp lệ';
+      } else if (d < new Date(formData.purchaseDate)) {
+        newErrors.customExpiryDate = 'Hạn phải sau hoặc bằng ngày mua';
+      }
+    }
 
     const selectedPackage = packages.find(p => p.id === formData.packageId);
     if (selectedPackage && selectedPackage.customFields && selectedPackage.customFields.length) {
@@ -479,20 +495,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return;
       }
 
-      // Calculate expiry date
+      // Calculate expiry date (allow override by custom expiry)
       const purchaseDate = new Date(formData.purchaseDate);
-      const expiryDate = new Date(purchaseDate);
+      let expiryDate = new Date(purchaseDate);
       
       // For shared pool products, use 1 month default if no specific expiry
       const product = products.find(p => p.id === selectedPackage.productId);
       const isSharedPool = product?.sharedInventoryPool;
       
-      if (isSharedPool && selectedInventoryId) {
-        // For shared pool products with inventory, use 1 month default
-        expiryDate.setMonth(expiryDate.getMonth() + 1);
+      if (formData.useCustomExpiry && formData.customExpiryDate) {
+        expiryDate = new Date(formData.customExpiryDate);
       } else {
-        // Use package warranty period for regular products
-        expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
+        if (isSharedPool && selectedInventoryId) {
+          // For shared pool products with inventory, use 1 month default
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+        } else {
+          // Use package warranty period for regular products
+          expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
+        }
       }
 
       const customFieldValues = (() => {
@@ -1101,27 +1121,66 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             {errors.purchaseDate && (
               <div className="text-danger small mt-1">{errors.purchaseDate}</div>
             )}
+            <div className="d-flex align-items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                id="useCustomExpiry"
+                checked={!!formData.useCustomExpiry}
+                onChange={(e) => setFormData(prev => ({
+                  ...prev,
+                  useCustomExpiry: e.target.checked,
+                  customExpiryDate: e.target.checked ? (prev.customExpiryDate || prev.purchaseDate) : undefined
+                }))}
+              />
+              <label htmlFor="useCustomExpiry" className="mb-0 ms-2">Hạn tùy chỉnh</label>
+            </div>
+            {formData.useCustomExpiry && (
+              <div className="mt-2">
+                <input
+                  type="date"
+                  className={`form-control ${errors.customExpiryDate ? 'is-invalid' : ''}`}
+                  value={(formData.customExpiryDate instanceof Date && !isNaN(formData.customExpiryDate.getTime()))
+                    ? formData.customExpiryDate.toISOString().split('T')[0]
+                    : ''}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    customExpiryDate: e.target.value ? new Date(e.target.value) : undefined
+                  }))}
+                />
+                {errors.customExpiryDate && (
+                  <div className="text-danger small mt-1">{errors.customExpiryDate}</div>
+                )}
+              </div>
+            )}
             {(() => {
               const pkg = getSelectedPackage();
               if (!pkg) return null;
-              const preview = new Date(formData.purchaseDate);
+              const preview = (() => {
+                if (formData.useCustomExpiry && formData.customExpiryDate) {
+                  return new Date(formData.customExpiryDate);
+                }
+                const d = new Date(formData.purchaseDate);
+                return d;
+              })();
               
               // Check if this is a shared pool product
               const product = products.find(p => p.id === pkg.productId);
               const isSharedPool = product?.sharedInventoryPool;
               
-              if (isSharedPool && selectedInventoryId) {
-                // For shared pool products with inventory, use 1 month default
-                preview.setMonth(preview.getMonth() + 1);
-              } else {
-                // Use package warranty period for regular products
-                preview.setMonth(preview.getMonth() + pkg.warrantyPeriod);
+              if (!(formData.useCustomExpiry && formData.customExpiryDate)) {
+                if (isSharedPool && selectedInventoryId) {
+                  // For shared pool products with inventory, use 1 month default
+                  preview.setMonth(preview.getMonth() + 1);
+                } else {
+                  // Use package warranty period for regular products
+                  preview.setMonth(preview.getMonth() + pkg.warrantyPeriod);
+                }
               }
               
               return (
                 <div className="text-muted small mt-1">
                   Hết hạn (dự kiến): {preview.toLocaleDateString('vi-VN')}
-                  {isSharedPool && selectedInventoryId && (
+                  {!formData.useCustomExpiry && isSharedPool && selectedInventoryId && (
                     <span className="text-info"> (Pool chung - 1 tháng)</span>
                   )}
                 </div>
