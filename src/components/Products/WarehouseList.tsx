@@ -25,6 +25,8 @@ const WarehouseList: React.FC = () => {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
+  const [renewalDialog, setRenewalDialog] = useState<null | { id: string; months: number; amount: number; note: string }>(null);
+  const [viewingInventory, setViewingInventory] = useState<null | InventoryItem>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -523,49 +525,11 @@ const WarehouseList: React.FC = () => {
   const renewInventory = (id: string) => {
     const inv = items.find(i => i.id === id);
     if (!inv) return;
-    
+    // default months based on product/package
     const product = products.find(p => p.id === inv.productId);
     const packageInfo = packages.find(p => p.id === inv.packageId);
-    
-    setConfirmState({
-      message: `Gia hạn kho hàng ${inv.code}?`,
-      onConfirm: async () => {
-        const sb = getSupabase();
-        if (!sb) return notify('Không thể gia hạn kho hàng', 'error');
-        
-        // Calculate new expiry date
-        const currentExpiry = new Date(inv.expiryDate);
-        const newExpiry = new Date(currentExpiry);
-        
-        if (product?.sharedInventoryPool) {
-          // For shared pool products, add 1 month
-          newExpiry.setMonth(newExpiry.getMonth() + 1);
-        } else {
-          // For regular products, add package warranty period
-          const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
-          newExpiry.setMonth(newExpiry.getMonth() + warrantyPeriod);
-        }
-        
-        const { error } = await sb.from('inventory').update({ 
-          expiry_date: newExpiry.toISOString() 
-        }).eq('id', id);
-        
-        if (!error) {
-          try {
-            const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: state.user?.id || 'system', 
-              action: 'Gia hạn kho hàng', 
-              details: `inventoryId=${id}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}` 
-            });
-          } catch {}
-          notify('Đã gia hạn kho hàng thành công', 'success');
-          refresh();
-        } else {
-          notify('Không thể gia hạn kho hàng', 'error');
-        }
-      }
-    });
+    const defaultMonths = product?.sharedInventoryPool ? 1 : (packageInfo?.warrantyPeriod || 1);
+    setRenewalDialog({ id, months: defaultMonths, amount: 0, note: '' });
   };
 
   const bulkRenewal = () => {
@@ -910,9 +874,7 @@ const WarehouseList: React.FC = () => {
                       {i.status === 'AVAILABLE' && (
                         <button className="btn btn-sm btn-danger" onClick={() => remove(i.id)}>Xóa</button>
                       )}
-                      {i.status !== 'AVAILABLE' && i.linkedOrderId && (
-                        <button className="btn btn-sm btn-secondary" onClick={() => unlinkFromOrder(i.id)}>Gỡ liên kết</button>
-                      )}
+              <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(i)}>Xem</button>
                     </div>
                   </td>
                 </tr>
@@ -1005,6 +967,102 @@ const WarehouseList: React.FC = () => {
           </div>
         </div>
       )}
+
+      {renewalDialog && (() => {
+        const inv = items.find(x => x.id === renewalDialog.id);
+        if (!inv) return null;
+        return (
+          <div className="modal" role="dialog" aria-modal>
+            <div className="modal-content" style={{ maxWidth: 420 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Gia hạn kho {inv.code}</h3>
+                <button className="close" onClick={() => setRenewalDialog(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                <div className="form-group">
+                  <label className="form-label">Số tháng</label>
+                  <input type="number" className="form-control" value={renewalDialog.months} min={1} onChange={e => setRenewalDialog({ ...renewalDialog, months: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Giá gia hạn (VND)</label>
+                  <input type="number" className="form-control" value={renewalDialog.amount} min={0} onChange={e => setRenewalDialog({ ...renewalDialog, amount: Math.max(0, parseInt(e.target.value || '0', 10)) })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ghi chú</label>
+                  <input type="text" className="form-control" value={renewalDialog.note} onChange={e => setRenewalDialog({ ...renewalDialog, note: e.target.value })} />
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button className="btn btn-secondary" onClick={() => setRenewalDialog(null)}>Hủy</button>
+                <button className="btn btn-success" onClick={async () => {
+                  const sb = getSupabase();
+                  if (!sb) { notify('Không thể gia hạn', 'error'); return; }
+                  const currentExpiry = new Date(inv.expiryDate);
+                  const newExpiry = new Date(currentExpiry);
+                  newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
+                  const { error } = await sb.from('inventory').update({ expiry_date: newExpiry.toISOString() }).eq('id', inv.id);
+                  if (!error) {
+                    Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, createdBy: state.user?.id || 'system' });
+                    try {
+                      const sb2 = getSupabase();
+                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}` });
+                    } catch {}
+                    notify('Gia hạn thành công', 'success');
+                    setRenewalDialog(null);
+                    refresh();
+                  } else {
+                    notify('Không thể gia hạn kho', 'error');
+                  }
+                }}>Xác nhận</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {viewingInventory && (() => {
+        const inv = items.find(x => x.id === viewingInventory.id) || viewingInventory;
+        const product = products.find(p => p.id === inv.productId);
+        const pkg = packages.find(p => p.id === inv.packageId);
+        const renewals = Database.getInventoryRenewals().filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+        return (
+          <div className="modal" role="dialog" aria-modal>
+            <div className="modal-content" style={{ maxWidth: 600 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Kho {inv.code}</h3>
+                <button className="close" onClick={() => setViewingInventory(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                <div><strong>Sản phẩm:</strong> {product?.name || inv.productId}</div>
+                <div><strong>Gói:</strong> {pkg?.name || inv.packageId}</div>
+                <div><strong>Nhập:</strong> {formatDate(inv.purchaseDate)}</div>
+                <div><strong>Hết hạn:</strong> {formatDate(inv.expiryDate)}</div>
+                <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
+                <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
+                {inv.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre></div>}
+                {inv.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú:</strong> {inv.notes}</div>}
+                <div style={{ marginTop: 12 }}>
+                  <strong>Lịch sử gia hạn:</strong>
+                  {renewals.length === 0 ? (
+                    <div>Chưa có</div>
+                  ) : (
+                    <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
+                      {renewals.map(r => (
+                        <li key={r.id}>
+                          {new Date(r.createdAt).toLocaleDateString('vi-VN')} · +{r.months} tháng · HSD: {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → {new Date(r.newExpiryDate).toLocaleDateString('vi-VN')} · Giá: {formatPrice(r.amount)}{r.note ? ` · Ghi chú: ${r.note}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button className="btn btn-secondary" onClick={() => setViewingInventory(null)}>Đóng</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {confirmState && (
         <div className="modal" role="dialog" aria-modal>

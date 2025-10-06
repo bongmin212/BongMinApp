@@ -14,6 +14,7 @@ import {
   Expense,
   ExpenseFormData
 } from '../types';
+import { InventoryRenewal } from '../types';
 import { Warranty, WarrantyFormData } from '../types';
 import { mirrorDelete, mirrorInsert, mirrorUpdate, mirrorActivityLog } from './supabaseSync';
 
@@ -27,7 +28,8 @@ const MEM: Record<string, any[]> = {
   bongmin_activity_logs: [],
   bongmin_inventory: [],
   bongmin_warranties: [],
-  bongmin_expenses: []
+  bongmin_expenses: [],
+  bongmin_inventory_renewals: []
 };
 
 // Keep symbolic keys for existing call sites; backed by in-memory store
@@ -40,7 +42,8 @@ const STORAGE_KEYS = {
   ACTIVITY_LOGS: 'bongmin_activity_logs',
   INVENTORY: 'bongmin_inventory',
   WARRANTIES: 'bongmin_warranties',
-  EXPENSES: 'bongmin_expenses'
+  EXPENSES: 'bongmin_expenses',
+  INVENTORY_RENEWALS: 'bongmin_inventory_renewals'
 };
 
 // Helper functions
@@ -257,6 +260,29 @@ export class Database {
           }))
         : undefined
     }));
+  }
+
+  // Inventory renewals
+  static getInventoryRenewals(): InventoryRenewal[] {
+    return getFromStorage(STORAGE_KEYS.INVENTORY_RENEWALS, []).map((r: any) => ({
+      ...r,
+      previousExpiryDate: new Date(r.previousExpiryDate),
+      newExpiryDate: new Date(r.newExpiryDate),
+      createdAt: new Date(r.createdAt)
+    }));
+  }
+
+  static addInventoryRenewal(entry: Omit<InventoryRenewal, 'id' | 'createdAt'> & { createdAt?: Date }): InventoryRenewal {
+    const renewals = this.getInventoryRenewals();
+    const id = generateId();
+    const newEntry: InventoryRenewal = {
+      id,
+      ...entry,
+      createdAt: entry.createdAt ? new Date(entry.createdAt) : new Date()
+    } as InventoryRenewal;
+    renewals.push(newEntry);
+    saveToStorage(STORAGE_KEYS.INVENTORY_RENEWALS, renewals);
+    return newEntry;
   }
 
   static getAvailableInventoryByPackage(packageId: string): InventoryItem[] {
@@ -527,6 +553,32 @@ export class Database {
     if (filtered.length === items.length) return false;
     saveToStorage(STORAGE_KEYS.INVENTORY, filtered);
     return true;
+  }
+
+  static async renewInventoryItem(
+    inventoryId: string,
+    months: number,
+    amount: number,
+    opts?: { note?: string; createdBy?: string }
+  ): Promise<InventoryItem | null> {
+    const item = this.getInventory().find(i => i.id === inventoryId);
+    if (!item) return null;
+    const safeMonths = Math.max(1, Math.floor(months || 1));
+    const prev = new Date(item.expiryDate);
+    const next = this.addMonths(prev, safeMonths);
+    const updated = this.updateInventoryItem(inventoryId, { expiryDate: next });
+    if (updated) {
+      this.addInventoryRenewal({
+        inventoryId,
+        months: safeMonths,
+        amount: Math.max(0, Number(amount || 0)),
+        previousExpiryDate: prev,
+        newExpiryDate: next,
+        note: opts?.note,
+        createdBy: opts?.createdBy || 'system'
+      });
+    }
+    return updated;
   }
 
   static reserveInventoryItem(id: string): InventoryItem | null {

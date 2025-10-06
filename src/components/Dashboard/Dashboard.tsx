@@ -50,10 +50,11 @@ const Dashboard: React.FC = () => {
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMonthOffset, setSelectedMonthOffset] = useState<number>(0); // 0 = current, -1..-11 = previous months
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [selectedMonthOffset]);
 
   const loadDashboardData = async () => {
     try {
@@ -84,15 +85,19 @@ const Dashboard: React.FC = () => {
           return sum;
         }, 0);
 
-      const currentMonth = new Date().getMonth();
-      const currentYear = new Date().getFullYear();
+      const now = new Date();
+      const base = new Date(now.getFullYear(), now.getMonth(), 1);
+      const target = new Date(base);
+      target.setMonth(target.getMonth() + selectedMonthOffset);
+      const targetMonth = target.getMonth();
+      const targetYear = target.getFullYear();
       const monthlyRevenue = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
           return order.status === 'COMPLETED' && 
                  order.paymentStatus === 'PAID' &&
-                 orderDate.getMonth() === currentMonth &&
-                 orderDate.getFullYear() === currentYear;
+                 orderDate.getMonth() === targetMonth &&
+                 orderDate.getFullYear() === targetYear;
         })
         .reduce((sum, order) => {
           const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
@@ -106,8 +111,10 @@ const Dashboard: React.FC = () => {
           return sum;
         }, 0);
 
-      const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-      const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+      const lastTarget = new Date(targetYear, targetMonth, 1);
+      lastTarget.setMonth(lastTarget.getMonth() - 1);
+      const lastMonth = lastTarget.getMonth();
+      const lastMonthYear = lastTarget.getFullYear();
       const lastMonthRevenue = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
@@ -152,8 +159,8 @@ const Dashboard: React.FC = () => {
           const orderDate = new Date(order.purchaseDate);
           return order.status === 'COMPLETED' && 
                  order.paymentStatus === 'PAID' &&
-                 orderDate.getMonth() === currentMonth &&
-                 orderDate.getFullYear() === currentYear;
+                 orderDate.getMonth() === targetMonth &&
+                 orderDate.getFullYear() === targetYear;
         })
         .reduce((sum, order) => {
           const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
@@ -198,14 +205,25 @@ const Dashboard: React.FC = () => {
       const monthlyExpenses = expenses
         .filter(expense => {
           const expenseDate = new Date(expense.date);
-          return expenseDate.getMonth() === currentMonth && 
-                 expenseDate.getFullYear() === currentYear;
+          return expenseDate.getMonth() === targetMonth && 
+                 expenseDate.getFullYear() === targetYear;
         })
         .reduce((sum, expense) => sum + expense.amount, 0);
 
+      // Import cost from inventory: sum of purchase prices by month + renewals in that month
+      const inventoryItems = await Database.getInventory();
+      const importCostByMonth = (inventoryItems as InventoryItem[])
+        .filter(i => new Date(i.purchaseDate).getMonth() === targetMonth && new Date(i.purchaseDate).getFullYear() === targetYear)
+        .reduce((s, i) => s + (i.purchasePrice || 0), 0);
+      const renewals = Database.getInventoryRenewals();
+      const renewalCostByMonth = renewals
+        .filter(r => r.createdAt.getMonth() === targetMonth && r.createdAt.getFullYear() === targetYear)
+        .reduce((s, r) => s + (r.amount || 0), 0);
+      const monthlyImportCost = importCostByMonth + renewalCostByMonth;
+
       // Calculate net profit (gross profit - expenses)
       const netProfit = totalProfit - totalExpenses;
-      const monthlyNetProfit = monthlyProfit - monthlyExpenses;
+      const monthlyNetProfit = monthlyProfit - (monthlyExpenses + monthlyImportCost);
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const reservedInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'RESERVED').length;
@@ -379,6 +397,23 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'sales' && (
           <div className="sales-tab">
+            <div className="d-flex align-items-center gap-2" style={{ marginBottom: 12 }}>
+              <label>Tháng:</label>
+              <select
+                className="form-control"
+                style={{ maxWidth: 180 }}
+                value={selectedMonthOffset}
+                onChange={(e) => setSelectedMonthOffset(parseInt(e.target.value, 10))}
+              >
+                {Array.from({ length: 12 }, (_, idx) => 0 - idx).map(v => {
+                  const now = new Date();
+                  const base = new Date(now.getFullYear(), now.getMonth(), 1);
+                  base.setMonth(base.getMonth() + v);
+                  const label = `${String(base.getMonth() + 1).padStart(2, '0')}/${base.getFullYear()}`;
+                  return <option key={v} value={v}>{v === 0 ? `Hiện tại (${label})` : label}</option>;
+                })}
+              </select>
+            </div>
             <div className="sales-stats">
               <div className="sales-card">
                 <h3>Doanh thu tháng này</h3>
@@ -414,6 +449,29 @@ const Dashboard: React.FC = () => {
                 <h3>Chi phí tháng này</h3>
                 <div className="sales-amount">{formatCurrency(stats.monthlyExpenses)}</div>
                 <div className="sales-subtitle">Chi phí ngoài lề</div>
+              </div>
+
+              <div className="sales-card">
+                <h3>Chi phí nhập hàng</h3>
+                <div className="sales-amount">{formatCurrency((() => {
+                  // derive from net vs profit difference if needed; we already reduced net by import cost
+                  // For display, recompute here for clarity
+                  const now = new Date();
+                  const base = new Date(now.getFullYear(), now.getMonth(), 1);
+                  base.setMonth(base.getMonth() + selectedMonthOffset);
+                  const targetMonth = base.getMonth();
+                  const targetYear = base.getFullYear();
+                  const inventoryItems = Database.getInventory();
+                  const importCost = inventoryItems
+                    .filter((i: any) => new Date(i.purchaseDate).getMonth() === targetMonth && new Date(i.purchaseDate).getFullYear() === targetYear)
+                    .reduce((s: number, i: any) => s + (i.purchasePrice || 0), 0);
+                  const renewals = Database.getInventoryRenewals();
+                  const renewalCost = renewals
+                    .filter((r: any) => r.createdAt.getMonth() === targetMonth && r.createdAt.getFullYear() === targetYear)
+                    .reduce((s: number, r: any) => s + (r.amount || 0), 0);
+                  return importCost + renewalCost;
+                })())}</div>
+                <div className="sales-subtitle">Giá mua + gia hạn kho</div>
               </div>
 
               <div className="sales-card">

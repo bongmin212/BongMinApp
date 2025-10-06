@@ -143,6 +143,19 @@ export interface InventoryItem {
   updatedAt: Date;
 }
 
+// Inventory renewal history (cost when extending warehouse items)
+export interface InventoryRenewal {
+  id: string;
+  inventoryId: string;
+  months: number;
+  amount: number; // renewal cost paid to extend inventory
+  previousExpiryDate: Date;
+  newExpiryDate: Date;
+  note?: string;
+  createdAt: Date;
+  createdBy: string;
+}
+
 // Renewal history
 export interface OrderRenewal {
   id: string;
