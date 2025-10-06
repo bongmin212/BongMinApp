@@ -103,8 +103,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       } else {
         if (it.packageId !== (pkg?.id || '')) return false;
       }
-      // Status: allow AVAILABLE or NEEDS_UPDATE (stock to be reworked but selectable)
-      const statusEligible = it.status === 'AVAILABLE' || it.status === 'NEEDS_UPDATE';
+      // Status: allow ONLY AVAILABLE
+      const statusEligible = it.status === 'AVAILABLE';
       if (!statusEligible) return false;
       // Exclusivity rules
       if (it.isAccountBased) {
