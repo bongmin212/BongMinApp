@@ -949,6 +949,16 @@ const OrderList: React.FC = () => {
               {new Date(order.expiryDate) < new Date() && (
                 <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot về kho</button>
               )}
+              <button
+                className="btn btn-outline-success"
+                title="Đánh dấu đã nhắn tin gia hạn"
+                onClick={() => setConfirmState({
+                  message: `Đánh dấu đơn ${order.code} đã nhắn tin gia hạn?`,
+                  onConfirm: () => markRenewalMessageSent(order.id)
+                })}
+              >
+                Đã nhắn tin gia hạn
+              </button>
             </div>
           </td>
         </tr>

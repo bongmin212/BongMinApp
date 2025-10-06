@@ -865,18 +865,21 @@ const WarehouseList: React.FC = () => {
                       {i.status === 'NEEDS_UPDATE' && (
                         <button
                           className="btn btn-sm btn-primary"
-                          onClick={async () => {
-                            const sb = getSupabase();
-                            if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                            const { error } = await sb.from('inventory').update({ status: 'AVAILABLE' }).eq('id', i.id);
-                            if (error) return notify('Không thể cập nhật trạng thái', 'error');
-                            try {
-                              const sb2 = getSupabase();
-                              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; code=${i.code}` });
-                            } catch {}
-                            notify('Đã chuyển về Sẵn có', 'success');
-                            refresh();
-                          }}
+                          onClick={() => setConfirmState({
+                            message: `Chuyển ${i.code} từ Cần update -> Sẵn có?`,
+                            onConfirm: async () => {
+                              const sb = getSupabase();
+                              if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
+                              const { error } = await sb.from('inventory').update({ status: 'AVAILABLE' }).eq('id', i.id);
+                              if (error) return notify('Không thể cập nhật trạng thái', 'error');
+                              try {
+                                const sb2 = getSupabase();
+                                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; code=${i.code}` });
+                              } catch {}
+                              notify('Đã chuyển về Sẵn có', 'success');
+                              refresh();
+                            }
+                          })}
                           title="Đặt lại trạng thái Sẵn có"
                         >
                           Mark Sẵn có
