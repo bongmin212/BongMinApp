@@ -140,6 +140,8 @@ export interface InventoryItem {
   accountData?: Record<string, string>; // key = column.id -> value
   totalSlots?: number; // total profiles, e.g., 5
   profiles?: InventoryProfileSlot[]; // current slot assignments
+  // Custom warranty for shared pool warehouses
+  customWarrantyMonths?: number; // Custom warranty duration in months for shared pool items
   createdAt: Date;
   updatedAt: Date;
 }
@@ -254,6 +256,8 @@ export interface InventoryFormData {
   accountData?: Record<string, string>;
   totalSlots?: number;
   profiles?: InventoryProfileSlot[];
+  // Custom warranty for shared pool warehouses
+  customWarrantyMonths?: number; // Custom warranty duration in months for shared pool items
 }
 
 export interface EmployeeFormData {

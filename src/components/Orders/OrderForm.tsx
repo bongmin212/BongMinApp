@@ -258,7 +258,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           accountColumns: i.account_columns,
           accountData: i.account_data,
           totalSlots: i.total_slots,
-          profiles: i.profiles
+          profiles: i.profiles,
+          customWarrantyMonths: i.custom_warranty_months
         } as InventoryItem;
         
         // Generate missing profiles for account-based inventory
@@ -300,7 +301,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             accountColumns: linked.account_columns,
             accountData: linked.account_data,
             totalSlots: linked.total_slots,
-            profiles: linked.profiles
+            profiles: linked.profiles,
+            customWarrantyMonths: linked.custom_warranty_months
           } as any;
           
           // Generate missing profiles for account-based inventory
@@ -1318,13 +1320,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         if (item.expiryDate) {
                           return new Date(item.expiryDate).toISOString().split('T')[0];
                         }
-                        // Calculate expiry date preview: if shared pool, use currently selected package's warranty
+                        // Calculate expiry date preview: if shared pool, use warehouse item's custom warranty or selected package's warranty
                         const product = products.find(p => p.id === item.productId);
                         const purchaseDate = new Date(item.purchaseDate);
                         const expiry = new Date(purchaseDate);
                         if (product?.sharedInventoryPool) {
-                          const selPkg = getSelectedPackage();
-                          const months = selPkg?.warrantyPeriod || 1;
+                          // Use custom warranty from warehouse item if available, otherwise use selected package warranty
+                          const months = (item as any).customWarrantyMonths || getSelectedPackage()?.warrantyPeriod || 1;
                           expiry.setMonth(expiry.getMonth() + months);
                         } else {
                           const packageInfo = packages.find(p => p.id === item.packageId);
