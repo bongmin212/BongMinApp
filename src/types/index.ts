@@ -371,8 +371,8 @@ export const PAYMENT_STATUSES: { value: PaymentStatus; label: string }[] = [
 ];
 
 export const INVENTORY_PAYMENT_STATUSES: { value: InventoryPaymentStatus; label: string }[] = [
-  { value: 'UNPAID', label: 'Chưa thanh toán' },
-  { value: 'PAID', label: 'Đã thanh toán' }
+  { value: 'UNPAID', label: 'Chưa TT' },
+  { value: 'PAID', label: 'Đã TT' }
 ];
 
 export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [

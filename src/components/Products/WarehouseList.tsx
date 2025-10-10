@@ -965,8 +965,6 @@ const WarehouseList: React.FC = () => {
                 <th>Nguồn</th>
                 <th>Giá mua</th>
                 <th>Thanh toán</th>
-                <th>Thông tin</th>
-                <th>Ghi chú</th>
                 <th>Trạng thái</th>
                 <th>Slot</th>
                 <th>Thao tác</th>
@@ -1001,14 +999,8 @@ const WarehouseList: React.FC = () => {
                   <td>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td>
                     <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
-                      {INVENTORY_PAYMENT_STATUSES.find(s => s.value === i.paymentStatus)?.label || 'Chưa thanh toán'}
+                      {INVENTORY_PAYMENT_STATUSES.find(s => s.value === i.paymentStatus)?.label || 'Chưa TT'}
                     </span>
-                  </td>
-                  <td style={{ maxWidth: 260 }}>
-                    <div className="line-clamp-3" title={i.productInfo || ''}>{i.productInfo || '-'}</div>
-                  </td>
-                  <td style={{ maxWidth: 200 }}>
-                    <div className="line-clamp-2" title={i.notes || ''}>{i.notes || '-'}</div>
                   </td>
                   <td>
                     <div className="d-flex align-items-center gap-2">
@@ -1230,8 +1222,9 @@ const WarehouseList: React.FC = () => {
                 <div><strong>Hết hạn:</strong> {formatDate(inv.expiryDate)}</div>
                 <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
                 <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
-                {inv.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre></div>}
-                {inv.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú:</strong> {inv.notes}</div>}
+                <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES.find(s => s.value === inv.paymentStatus)?.label || 'Chưa TT'}</div>
+                {inv.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin sản phẩm:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre></div>}
+                {inv.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {inv.notes}</div>}
                 <div style={{ marginTop: 12 }}>
                   <strong>Lịch sử gia hạn:</strong>
                   {renewals.length === 0 ? (
