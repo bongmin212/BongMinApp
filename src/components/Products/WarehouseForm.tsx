@@ -33,6 +33,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
+  // Search states (debounced)
+  const [productSearch, setProductSearch] = useState('');
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -218,6 +221,21 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     return cols || [];
   }, [selectedPkg, item]);
 
+  // Debounce search inputs (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedProductSearch(productSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [productSearch]);
+
+  const getFilteredProducts = () => {
+    const q = debouncedProductSearch;
+    if (!q) return products;
+    return products.filter(p => (
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.code || '').toLowerCase().includes(q)
+    ));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: { [key: string]: string } = {};
@@ -230,6 +248,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     // Package is required unless product uses shared inventory pool
     if (!currentProduct?.sharedInventoryPool && !formData.packageId) newErrors.packageId = 'Chọn gói sản phẩm';
     if (!formData.purchaseDate) newErrors.purchaseDate = 'Chọn ngày nhập kho';
+    if (!formData.sourceNote || !formData.sourceNote.trim()) newErrors.sourceNote = 'Nhập từ nguồn là bắt buộc';
     if (!formData.productInfo || !formData.productInfo.trim()) newErrors.productInfo = 'Nhập thông tin sản phẩm';
     if (formData.purchasePrice == null || isNaN(formData.purchasePrice) || formData.purchasePrice < 0) newErrors.purchasePrice = 'Giá mua không được âm';
     // Validate custom warranty for shared pool products
@@ -411,6 +430,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
 
           <div className="form-group">
             <label className="form-label">Sản phẩm</label>
+            <input
+              type="text"
+              className="form-control mb-2"
+              placeholder="Tìm sản phẩm theo tên/mã..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              disabled={isLockedProduct}
+            />
             <select
               className={`form-control ${errors.productId ? 'is-invalid' : ''}`}
               value={selectedProduct}
@@ -427,7 +454,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                   Đang tải sản phẩm...
                 </option>
               )}
-              {products.map(p => (
+              {getFilteredProducts().map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
@@ -469,14 +496,19 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           </div>
 
           <div className="form-group">
-            <label className="form-label">Nhập từ nguồn (không bắt buộc)</label>
+            <label className="form-label">
+              Nhập từ nguồn <span className="text-danger">*</span>
+            </label>
             <input
               type="text"
-              className="form-control"
+              className={`form-control ${errors.sourceNote ? 'is-invalid' : ''}`}
               value={formData.sourceNote || ''}
               onChange={(e) => setFormData(prev => ({ ...prev, sourceNote: e.target.value }))}
               placeholder="vd: Bạn hàng, key khuyến mãi, ..."
             />
+            {errors.sourceNote && (
+              <div className="text-danger small mt-1">{errors.sourceNote}</div>
+            )}
           </div>
 
           <div className="form-group">

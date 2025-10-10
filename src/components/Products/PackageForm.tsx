@@ -32,6 +32,9 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
   const [priceDisplay, setPriceDisplay] = useState<{ costPrice: string; ctvPrice: string; retailPrice: string }>({ costPrice: '0', ctvPrice: '0', retailPrice: '0' });
   const [sharedConfigLocked, setSharedConfigLocked] = useState<boolean>(false);
   const [firstPackageId, setFirstPackageId] = useState<string | null>(null);
+  // Search states (debounced)
+  const [productSearch, setProductSearch] = useState('');
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
 
   useEffect(() => {
     const allProducts = Database.getProducts();
@@ -212,6 +215,21 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
       }
     })();
   }, [formData.productId]);
+
+  // Debounce search inputs (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedProductSearch(productSearch.trim().toLowerCase()), 300);
+    return () => clearTimeout(t);
+  }, [productSearch]);
+
+  const getFilteredProducts = () => {
+    const q = debouncedProductSearch;
+    if (!q) return products;
+    return products.filter(p => (
+      (p.name || '').toLowerCase().includes(q) ||
+      (p.code || '').toLowerCase().includes(q)
+    ));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -553,6 +571,13 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             <label className="form-label">
               Sản phẩm <span className="text-danger">*</span>
             </label>
+            <input
+              type="text"
+              className="form-control mb-2"
+              placeholder="Tìm sản phẩm theo tên/mã..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+            />
             <select
               name="productId"
               className={`form-control ${errors.productId ? 'is-invalid' : ''}`}
@@ -560,7 +585,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               onChange={handleChange}
             >
               <option value="">Chọn sản phẩm</option>
-              {products.map(product => (
+              {getFilteredProducts().map(product => (
                 <option key={product.id} value={product.id}>
                   {product.name}
                 </option>
