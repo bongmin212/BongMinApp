@@ -207,8 +207,10 @@ const PackageList: React.FC = () => {
 
   const filteredPackages = packages.filter(pkg => {
     const normalizedSearch = searchTerm.toLowerCase();
+    const productName = getProductName(pkg.productId).toLowerCase();
     const matchesSearch = pkg.name.toLowerCase().includes(normalizedSearch) ||
-                         (pkg.code || '').toLowerCase().includes(normalizedSearch);
+                         (pkg.code || '').toLowerCase().includes(normalizedSearch) ||
+                         productName.includes(normalizedSearch);
     const matchesProduct = !selectedProduct || pkg.productId === selectedProduct;
     return matchesSearch && matchesProduct;
   });
