@@ -4,7 +4,7 @@ import { Database } from '../../utils/database';
 import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
 import { getSupabase } from '../../utils/supabaseClient';
 
@@ -843,8 +843,34 @@ const WarehouseList: React.FC = () => {
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="card-title">Danh sách kho hàng</h2>
           <div className="d-flex gap-2">
-            <button className="btn btn-light" onClick={() => exportInventoryXlsx(pageItems, 'inventory_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => exportInventoryXlsx(filteredItems, 'inventory_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('KhoHang', {
+                searchTerm: debouncedSearchTerm,
+                filterProduct: filterProduct ? products.find(p => p.id === filterProduct)?.name : '',
+                filterPackage: filterPackage ? packages.find(p => p.id === filterPackage)?.name : '',
+                filterStatus,
+                filterPaymentStatus,
+                dateFrom,
+                dateTo,
+                onlyAccounts,
+                onlyFreeSlots
+              }, 'TrangHienTai');
+              exportInventoryXlsx(pageItems, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('KhoHang', {
+                searchTerm: debouncedSearchTerm,
+                filterProduct: filterProduct ? products.find(p => p.id === filterProduct)?.name : '',
+                filterPackage: filterPackage ? packages.find(p => p.id === filterPackage)?.name : '',
+                filterStatus,
+                filterPaymentStatus,
+                dateFrom,
+                dateTo,
+                onlyAccounts,
+                onlyFreeSlots
+              }, 'KetQuaLoc');
+              exportInventoryXlsx(filteredItems, filename);
+            }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
               <>
                 <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>

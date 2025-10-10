@@ -7,7 +7,7 @@ import CustomerOrderHistory from './CustomerOrderHistory';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 // removed export button
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
 const CustomerList: React.FC = () => {
   const { state } = useAuth();
@@ -298,8 +298,22 @@ const CustomerList: React.FC = () => {
                 <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
               </>
             )}
-            <button className="btn btn-light" onClick={() => exportCustomersXlsx(paginatedCustomers, 'customers_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => exportCustomersXlsx(filteredCustomers, 'customers_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('KhachHang', {
+                debouncedSearchTerm,
+                filterType,
+                filterSource
+              }, 'TrangHienTai');
+              exportCustomersXlsx(paginatedCustomers, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('KhachHang', {
+                debouncedSearchTerm,
+                filterType,
+                filterSource
+              }, 'KetQuaLoc');
+              exportCustomersXlsx(filteredCustomers, filename);
+            }}>Xuất Excel (kết quả đã lọc)</button>
             <button
               onClick={handleCreate}
               className="btn btn-primary"

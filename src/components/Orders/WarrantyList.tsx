@@ -4,7 +4,7 @@ import { Database } from '../../utils/database';
 import { Customer, Order, Product, ProductPackage, Warranty, WarrantyFormData, WARRANTY_STATUSES, InventoryItem } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
 
 const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warranty?: Warranty }> = ({ onClose, onSuccess, warranty }) => {
@@ -1009,8 +1009,24 @@ const handleDelete = (id: string) => {
       <div className="card-header d-flex justify-content-between align-items-center">
         <h2 className="card-title">Đơn bảo hành</h2>
         <div className="d-flex gap-2">
-          <button className="btn btn-light" onClick={() => exportWarrantiesXlsx(pageItems, 'warranties_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-          <button className="btn btn-light" onClick={() => exportWarrantiesXlsx(filteredWarranties, 'warranties_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+          <button className="btn btn-light" onClick={() => {
+            const filename = generateExportFilename('BaoHanh', {
+              debouncedSearchTerm,
+              filterStatus,
+              dateFrom,
+              dateTo
+            }, 'TrangHienTai');
+            exportWarrantiesXlsx(pageItems, filename);
+          }}>Xuất Excel (trang hiện tại)</button>
+          <button className="btn btn-light" onClick={() => {
+            const filename = generateExportFilename('BaoHanh', {
+              debouncedSearchTerm,
+              filterStatus,
+              dateFrom,
+              dateTo
+            }, 'KetQuaLoc');
+            exportWarrantiesXlsx(filteredWarranties, filename);
+          }}>Xuất Excel (kết quả đã lọc)</button>
           {selectedIds.length > 0 && (
             <>
               <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>

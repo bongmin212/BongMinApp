@@ -7,7 +7,7 @@ import OrderForm from './OrderForm';
 // removed export button
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
 const OrderList: React.FC = () => {
   const { state } = useAuth();
@@ -1016,8 +1016,30 @@ const OrderList: React.FC = () => {
               <div>Tổng doanh thu: {formatPrice(getTotalRevenue())}</div>
               <small className="text-muted">({filteredOrders.filter(o => o.status === 'COMPLETED').length} đơn hoàn thành)</small>
             </div>
-            <button className="btn btn-light" onClick={() => exportOrdersXlsx(paginatedOrders, 'orders_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => exportOrdersXlsx(filteredOrders, 'orders_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('DonHang', {
+                debouncedSearchTerm,
+                filterStatus,
+                filterPayment,
+                dateFrom,
+                dateTo,
+                expiryFilter,
+                onlyExpiringNotSent
+              }, 'TrangHienTai');
+              exportOrdersXlsx(paginatedOrders, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('DonHang', {
+                debouncedSearchTerm,
+                filterStatus,
+                filterPayment,
+                dateFrom,
+                dateTo,
+                expiryFilter,
+                onlyExpiringNotSent
+              }, 'KetQuaLoc');
+              exportOrdersXlsx(filteredOrders, filename);
+            }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
             <div className="d-flex gap-2 align-items-center">
               {/* Bulk delete removed per request */}

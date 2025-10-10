@@ -6,6 +6,7 @@ import PackageForm from './PackageForm';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { getSupabase } from '../../utils/supabaseClient';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
 const PackageList: React.FC = () => {
   const { state } = useAuth();
@@ -205,6 +206,29 @@ const PackageList: React.FC = () => {
     }).format(price);
   };
 
+  const exportPackagesXlsx = (items: ProductPackage[], filename: string) => {
+    const rows = items.map((pkg, idx) => ({
+      code: pkg.code || `PK${idx + 1}`,
+      name: pkg.name || '',
+      product: getProductName(pkg.productId),
+      warrantyPeriod: formatWarrantyPeriod(pkg.warrantyPeriod),
+      costPrice: pkg.costPrice || 0,
+      ctvPrice: pkg.ctvPrice || 0,
+      retailPrice: pkg.retailPrice || 0,
+      createdAt: new Date(pkg.createdAt).toLocaleDateString('vi-VN')
+    }));
+    exportToXlsx(rows, [
+      { header: 'Mã gói', key: 'code', width: 16 },
+      { header: 'Tên gói', key: 'name', width: 28 },
+      { header: 'Sản phẩm', key: 'product', width: 24 },
+      { header: 'Thời hạn BH', key: 'warrantyPeriod', width: 16 },
+      { header: 'Giá gốc', key: 'costPrice', width: 14 },
+      { header: 'Giá CTV', key: 'ctvPrice', width: 14 },
+      { header: 'Giá lẻ', key: 'retailPrice', width: 14 },
+      { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+    ], filename, 'Gói sản phẩm');
+  };
+
   const filteredPackages = packages.filter(pkg => {
     const normalizedSearch = searchTerm.toLowerCase();
     const productName = getProductName(pkg.productId).toLowerCase();
@@ -243,6 +267,14 @@ const PackageList: React.FC = () => {
             {selectedIds.length > 0 && (
               <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
             )}
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('GoiSanPham', { searchTerm, selectedProduct: selectedProduct ? products.find(p => p.id === selectedProduct)?.name : '' }, 'TrangHienTai');
+              exportPackagesXlsx(pageItems, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('GoiSanPham', { searchTerm, selectedProduct: selectedProduct ? products.find(p => p.id === selectedProduct)?.name : '' }, 'KetQuaLoc');
+              exportPackagesXlsx(filteredPackages, filename);
+            }}>Xuất Excel (kết quả đã lọc)</button>
             <button
               onClick={handleCreate}
               className="btn btn-primary"

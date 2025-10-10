@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ActivityLog, Employee, Order, Customer, Product, ProductPackage, ORDER_STATUSES, WARRANTY_STATUSES, InventoryItem, Warranty } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
 const ActivityLogList: React.FC = () => {
   const { isManager, state } = useAuth();
@@ -438,8 +438,20 @@ const ActivityLogList: React.FC = () => {
           </div>
           <div>
             <div className="d-flex gap-2">
-              <button className="btn btn-light" onClick={() => exportLogsXlsx(pageItems, 'activity_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-              <button className="btn btn-light" onClick={() => exportLogsXlsx(filteredLogs, 'activity_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+              <button className="btn btn-light" onClick={() => {
+                const filename = generateExportFilename('NhatKyHoatDong', {
+                  debouncedSearchTerm,
+                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : ''
+                }, 'TrangHienTai');
+                exportLogsXlsx(pageItems, filename);
+              }}>Xuất Excel (trang hiện tại)</button>
+              <button className="btn btn-light" onClick={() => {
+                const filename = generateExportFilename('NhatKyHoatDong', {
+                  debouncedSearchTerm,
+                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : ''
+                }, 'KetQuaLoc');
+                exportLogsXlsx(filteredLogs, filename);
+              }}>Xuất Excel (kết quả đã lọc)</button>
             </div>
           </div>
           <div>

@@ -7,7 +7,7 @@ import { IconEdit, IconTrash, IconBox, IconClipboard } from '../Icons';
 // removed export button
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
 const ProductList: React.FC = () => {
   const { state } = useAuth();
@@ -287,7 +287,10 @@ const ProductList: React.FC = () => {
             {selectedIds.length > 0 && (
               <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
             )}
-            <button className="btn btn-light" onClick={() => exportProductsXlsx(paginatedProducts, 'products_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('SanPham', { debouncedSearchTerm }, 'TrangHienTai');
+              exportProductsXlsx(paginatedProducts, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
             <button className="btn btn-light" onClick={async () => {
               const sb = getSupabase();
               if (!sb) return notify('Không thể xuất Excel', 'error');
@@ -305,12 +308,13 @@ const ProductList: React.FC = () => {
                 description: r.description || '',
                 createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : ''
               }));
+              const filename = generateExportFilename('SanPham', { debouncedSearchTerm }, 'KetQuaLoc');
               exportToXlsx(rows, [
                 { header: 'Mã SP', key: 'code', width: 16 },
                 { header: 'Tên', key: 'name', width: 28 },
                 { header: 'Mô tả', key: 'description', width: 60 },
                 { header: 'Ngày tạo', key: 'createdAt', width: 14 },
-              ], 'products_filtered.xlsx', 'Sản phẩm');
+              ], filename, 'Sản phẩm');
             }}>Xuất Excel (kết quả đã lọc)</button>
             <button
               onClick={handleCreate}

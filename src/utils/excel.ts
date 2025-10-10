@@ -6,6 +6,79 @@ export type WorksheetColumn = {
   width?: number;
 };
 
+export function generateExportFilename(
+  componentName: string,
+  filters: Record<string, any> = {},
+  prefix: string = ''
+): string {
+  const now = new Date();
+  const timestamp = now.toISOString().slice(0, 19).replace(/[-:]/g, '-').replace('T', '_');
+  
+  // Sanitize function for filter values
+  const sanitize = (value: any): string => {
+    if (value === null || value === undefined || value === '') return '';
+    const str = String(value);
+    return str
+      .replace(/[/\\:*?"<>|]/g, '') // Remove special filesystem characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .slice(0, 30); // Limit length
+  };
+
+  // Filter mapping for better naming
+  const filterMap: Record<string, string> = {
+    searchTerm: 'Search',
+    debouncedSearchTerm: 'Search',
+    debouncedSearchQuery: 'Search',
+    filterProduct: 'Product',
+    filterPackage: 'Package',
+    filterStatus: 'Status',
+    filterPayment: 'Payment',
+    filterPaymentStatus: 'Payment',
+    filterType: 'Type',
+    filterSource: 'Source',
+    dateFrom: 'From',
+    dateTo: 'To',
+    minAmount: 'Min',
+    maxAmount: 'Max',
+    expiryFilter: 'Expiry',
+    onlyExpiringNotSent: 'ExpiringNotSent',
+    onlyAccounts: 'Accounts',
+    onlyFreeSlots: 'FreeSlots',
+    selectedEmployee: 'Employee',
+    selectedProduct: 'Product'
+  };
+
+  const filterParts: string[] = [];
+  
+  // Process each filter
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value === null || value === undefined || value === '') return;
+    
+    const filterName = filterMap[key] || key;
+    let filterValue = value;
+    
+    // Special handling for different value types
+    if (typeof value === 'boolean') {
+      filterValue = value ? 'true' : 'false';
+    } else if (value instanceof Date) {
+      filterValue = value.toISOString().slice(0, 10); // YYYY-MM-DD
+    } else if (typeof value === 'object' && value.name) {
+      // For objects with name property (like products, customers)
+      filterValue = value.name;
+    }
+    
+    const sanitizedValue = sanitize(filterValue);
+    if (sanitizedValue) {
+      filterParts.push(`${filterName}-${sanitizedValue}`);
+    }
+  });
+
+  const baseName = prefix ? `${prefix}_${componentName}` : componentName;
+  const filterString = filterParts.length > 0 ? `_${filterParts.join('_')}` : '';
+  
+  return `${baseName}_${timestamp}${filterString}.xlsx`;
+}
+
 export function exportToXlsx<T extends Record<string, any>>(
   data: T[],
   columns: WorksheetColumn[],

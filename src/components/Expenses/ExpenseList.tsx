@@ -3,7 +3,7 @@ import { Database } from '../../utils/database';
 import { Expense, ExpenseFormData, EXPENSE_TYPES } from '../../types';
 import { IconPlus, IconEdit, IconTrash, IconReceipt } from '../Icons';
 import { useToast } from '../../contexts/ToastContext';
-import { exportToXlsx } from '../../utils/excel';
+import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
 
 const ExpenseList: React.FC = () => {
@@ -262,8 +262,28 @@ const ExpenseList: React.FC = () => {
               <div>Tổng chi: {formatCurrency(getTotalExpense)}</div>
               <small className="text-muted">({total} mục)</small>
             </div>
-            <button className="btn btn-light" onClick={() => exportExpensesXlsx(pageItems, 'expenses_page.xlsx')}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => exportExpensesXlsx(filteredExpenses, 'expenses_filtered.xlsx')}>Xuất Excel (kết quả đã lọc)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('ChiPhi', {
+                debouncedSearchQuery,
+                filterType,
+                dateFrom,
+                dateTo,
+                minAmount,
+                maxAmount
+              }, 'TrangHienTai');
+              exportExpensesXlsx(pageItems, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('ChiPhi', {
+                debouncedSearchQuery,
+                filterType,
+                dateFrom,
+                dateTo,
+                minAmount,
+                maxAmount
+              }, 'KetQuaLoc');
+              exportExpensesXlsx(filteredExpenses, filename);
+            }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
               <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
             )}
