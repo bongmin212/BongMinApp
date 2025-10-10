@@ -646,7 +646,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             <div className="col-md-4">
               <div className="form-group">
                 <label className="form-label">
-                  Giá gốc (giá vốn) <span className="text-danger">*</span>
+                  Giá tham chiếu (không dùng tính lãi) <span className="text-danger">*</span>
                 </label>
                 <div className="currency-input">
                   <input

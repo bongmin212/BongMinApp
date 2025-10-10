@@ -71,6 +71,7 @@ export interface Order {
   updatedAt: Date;
   inventoryItemId?: string; // Liên kết tới kho hàng nếu có
   inventoryProfileId?: string; // Nếu là tài khoản nhiều profile, id profile đã cấp
+  cogs?: number; // Giá vốn snapshot từ kho tại thời điểm liên kết
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh
   customPrice?: number; // Giá tùy chỉnh
   customFieldValues?: Record<string, string>; // key = PackageCustomField.id -> value nhập khi tạo đơn
@@ -130,6 +131,9 @@ export interface InventoryItem {
   expiryDate: Date;
   sourceNote?: string; // Nhập từ nguồn (tự do)
   purchasePrice?: number; // Giá mua
+  supplierName?: string;
+  supplierId?: string;
+  currency?: string;
   productInfo?: string; // Thông tin sản phẩm nhập kho (serial/key/tài khoản...)
   notes?: string; // Ghi chú nội bộ cho sản phẩm trong kho
   status: InventoryStatus;

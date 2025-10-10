@@ -138,22 +138,21 @@ const Dashboard: React.FC = () => {
       const revenueGrowth = lastMonthRevenue > 0 ? 
         ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
 
-      // Calculate total profit
+      // Calculate total profit using order.cogs (COGS from inventory)
       const totalProfit = orders
         .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID')
         .reduce((sum, order) => {
           const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (packageData) {
-            const price = order.useCustomPrice ? order.customPrice || 0 : 
-              (order.customerId ? 
-                (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-                packageData.retailPrice);
-            return sum + (price - packageData.costPrice);
-          }
-          return sum;
+          if (!packageData) return sum;
+          const price = order.useCustomPrice ? order.customPrice || 0 : 
+            (order.customerId ? 
+              (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
+              packageData.retailPrice);
+          const cogs = (order as any).cogs || 0;
+          return sum + (price - cogs);
         }, 0);
 
-      // Calculate monthly profit
+      // Calculate monthly profit using order.cogs
       const monthlyProfit = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
@@ -164,17 +163,16 @@ const Dashboard: React.FC = () => {
         })
         .reduce((sum, order) => {
           const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (packageData) {
-            const price = order.useCustomPrice ? order.customPrice || 0 : 
-              (order.customerId ? 
-                (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-                packageData.retailPrice);
-            return sum + (price - packageData.costPrice);
-          }
-          return sum;
+          if (!packageData) return sum;
+          const price = order.useCustomPrice ? order.customPrice || 0 : 
+            (order.customerId ? 
+              (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
+              packageData.retailPrice);
+          const cogs = (order as any).cogs || 0;
+          return sum + (price - cogs);
         }, 0);
 
-      // Calculate last month profit
+      // Calculate last month profit using order.cogs
       const lastMonthProfit = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
@@ -185,14 +183,13 @@ const Dashboard: React.FC = () => {
         })
         .reduce((sum, order) => {
           const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (packageData) {
-            const price = order.useCustomPrice ? order.customPrice || 0 : 
-              (order.customerId ? 
-                (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-                packageData.retailPrice);
-            return sum + (price - packageData.costPrice);
-          }
-          return sum;
+          if (!packageData) return sum;
+          const price = order.useCustomPrice ? order.customPrice || 0 : 
+            (order.customerId ? 
+              (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
+              packageData.retailPrice);
+          const cogs = (order as any).cogs || 0;
+          return sum + (price - cogs);
         }, 0);
 
       const profitGrowth = lastMonthProfit > 0 ? 
@@ -220,9 +217,9 @@ const Dashboard: React.FC = () => {
         .reduce((s, r) => s + (r.amount || 0), 0);
       const monthlyImportCost = importCostByMonth + renewalCostByMonth;
 
-      // Calculate net profit (gross profit - expenses)
+      // Calculate net profit (gross profit - expenses). Do not subtract import cost again (already in COGS per order)
       const netProfit = totalProfit - totalExpenses;
-      const monthlyNetProfit = monthlyProfit - (monthlyExpenses + monthlyImportCost);
+      const monthlyNetProfit = monthlyProfit - monthlyExpenses;
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const reservedInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'RESERVED').length;
