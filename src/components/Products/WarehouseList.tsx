@@ -241,6 +241,7 @@ const WarehouseList: React.FC = () => {
       accountColumns: r.account_columns || [],
       accountData: r.account_data || {},
       totalSlots: r.total_slots || 0,
+      customWarrantyMonths: r.custom_warranty_months || undefined,
       profiles: (() => {
         const profiles = Array.isArray(r.profiles) ? r.profiles : [];
         // Generate missing profiles for account-based inventory
@@ -479,6 +480,14 @@ const WarehouseList: React.FC = () => {
         group: pool,
         purchaseDate: new Date(i.purchaseDate).toISOString().split('T')[0],
         expiryDate: new Date(i.expiryDate).toISOString().split('T')[0],
+        warrantyMonths: (() => {
+          const prod = products.find(p => p.id === i.productId);
+          if (prod?.sharedInventoryPool) {
+            return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
+          }
+          const pkg = packages.find(p => p.id === i.packageId);
+          return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+        })(),
         source: i.sourceNote || '',
         purchasePrice: typeof i.purchasePrice === 'number' ? i.purchasePrice : '',
         productInfo: i.productInfo || '',
@@ -493,6 +502,7 @@ const WarehouseList: React.FC = () => {
       { header: 'Gói/Pool', key: 'group', width: 18 },
       { header: 'Nhập', key: 'purchaseDate', width: 12 },
       { header: 'Hết hạn', key: 'expiryDate', width: 12 },
+      { header: 'Thời hạn', key: 'warrantyMonths', width: 12 },
       { header: 'Nguồn', key: 'source', width: 18 },
       { header: 'Giá nhập', key: 'purchasePrice', width: 14 },
       { header: 'Thông tin', key: 'productInfo', width: 50 },
@@ -934,6 +944,7 @@ const WarehouseList: React.FC = () => {
                 <th>Gói / Pool</th>
                 <th>Ngày nhập</th>
                 <th>Hết hạn</th>
+                <th>Thời hạn</th>
                 <th>Nguồn</th>
                 <th>Giá mua</th>
                 <th>Thông tin</th>
@@ -960,6 +971,14 @@ const WarehouseList: React.FC = () => {
                   })()}</td>
                   <td>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
                   <td>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
+                  <td>{(() => {
+                    const prod = products.find(p => p.id === i.productId);
+                    if (prod?.sharedInventoryPool) {
+                      return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
+                    }
+                    const pkg = packages.find(p => p.id === i.packageId);
+                    return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                  })()}</td>
                   <td>{i.sourceNote || '-'}</td>
                   <td>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td style={{ maxWidth: 260 }}>

@@ -247,7 +247,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             purchase_price: formData.purchasePrice,
             product_info: formData.productInfo,
             notes: formData.notes,
-            account_data: formData.accountData
+            account_data: formData.accountData,
+            custom_warranty_months: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : null
           })
           .eq('id', item.id);
         if (error) throw new Error(error.message || 'Không thể cập nhật kho');
@@ -266,6 +267,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 productInfo: formData.productInfo,
                 notes: formData.notes,
                 accountData: formData.accountData,
+                customWarrantyMonths: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : undefined,
                 updatedAt: new Date()
               }
             : it);
