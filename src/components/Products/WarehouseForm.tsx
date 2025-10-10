@@ -97,6 +97,22 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     });
   }, [item]);
 
+  // Ensure selected product/package remain visible after async products/packages load
+  useEffect(() => {
+    if (!item) return;
+    // If editing and current selectedProduct mismatches item after data load, resync
+    if (item.productId && selectedProduct !== item.productId) {
+      setSelectedProduct(item.productId);
+    }
+    // Ensure formData.productId matches selected product
+    setFormData(prev => (
+      item.productId && prev.productId !== item.productId
+        ? { ...prev, productId: item.productId }
+        : prev
+    ));
+    // Ensure packageId remains set if it's not in filtered list yet (will be handled by fallback option)
+  }, [products, packages, item]);
+
   // Prefill code for new inventory item
   useEffect(() => {
     if (!item) {
@@ -397,6 +413,12 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               disabled={isLockedProduct}
             >
               <option value="">Chọn sản phẩm</option>
+              {/* Fallback option to show current selection before products load */}
+              {selectedProduct && !products.some(p => p.id === selectedProduct) && (
+                <option value={selectedProduct}>
+                  Đang tải sản phẩm...
+                </option>
+              )}
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -416,6 +438,10 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 disabled={!selectedProduct || isLockedProduct}
               >
                 <option value="">Chọn gói</option>
+                {/* Fallback option to show current package before packages load/filter */}
+                {formData.packageId && !filteredPackages.some(pk => pk.id === formData.packageId) && (
+                  <option value={formData.packageId}>Đang tải gói...</option>
+                )}
                 {filteredPackages.map(pkg => (
                   <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
                 ))}

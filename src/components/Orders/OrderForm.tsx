@@ -388,7 +388,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   }, [selectedInventoryId]);
 
   // Auto-pick slot for account-based inventory
-  // Preserve the slot already assigned to this order if present; otherwise select the first available
+  // For new orders: do NOT auto-select; require explicit user choice
+  // For editing: preserve the slot already assigned to this order if present; otherwise select the first available
   useEffect(() => {
     if (!selectedInventoryId) return;
     const inv = availableInventory.find(i => i.id === selectedInventoryId);
@@ -400,16 +401,31 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       setSelectedProfileId('');
       return;
     }
+    // New order: don't auto-pick a slot
+    if (!order) {
+      setSelectedProfileId(prev => (prev && allowed.some((p: any) => p.id === prev)) ? prev : '');
+      return;
+    }
+    // Editing existing order: keep current/assigned or fallback to first allowed
     setSelectedProfileId(prev => {
-      // If current selection is valid, keep it
       if (prev && allowed.some((p: any) => p.id === prev)) return prev;
-      // If order already has a profile id and it's allowed, use it
       const existing = (order as any)?.inventoryProfileId;
       if (existing && allowed.some((p: any) => p.id === existing)) return existing as string;
-      // Fallback to first allowed option
       return allowed[0].id as string;
     });
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
+
+  // Reset custom fields and selected slot when package changes (new order flow)
+  useEffect(() => {
+    // Only apply on creating new orders
+    if (!order) {
+      setFormData(prev => ({
+        ...prev,
+        customFieldValues: {}
+      }));
+      setSelectedProfileId('');
+    }
+  }, [formData.packageId, order]);
 
   // Ensure selected product is correct on edit so package select isn't disabled
   useEffect(() => {
