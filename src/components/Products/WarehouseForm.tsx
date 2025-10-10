@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES } from '../../types';
+import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSupabase } from '../../utils/supabaseClient';
@@ -510,7 +510,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               value={formData.paymentStatus || 'UNPAID'}
               onChange={(e) => setFormData(prev => ({ ...prev, paymentStatus: e.target.value as any }))}
             >
-              {INVENTORY_PAYMENT_STATUSES.map(status => (
+              {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
                 <option key={status.value} value={status.value}>{status.label}</option>
               ))}
             </select>

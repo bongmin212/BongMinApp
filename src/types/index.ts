@@ -375,6 +375,11 @@ export const INVENTORY_PAYMENT_STATUSES: { value: InventoryPaymentStatus; label:
   { value: 'PAID', label: 'Đã TT' }
 ];
 
+export const INVENTORY_PAYMENT_STATUSES_FULL: { value: InventoryPaymentStatus; label: string }[] = [
+  { value: 'UNPAID', label: 'Chưa thanh toán' },
+  { value: 'PAID', label: 'Đã thanh toán' }
+];
+
 export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [
   { value: 'MANAGER', label: 'Quản lý' },
   { value: 'EMPLOYEE', label: 'Nhân viên' }
