@@ -411,6 +411,7 @@ const Dashboard: React.FC = () => {
               </select>
             </div>
             <div className="sales-stats">
+              <div style={{ gridColumn: '1 / -1', marginBottom: 8, fontWeight: 600 }}>Tháng này</div>
               <div className="sales-card">
                 <h3>Doanh thu tháng này</h3>
                 <div className="sales-amount">{formatCurrency(stats.monthlyRevenue)}</div>
@@ -418,27 +419,6 @@ const Dashboard: React.FC = () => {
                   {stats.revenueGrowth >= 0 ? <IconTrendingUp /> : <IconTrendingDown />}
                   {Math.abs(stats.revenueGrowth).toFixed(1)}%
                 </div>
-              </div>
-
-              <div className="sales-card">
-                <h3>Tổng doanh thu</h3>
-                <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
-                <div className="sales-subtitle">Tất cả thời gian</div>
-              </div>
-
-              <div className="sales-card">
-                <h3>Lãi tháng này</h3>
-                <div className="sales-amount">{formatCurrency(stats.monthlyProfit)}</div>
-                <div className={`sales-growth ${stats.profitGrowth >= 0 ? 'positive' : 'negative'}`}>
-                  {stats.profitGrowth >= 0 ? <IconTrendingUp /> : <IconTrendingDown />}
-                  {Math.abs(stats.profitGrowth).toFixed(1)}%
-                </div>
-              </div>
-
-              <div className="sales-card">
-                <h3>Tổng lãi</h3>
-                <div className="sales-amount">{formatCurrency(stats.totalProfit)}</div>
-                <div className="sales-subtitle">Tất cả thời gian</div>
               </div>
 
               <div className="sales-card">
@@ -450,8 +430,6 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Chi phí nhập hàng</h3>
                 <div className="sales-amount">{formatCurrency((() => {
-                  // derive from net vs profit difference if needed; we already reduced net by import cost
-                  // For display, recompute here for clarity
                   const now = new Date();
                   const base = new Date(now.getFullYear(), now.getMonth(), 1);
                   base.setMonth(base.getMonth() + selectedMonthOffset);
@@ -477,6 +455,19 @@ const Dashboard: React.FC = () => {
                   {stats.monthlyNetProfit >= 0 ? <IconTrendingUp /> : <IconTrendingDown />}
                   Lãi thực tế
                 </div>
+              </div>
+
+              <div style={{ gridColumn: '1 / -1', marginTop: 16, marginBottom: 8, fontWeight: 600 }}>Tất cả thời gian</div>
+              <div className="sales-card">
+                <h3>Tổng doanh thu</h3>
+                <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
+                <div className="sales-subtitle">Tất cả thời gian</div>
+              </div>
+
+              <div className="sales-card">
+                <h3>Tổng lãi</h3>
+                <div className="sales-amount">{formatCurrency(stats.totalProfit)}</div>
+                <div className="sales-subtitle">Tất cả thời gian</div>
               </div>
             </div>
 
