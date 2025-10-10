@@ -217,8 +217,12 @@ const Dashboard: React.FC = () => {
         .reduce((s, r) => s + (r.amount || 0), 0);
       const monthlyImportCost = importCostByMonth + renewalCostByMonth;
 
+      // All-time import cost (purchase + renewals)
+      const totalImportCost = (inventoryItems as InventoryItem[]).reduce((s, i) => s + (i.purchasePrice || 0), 0)
+        + Database.getInventoryRenewals().reduce((s: number, r: any) => s + (r.amount || 0), 0);
+
       // Calculate net profit (gross profit - expenses - import cost)
-      const netProfit = totalProfit - totalExpenses; // keep total without import aggregation for now
+      const netProfit = totalProfit - (totalExpenses + totalImportCost);
       const monthlyNetProfit = monthlyProfit - (monthlyExpenses + monthlyImportCost);
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
@@ -468,6 +472,12 @@ const Dashboard: React.FC = () => {
                 <h3>Tổng lãi</h3>
                 <div className="sales-amount">{formatCurrency(stats.totalProfit)}</div>
                 <div className="sales-subtitle">Tất cả thời gian</div>
+              </div>
+
+              <div className="sales-card">
+                <h3>Lãi thực tế (tất cả thời gian)</h3>
+                <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
+                <div className="sales-subtitle">Lãi sau chi phí + nhập hàng</div>
               </div>
             </div>
 
