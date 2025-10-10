@@ -340,23 +340,43 @@ const OrderList: React.FC = () => {
           try {
             // Release any linked inventory or assigned account-based profiles in Supabase before deleting the order
             // 1) Classic link: inventory.linked_order_id === order.id
-            const { data: classicLinked } = await sb
+            const { data: classicLinked, error: classicError } = await sb
               .from('inventory')
               .select('id')
               .eq('linked_order_id', id);
+            
+            if (classicError) {
+              console.error('Error fetching linked inventory:', classicError);
+              notify('Lỗi khi giải phóng kho hàng liên kết', 'error');
+              return;
+            }
+            
             const classicIds = (classicLinked || []).map((r: any) => r.id);
             if (classicIds.length) {
-              await sb
+              const { error: updateError } = await sb
                 .from('inventory')
                 .update({ status: 'AVAILABLE', linked_order_id: null })
                 .in('id', classicIds);
+              
+              if (updateError) {
+                console.error('Error updating inventory status:', updateError);
+                notify('Lỗi khi cập nhật trạng thái kho hàng', 'error');
+                return;
+              }
             }
 
             // 2) Account-based profiles: clear any profile assigned to this order
-            const { data: accountItems } = await sb
+            const { data: accountItems, error: accountError } = await sb
               .from('inventory')
               .select('*')
               .eq('is_account_based', true);
+              
+            if (accountError) {
+              console.error('Error fetching account-based inventory:', accountError);
+              notify('Lỗi khi giải phóng kho hàng dạng tài khoản', 'error');
+              return;
+            }
+            
             const toUpdate = (accountItems || []).filter((it: any) => Array.isArray(it.profiles) && it.profiles.some((p: any) => p.assignedOrderId === id));
             for (const it of toUpdate) {
               const nextProfiles = (Array.isArray(it.profiles) ? it.profiles : []).map((p: any) => (
@@ -364,9 +384,19 @@ const OrderList: React.FC = () => {
                   ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
                   : p
               ));
-              await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+              const { error: profileError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+              
+              if (profileError) {
+                console.error('Error updating account profiles:', profileError);
+                notify('Lỗi khi cập nhật profile tài khoản', 'error');
+                return;
+              }
             }
-          } catch {}
+          } catch (error) {
+            console.error('Unexpected error during inventory release:', error);
+            notify('Lỗi không mong muốn khi giải phóng kho hàng', 'error');
+            return;
+          }
           const { error } = await sb.from('orders').delete().eq('id', id);
           if (!error) {
             // Update local storage immediately

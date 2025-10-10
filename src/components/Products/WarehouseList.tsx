@@ -35,6 +35,89 @@ const WarehouseList: React.FC = () => {
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
 
+  const fixOrphanedSlots = async () => {
+    const sb = getSupabase();
+    if (!sb) return notify('Không thể kết nối database', 'error');
+    
+    setConfirmState({
+      message: 'Tìm và fix các slot kho hàng bị kẹt (có trạng thái SOLD nhưng không có đơn liên kết)?',
+      onConfirm: async () => {
+        try {
+          // 1. Tìm các slot có vấn đề
+          const { data: orphanedSlots, error: fetchError } = await sb
+            .from('inventory')
+            .select('id, code, status, linked_order_id')
+            .eq('status', 'SOLD')
+            .or('linked_order_id.is.null,linked_order_id.eq.');
+          
+          if (fetchError) {
+            console.error('Error fetching orphaned slots:', fetchError);
+            notify('Lỗi khi tìm slot bị kẹt', 'error');
+            return;
+          }
+          
+          if (!orphanedSlots || orphanedSlots.length === 0) {
+            notify('Không tìm thấy slot nào bị kẹt', 'info');
+            return;
+          }
+          
+          // 2. Kiểm tra xem các đơn hàng liên kết có còn tồn tại không
+          const { data: orders, error: ordersError } = await sb
+            .from('orders')
+            .select('id');
+          
+          if (ordersError) {
+            console.error('Error fetching orders:', ordersError);
+            notify('Lỗi khi kiểm tra đơn hàng', 'error');
+            return;
+          }
+          
+          const existingOrderIds = new Set((orders || []).map(o => o.id));
+          const trulyOrphaned = orphanedSlots.filter(slot => 
+            !slot.linked_order_id || 
+            slot.linked_order_id === '' || 
+            !existingOrderIds.has(slot.linked_order_id)
+          );
+          
+          if (trulyOrphaned.length === 0) {
+            notify('Không có slot nào thực sự bị kẹt', 'info');
+            return;
+          }
+          
+          // 3. Fix các slot bị kẹt
+          const slotIds = trulyOrphaned.map(slot => slot.id);
+          const { error: updateError } = await sb
+            .from('inventory')
+            .update({ status: 'AVAILABLE', linked_order_id: null })
+            .in('id', slotIds);
+          
+          if (updateError) {
+            console.error('Error fixing orphaned slots:', updateError);
+            notify('Lỗi khi fix slot bị kẹt', 'error');
+            return;
+          }
+          
+          // 4. Log hoạt động
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({ 
+              employee_id: state.user?.id || 'system', 
+              action: 'Fix slot bị kẹt', 
+              details: `Fixed ${trulyOrphaned.length} slots: ${slotIds.join(',')}` 
+            });
+          } catch {}
+          
+          notify(`Đã fix ${trulyOrphaned.length} slot bị kẹt`, 'success');
+          refresh();
+          
+        } catch (error) {
+          console.error('Unexpected error fixing orphaned slots:', error);
+          notify('Lỗi không mong muốn khi fix slot', 'error');
+        }
+      }
+    });
+  };
+
   const releaseStuckProfiles = async (inventoryId: string) => {
     const sb = getSupabase();
     if (!sb) { notify('Không thể giải phóng slot kẹt', 'error'); return; }
@@ -757,6 +840,7 @@ const WarehouseList: React.FC = () => {
                 setShowForm(true); // Then open with fresh state
               }, 50); // Small delay to ensure fresh state
             }}>Nhập kho</button>
+            <button className="btn btn-warning" onClick={fixOrphanedSlots}>Fix slot bị kẹt</button>
           </div>
         </div>
       </div>
