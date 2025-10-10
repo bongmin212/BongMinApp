@@ -1012,7 +1012,7 @@ const handleDelete = (id: string) => {
           <button className="btn btn-light" onClick={() => {
             const filename = generateExportFilename('BaoHanh', {
               debouncedSearchTerm,
-              filterStatus,
+              searchStatus,
               dateFrom,
               dateTo
             }, 'TrangHienTai');
@@ -1021,7 +1021,7 @@ const handleDelete = (id: string) => {
           <button className="btn btn-light" onClick={() => {
             const filename = generateExportFilename('BaoHanh', {
               debouncedSearchTerm,
-              filterStatus,
+              searchStatus,
               dateFrom,
               dateTo
             }, 'KetQuaLoc');

@@ -29,6 +29,7 @@ export function generateExportFilename(
     searchTerm: 'Search',
     debouncedSearchTerm: 'Search',
     debouncedSearchQuery: 'Search',
+    searchStatus: 'Status',
     filterProduct: 'Product',
     filterPackage: 'Package',
     filterStatus: 'Status',
