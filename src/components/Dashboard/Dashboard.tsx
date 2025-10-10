@@ -217,9 +217,9 @@ const Dashboard: React.FC = () => {
         .reduce((s, r) => s + (r.amount || 0), 0);
       const monthlyImportCost = importCostByMonth + renewalCostByMonth;
 
-      // Calculate net profit (gross profit - expenses). Do not subtract import cost again (already in COGS per order)
-      const netProfit = totalProfit - totalExpenses;
-      const monthlyNetProfit = monthlyProfit - monthlyExpenses;
+      // Calculate net profit (gross profit - expenses - import cost)
+      const netProfit = totalProfit - totalExpenses; // keep total without import aggregation for now
+      const monthlyNetProfit = monthlyProfit - (monthlyExpenses + monthlyImportCost);
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const reservedInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'RESERVED').length;
