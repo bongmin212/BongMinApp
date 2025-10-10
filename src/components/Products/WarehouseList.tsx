@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
+import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, InventoryPaymentStatus, INVENTORY_PAYMENT_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
 import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,6 +20,7 @@ const WarehouseList: React.FC = () => {
   const [filterProduct, setFilterProduct] = useState<string>('');
   const [filterPackage, setFilterPackage] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
@@ -237,6 +238,7 @@ const WarehouseList: React.FC = () => {
       productInfo: r.product_info || '',
       notes: r.notes || '',
       status: r.status,
+      paymentStatus: r.payment_status || 'UNPAID',
       isAccountBased: !!r.is_account_based,
       accountColumns: r.account_columns || [],
       accountData: r.account_data || {},
@@ -314,6 +316,7 @@ const WarehouseList: React.FC = () => {
       const prod = params.get('product') || '';
       const pkg = params.get('package') || '';
       const status = params.get('status') || '';
+      const paymentStatus = params.get('paymentStatus') || '';
       const from = params.get('from') || '';
       const to = params.get('to') || '';
       const accounts = params.get('accounts') === '1';
@@ -325,6 +328,7 @@ const WarehouseList: React.FC = () => {
       setFilterProduct(prod);
       setFilterPackage(pkg);
       setFilterStatus(status);
+      setFilterPaymentStatus(paymentStatus);
       setDateFrom(from);
       setDateTo(to);
       setOnlyAccounts(accounts);
@@ -343,7 +347,7 @@ const WarehouseList: React.FC = () => {
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterProduct, filterPackage, filterStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
+  }, [debouncedSearchTerm, filterProduct, filterPackage, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
 
   // Persist limit
   useEffect(() => {
@@ -358,6 +362,7 @@ const WarehouseList: React.FC = () => {
       if (filterProduct) params.set('product', filterProduct); else params.delete('product');
       if (filterPackage) params.set('package', filterPackage); else params.delete('package');
       if (filterStatus) params.set('status', filterStatus); else params.delete('status');
+      if (filterPaymentStatus) params.set('paymentStatus', filterPaymentStatus); else params.delete('paymentStatus');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
       params.set('accounts', onlyAccounts ? '1' : '0');
@@ -368,7 +373,7 @@ const WarehouseList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterProduct, filterPackage, filterStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
+  }, [debouncedSearchTerm, filterProduct, filterPackage, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
   const packageMap = useMemo(() => new Map(packages.map(p => [p.id, p.name])), [packages]);
@@ -430,6 +435,7 @@ const WarehouseList: React.FC = () => {
       const matchesProduct = !filterProduct || i.productId === filterProduct;
       const matchesPackage = !filterPackage || i.packageId === filterPackage;
       const matchesStatus = !filterStatus || i.status === filterStatus as any;
+      const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
 
       const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
       const pToOk = !dateTo || new Date(i.purchaseDate) <= new Date(dateTo);
@@ -440,9 +446,9 @@ const WarehouseList: React.FC = () => {
       const accountsOk = !onlyAccounts || isAcc;
       const freeOk = !onlyFreeSlots || hasFree;
 
-      return matchesSearch && matchesProduct && matchesPackage && matchesStatus && pFromOk && pToOk && accountsOk && freeOk;
+      return matchesSearch && matchesProduct && matchesPackage && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
     });
-  }, [items, filterProduct, filterPackage, filterStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+  }, [items, filterProduct, filterPackage, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -490,6 +496,7 @@ const WarehouseList: React.FC = () => {
         })(),
         source: i.sourceNote || '',
         purchasePrice: typeof i.purchasePrice === 'number' ? i.purchasePrice : '',
+        paymentStatus: i.paymentStatus || 'UNPAID',
         productInfo: i.productInfo || '',
         notes: i.notes || '',
         status: i.status,
@@ -505,6 +512,7 @@ const WarehouseList: React.FC = () => {
       { header: 'Thời hạn', key: 'warrantyMonths', width: 12 },
       { header: 'Nguồn', key: 'source', width: 18 },
       { header: 'Giá nhập', key: 'purchasePrice', width: 14 },
+      { header: 'Thanh toán', key: 'paymentStatus', width: 14 },
       { header: 'Thông tin', key: 'productInfo', width: 50 },
       { header: 'Ghi chú', key: 'notes', width: 32 },
       { header: 'Trạng thái', key: 'status', width: 14 },
@@ -821,6 +829,7 @@ const WarehouseList: React.FC = () => {
     setFilterProduct('');
     setFilterPackage('');
     setFilterStatus('');
+    setFilterPaymentStatus('');
     setDateFrom('');
     setDateTo('');
     setOnlyAccounts(false);
@@ -889,6 +898,14 @@ const WarehouseList: React.FC = () => {
               <option value="NEEDS_UPDATE">Cần update</option>
             </select>
           </div>
+          <div>
+            <select className="form-control" value={filterPaymentStatus} onChange={(e) => setFilterPaymentStatus(e.target.value)}>
+              <option value="">Thanh toán</option>
+              {INVENTORY_PAYMENT_STATUSES.map(status => (
+                <option key={status.value} value={status.value}>{status.label}</option>
+              ))}
+            </select>
+          </div>
           <div style={{ gridColumn: 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày nhập"
@@ -947,6 +964,7 @@ const WarehouseList: React.FC = () => {
                 <th>Thời hạn</th>
                 <th>Nguồn</th>
                 <th>Giá mua</th>
+                <th>Thanh toán</th>
                 <th>Thông tin</th>
                 <th>Ghi chú</th>
                 <th>Trạng thái</th>
@@ -981,6 +999,11 @@ const WarehouseList: React.FC = () => {
                   })()}</td>
                   <td>{i.sourceNote || '-'}</td>
                   <td>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
+                  <td>
+                    <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
+                      {INVENTORY_PAYMENT_STATUSES.find(s => s.value === i.paymentStatus)?.label || 'Chưa thanh toán'}
+                    </span>
+                  </td>
                   <td style={{ maxWidth: 260 }}>
                     <div className="line-clamp-3" title={i.productInfo || ''}>{i.productInfo || '-'}</div>
                   </td>

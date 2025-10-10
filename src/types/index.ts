@@ -55,6 +55,8 @@ export type OrderStatus = 'PROCESSING' | 'COMPLETED' | 'CANCELLED';
 
 export type PaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
+export type InventoryPaymentStatus = 'UNPAID' | 'PAID';
+
 export interface Order {
   id: string;
   code: string; // Mã đơn hàng cố định
@@ -137,6 +139,7 @@ export interface InventoryItem {
   productInfo?: string; // Thông tin sản phẩm nhập kho (serial/key/tài khoản...)
   notes?: string; // Ghi chú nội bộ cho sản phẩm trong kho
   status: InventoryStatus;
+  paymentStatus?: InventoryPaymentStatus; // Trạng thái thanh toán với nhà cung cấp
   linkedOrderId?: string; // Nếu đã bán, liên kết đơn hàng
   // Account-based inventory (optional)
   isAccountBased?: boolean; // true if this item represents a multi-profile account
@@ -254,6 +257,7 @@ export interface InventoryFormData {
   purchasePrice?: number;
   productInfo?: string;
   notes?: string;
+  paymentStatus?: InventoryPaymentStatus; // Trạng thái thanh toán với nhà cung cấp
   // Account-based optional fields
   isAccountBased?: boolean;
   accountColumns?: InventoryAccountColumn[];
@@ -364,6 +368,11 @@ export const PAYMENT_STATUSES: { value: PaymentStatus; label: string }[] = [
   { value: 'UNPAID', label: 'Chưa thanh toán' },
   { value: 'PAID', label: 'Đã thanh toán' },
   { value: 'REFUNDED', label: 'Đã hoàn tiền' }
+];
+
+export const INVENTORY_PAYMENT_STATUSES: { value: InventoryPaymentStatus; label: string }[] = [
+  { value: 'UNPAID', label: 'Chưa thanh toán' },
+  { value: 'PAID', label: 'Đã thanh toán' }
 ];
 
 export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [

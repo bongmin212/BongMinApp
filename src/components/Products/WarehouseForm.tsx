@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn } from '../../types';
+import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
 import { getSupabase } from '../../utils/supabaseClient';
@@ -24,6 +24,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     purchasePrice: undefined,
     productInfo: '',
     notes: '',
+    paymentStatus: 'UNPAID',
     isAccountBased: false,
     accountColumns: [],
     accountData: {},
@@ -89,6 +90,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       purchasePrice: item.purchasePrice,
       productInfo: item.productInfo || '',
       notes: item.notes || '',
+      paymentStatus: item.paymentStatus || 'UNPAID',
       isAccountBased: !!item.isAccountBased,
       accountColumns: item.accountColumns || [],
       accountData: item.accountData || {},
@@ -133,6 +135,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             purchasePrice: 0,
             productInfo: '',
             notes: '',
+            paymentStatus: 'UNPAID',
             isAccountBased: false,
             accountColumns: [],
             accountData: {},
@@ -151,6 +154,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             purchasePrice: 0,
             productInfo: '',
             notes: '',
+            paymentStatus: 'UNPAID',
             isAccountBased: false,
             accountColumns: [],
             accountData: {},
@@ -263,6 +267,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             purchase_price: formData.purchasePrice,
             product_info: formData.productInfo,
             notes: formData.notes,
+            payment_status: formData.paymentStatus || 'UNPAID',
             account_data: formData.accountData,
             custom_warranty_months: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : null
           })
@@ -282,6 +287,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 purchasePrice: formData.purchasePrice,
                 productInfo: formData.productInfo,
                 notes: formData.notes,
+                paymentStatus: formData.paymentStatus || 'UNPAID',
                 accountData: formData.accountData,
                 customWarrantyMonths: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : undefined,
                 updatedAt: new Date()
@@ -320,6 +326,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             purchase_price: formData.purchasePrice,
             product_info: formData.productInfo,
             notes: formData.notes,
+            payment_status: formData.paymentStatus || 'UNPAID',
             // profiles/slots will be generated backend or managed separately
             account_columns: selectedPkg?.accountColumns || null,
             account_data: formData.accountData,
@@ -351,6 +358,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           purchasePrice: formData.purchasePrice,
           productInfo: formData.productInfo,
           notes: formData.notes,
+          paymentStatus: formData.paymentStatus || 'UNPAID',
           status: 'AVAILABLE' as const,
           isAccountBased: !!selectedPkg?.isAccountBased,
           accountColumns: selectedPkg?.accountColumns,
@@ -493,6 +501,19 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             {errors.purchasePrice && (
               <div className="text-danger small mt-1">{errors.purchasePrice}</div>
             )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Trạng thái thanh toán</label>
+            <select
+              className="form-control"
+              value={formData.paymentStatus || 'UNPAID'}
+              onChange={(e) => setFormData(prev => ({ ...prev, paymentStatus: e.target.value as any }))}
+            >
+              {INVENTORY_PAYMENT_STATUSES.map(status => (
+                <option key={status.value} value={status.value}>{status.label}</option>
+              ))}
+            </select>
           </div>
 
           {/* Custom warranty field for shared pool products */}
