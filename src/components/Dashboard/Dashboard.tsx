@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 import { Product, ProductPackage, Customer, Order, InventoryItem, Expense } from '../../types';
 import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit } from '../Icons';
 
@@ -60,15 +61,122 @@ const Dashboard: React.FC = () => {
     try {
       setLoading(true);
       
-      // Load all data including expenses
-      const [products, packages, customers, orders, inventoryItems, expenses] = await Promise.all([
-        Database.getProducts(),
-        Database.getPackages(),
-        Database.getCustomers(),
-        Database.getOrders(),
-        Database.getInventory(),
-        Database.getExpenses()
-      ]);
+      // Load all data including expenses (prefer Supabase; fallback to local cache)
+      const sb = getSupabase();
+      let products: Product[] = [];
+      let packages: ProductPackage[] = [];
+      let customers: Customer[] = [];
+      let orders: Order[] = [];
+      let inventoryItems: InventoryItem[] = [];
+      let expenses: Expense[] = [];
+
+      if (sb) {
+        const [pr, pk, cu, or, inv, ex] = await Promise.all([
+          sb.from('products').select('*'),
+          sb.from('packages').select('*'),
+          sb.from('customers').select('*'),
+          sb.from('orders').select('*'),
+          sb.from('inventory').select('*'),
+          sb.from('expenses').select('*')
+        ]);
+        products = (pr.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          name: r.name,
+          description: r.description || '',
+          sharedInventoryPool: !!r.shared_inventory_pool,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        }));
+        packages = (pk.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          productId: r.product_id,
+          name: r.name,
+          warrantyPeriod: r.warranty_period,
+          costPrice: r.cost_price,
+          ctvPrice: r.ctv_price,
+          retailPrice: r.retail_price,
+          customFields: r.custom_fields || [],
+          isAccountBased: !!r.is_account_based,
+          accountColumns: r.account_columns || [],
+          defaultSlots: r.default_slots,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        }));
+        customers = (cu.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          name: r.name,
+          type: r.type,
+          phone: r.phone,
+          email: r.email,
+          source: r.source,
+          sourceDetail: r.source_detail,
+          notes: r.notes,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        }));
+        orders = (or.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          customerId: r.customer_id,
+          packageId: r.package_id,
+          status: r.status,
+          paymentStatus: r.payment_status,
+          useCustomPrice: r.use_custom_price || false,
+          customPrice: r.custom_price,
+          purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+          expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
+          orderInfo: r.order_info,
+          notes: r.notes,
+          inventoryItemId: r.inventory_item_id,
+          inventoryProfileId: r.inventory_profile_id,
+          cogs: r.cogs
+        })) as any;
+        inventoryItems = (inv.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          productId: r.product_id,
+          packageId: r.package_id,
+          purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
+          expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
+          sourceNote: r.source_note,
+          purchasePrice: r.purchase_price,
+          productInfo: r.product_info,
+          notes: r.notes,
+          status: r.status,
+          isAccountBased: !!r.is_account_based,
+          accountColumns: r.account_columns || [],
+          accountData: r.account_data || {},
+          totalSlots: r.total_slots || 0,
+          profiles: Array.isArray(r.profiles) ? r.profiles : [],
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        }));
+        expenses = (ex.data || []).map((r: any) => ({
+          id: r.id,
+          code: r.code,
+          type: r.type,
+          amount: r.amount || 0,
+          description: r.description || '',
+          date: r.date ? new Date(r.date) : new Date(),
+          createdBy: r.created_by || 'system',
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+          updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+        }));
+      } else {
+        [products, packages, customers, orders, inventoryItems, expenses] = await Promise.all([
+          Database.getProducts(),
+          Database.getPackages(),
+          Database.getCustomers(),
+          Database.getOrders(),
+          Database.getInventory(),
+          Database.getExpenses()
+        ]);
+      }
 
       // Calculate stats
       const totalRevenue = orders
