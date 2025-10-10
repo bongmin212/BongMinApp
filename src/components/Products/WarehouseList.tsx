@@ -43,26 +43,18 @@ const WarehouseList: React.FC = () => {
       message: 'Tìm và fix các slot kho hàng bị kẹt (có trạng thái SOLD nhưng không có đơn liên kết)?',
       onConfirm: async () => {
         try {
-          // 1. Tìm các slot có vấn đề - tách thành 2 query để tránh lỗi syntax
-          const { data: nullLinkedSlots, error: nullError } = await sb
+          // 1. Tìm các slot có vấn đề: SOLD nhưng không có đơn liên kết (linked_order_id IS NULL)
+          const { data: orphanedSlots, error: fetchError } = await sb
             .from('inventory')
             .select('id, code, status, linked_order_id')
             .eq('status', 'SOLD')
             .is('linked_order_id', null);
           
-          const { data: emptyLinkedSlots, error: emptyError } = await sb
-            .from('inventory')
-            .select('id, code, status, linked_order_id')
-            .eq('status', 'SOLD')
-            .eq('linked_order_id', '');
-          
-          if (nullError || emptyError) {
-            console.error('Error fetching orphaned slots:', nullError || emptyError);
+          if (fetchError) {
+            console.error('Error fetching orphaned slots:', fetchError);
             notify('Lỗi khi tìm slot bị kẹt', 'error');
             return;
           }
-          
-          const orphanedSlots = [...(nullLinkedSlots || []), ...(emptyLinkedSlots || [])];
           
           if (!orphanedSlots || orphanedSlots.length === 0) {
             notify('Không tìm thấy slot nào bị kẹt', 'info');
