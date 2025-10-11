@@ -117,10 +117,17 @@ export async function mirrorInsert(table: string, payload: any): Promise<void> {
     })();
 
     const snake = toSnake(normalized);
-    await sb.from(table).insert(snake);
+    console.log(`[SupabaseSync] mirrorInsert ${table}:`, snake);
+    const { data, error } = await sb.from(table).insert(snake);
+    if (error) {
+      console.error(`[SupabaseSync] mirrorInsert ${table} error:`, error);
+      throw error;
+    }
+    console.log(`[SupabaseSync] mirrorInsert ${table} success:`, data);
   } catch (e: any) {
     const message = e?.message || e?.error || String(e);
     console.warn('[SupabaseSync] mirrorInsert failed', { table, message, payloadKeys: Object.keys(payload || {}) });
+    throw e; // Re-throw to let caller handle the error
   }
 }
 

@@ -1182,7 +1182,7 @@ export class Database {
       id: generateId(),
       ...expenseData,
       code: autoCode,
-      createdBy: 'system', // Default user ID
+      createdBy: 'system', // Default user ID - will be replaced by actual user ID in Supabase
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1197,6 +1197,7 @@ export class Database {
       console.log('Synced to Supabase successfully');
     } catch (error) {
       console.error('Failed to sync to Supabase:', error);
+      // Don't throw - data is saved locally and will sync later
     }
     
     return newExpense;
