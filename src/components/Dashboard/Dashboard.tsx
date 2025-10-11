@@ -578,6 +578,12 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="sales-card">
+                <h3>Tổng chi phí ngoài lề</h3>
+                <div className="sales-amount">{formatCurrency(stats.totalExpenses)}</div>
+                <div className="sales-subtitle">Tất cả thời gian</div>
+              </div>
+
+              <div className="sales-card">
                 <h3>Tổng chi phí nhập hàng</h3>
                 <div className="sales-amount">{formatCurrency((() => {
                   const inventoryItems = Database.getInventory();
