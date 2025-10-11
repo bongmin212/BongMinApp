@@ -23,6 +23,29 @@ export function toSnake<T = any>(obj: any): T {
   return out as T;
 }
 
+// Special mapping for expenses table
+export function toSnakeExpense(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+  const out: any = { ...obj };
+  
+  // Map 'date' to the actual column name in Supabase
+  // Try common column names: expense_date, expense_date, created_at, etc.
+  if (out.date) {
+    // Try 'expense_date' first, if that doesn't work, try 'created_at'
+    out.expense_date = out.date;
+    delete out.date;
+  }
+  
+  // Convert camelCase to snake_case for other fields
+  const snakeOut: any = {};
+  Object.keys(out).forEach(k => {
+    const sk = k.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    snakeOut[sk] = out[k];
+  });
+  
+  return snakeOut;
+}
+
 export function reviveDates<T = any>(x: T): T {
   const out: any = { ...x };
   if (out.createdAt) out.createdAt = new Date(out.createdAt);
@@ -32,6 +55,7 @@ export function reviveDates<T = any>(x: T): T {
   if ((out as any).expiryDate) (out as any).expiryDate = new Date((out as any).expiryDate);
   if ((out as any).timestamp) (out as any).timestamp = new Date((out as any).timestamp);
   if ((out as any).date) (out as any).date = new Date((out as any).date);
+  if ((out as any).expenseDate) (out as any).date = new Date((out as any).expenseDate); // Map expense_date back to date
   return out as T;
 }
 
@@ -116,7 +140,7 @@ export async function mirrorInsert(table: string, payload: any): Promise<void> {
       return clone;
     })();
 
-    const snake = toSnake(normalized);
+    const snake = table === 'expenses' ? toSnakeExpense(normalized) : toSnake(normalized);
     console.log(`[SupabaseSync] mirrorInsert ${table}:`, snake);
     const { data, error } = await sb.from(table).insert(snake);
     if (error) {
