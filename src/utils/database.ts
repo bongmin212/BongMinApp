@@ -1220,7 +1220,11 @@ export class Database {
     };
     
     saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
-    mirrorUpdate('expenses', id, expenses[index]);
+    try {
+      await mirrorUpdate('expenses', id, expenses[index]);
+    } catch (error) {
+      console.error('Failed to sync update to Supabase:', error);
+    }
     return expenses[index];
   }
 
@@ -1228,7 +1232,11 @@ export class Database {
     const expenses = await this.getExpenses();
     const filteredExpenses = expenses.filter(expense => expense.id !== id);
     saveToStorage(STORAGE_KEYS.EXPENSES, filteredExpenses);
-    mirrorDelete('expenses', id);
+    try {
+      await mirrorDelete('expenses', id);
+    } catch (error) {
+      console.error('Failed to sync delete to Supabase:', error);
+    }
   }
 
   static setExpenses(expenses: Expense[]): void {
