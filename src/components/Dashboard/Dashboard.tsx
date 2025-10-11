@@ -329,9 +329,10 @@ const Dashboard: React.FC = () => {
       const totalImportCost = (inventoryItems as InventoryItem[]).reduce((s, i) => s + (i.purchasePrice || 0), 0)
         + Database.getInventoryRenewals().reduce((s: number, r: any) => s + (r.amount || 0), 0);
 
-      // Calculate net profit (gross profit - expenses - import cost)
-      const netProfit = totalProfit - (totalExpenses + totalImportCost);
-      const monthlyNetProfit = monthlyProfit - (monthlyExpenses + monthlyImportCost);
+      // Calculate net profit (gross profit - external expenses only)
+      // Do NOT subtract import cost again since COGS already accounts for it
+      const netProfit = totalProfit - totalExpenses;
+      const monthlyNetProfit = monthlyProfit - monthlyExpenses;
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const reservedInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'RESERVED').length;
@@ -577,13 +578,13 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="sales-card">
-                <h3>Tổng lãi</h3>
-                <div className="sales-amount">{formatCurrency(stats.totalProfit)}</div>
+                <h3>Tổng chi phí nhập hàng</h3>
+                <div className="sales-amount">{formatCurrency(totalImportCost)}</div>
                 <div className="sales-subtitle">Tất cả thời gian</div>
               </div>
 
               <div className="sales-card">
-                <h3>Lãi thực tế (tất cả thời gian)</h3>
+                <h3>Tổng lãi thực tế</h3>
                 <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
                 <div className="sales-subtitle">Lãi sau chi phí + nhập hàng</div>
               </div>
