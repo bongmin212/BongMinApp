@@ -1167,7 +1167,9 @@ export class Database {
 
   // Expense methods
   static async getExpenses(): Promise<Expense[]> {
-    return getFromStorage('bongmin_expenses', []);
+    const expenses = getFromStorage(STORAGE_KEYS.EXPENSES, []);
+    console.log('Loading expenses from storage:', expenses.length, 'items');
+    return expenses;
   }
 
   static async createExpense(expenseData: ExpenseFormData): Promise<Expense> {
@@ -1185,9 +1187,17 @@ export class Database {
       updatedAt: new Date(),
     };
     
+    console.log('Creating expense:', newExpense);
     expenses.push(newExpense);
-    saveToStorage('bongmin_expenses', expenses);
-    mirrorInsert('expenses', newExpense);
+    saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
+    console.log('Saved to storage, expenses count:', expenses.length);
+    
+    try {
+      await mirrorInsert('expenses', newExpense);
+      console.log('Synced to Supabase successfully');
+    } catch (error) {
+      console.error('Failed to sync to Supabase:', error);
+    }
     
     return newExpense;
   }
@@ -1208,7 +1218,7 @@ export class Database {
       updatedAt: new Date(),
     };
     
-    saveToStorage('bongmin_expenses', expenses);
+    saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
     mirrorUpdate('expenses', id, expenses[index]);
     return expenses[index];
   }
@@ -1216,12 +1226,12 @@ export class Database {
   static async deleteExpense(id: string): Promise<void> {
     const expenses = await this.getExpenses();
     const filteredExpenses = expenses.filter(expense => expense.id !== id);
-    saveToStorage('bongmin_expenses', filteredExpenses);
+    saveToStorage(STORAGE_KEYS.EXPENSES, filteredExpenses);
     mirrorDelete('expenses', id);
   }
 
   static setExpenses(expenses: Expense[]): void {
-    saveToStorage('bongmin_expenses', expenses);
+    saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
   }
 }
 

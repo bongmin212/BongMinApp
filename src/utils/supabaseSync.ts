@@ -55,6 +55,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
       const { data, error } = await sb.from(t.name).select('*');
       if (error) throw error;
       const rows = (data || []).map((d: any) => reviveDates(toCamel(d)));
+      console.log(`[SupabaseSync] hydrating ${t.name}:`, rows.length, 'items');
       (t.setter as any)(rows);
     } catch (e) {
       console.warn('[SupabaseSync] hydrate table failed:', t.name, e);

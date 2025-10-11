@@ -546,8 +546,6 @@ const ExpenseForm: React.FC<{
               type="text"
               className="form-control"
               value={formData.code}
-              onChange={() => {}}
-              placeholder="Tự tạo như CP001"
               readOnly
               disabled
               aria-disabled
