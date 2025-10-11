@@ -146,10 +146,10 @@ create table public.activity_logs (
 create table public.expenses (
   id uuid primary key default gen_random_uuid(),
   code text unique not null,
-  title text not null,
+  type text not null,
   amount numeric not null,
-  category text,
-  note text,
+  description text,
+  date timestamptz not null,
   created_by text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
