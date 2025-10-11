@@ -579,7 +579,15 @@ const Dashboard: React.FC = () => {
 
               <div className="sales-card">
                 <h3>Tổng chi phí nhập hàng</h3>
-                <div className="sales-amount">{formatCurrency(totalImportCost)}</div>
+                <div className="sales-amount">{formatCurrency((() => {
+                  const inventoryItems = Database.getInventory();
+                  const importCost = inventoryItems
+                    .reduce((s: number, i: any) => s + (i.purchasePrice || 0), 0);
+                  const renewals = Database.getInventoryRenewals();
+                  const renewalCost = renewals
+                    .reduce((s: number, r: any) => s + (r.amount || 0), 0);
+                  return importCost + renewalCost;
+                })())}</div>
                 <div className="sales-subtitle">Tất cả thời gian</div>
               </div>
 
