@@ -1183,6 +1183,7 @@ export class Database {
     
     expenses.push(newExpense);
     saveToStorage('bongmin_expenses', expenses);
+    mirrorInsert('expenses', newExpense);
     
     return newExpense;
   }
@@ -1204,6 +1205,7 @@ export class Database {
     };
     
     saveToStorage('bongmin_expenses', expenses);
+    mirrorUpdate('expenses', id, expenses[index]);
     return expenses[index];
   }
 

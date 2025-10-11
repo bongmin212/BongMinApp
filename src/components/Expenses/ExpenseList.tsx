@@ -572,7 +572,7 @@ const ExpenseForm: React.FC<{
           </div>
 
           <div className="form-group">
-            <label className="form-label">Số tiền (₫)</label>
+            <label className="form-label">Số tiền (₫) *</label>
             <input
               type="text"
               inputMode="numeric"
@@ -591,7 +591,7 @@ const ExpenseForm: React.FC<{
           </div>
 
           <div className="form-group">
-            <label className="form-label">Mô tả</label>
+            <label className="form-label">Mô tả *</label>
             <textarea
               className="form-control"
               value={formData.description}
@@ -603,7 +603,7 @@ const ExpenseForm: React.FC<{
           </div>
 
           <div className="form-group">
-            <label className="form-label">Ngày</label>
+            <label className="form-label">Ngày *</label>
             <input
               type="date"
               className="form-control"
