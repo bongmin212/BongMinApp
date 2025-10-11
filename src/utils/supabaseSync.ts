@@ -47,7 +47,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
     { name: 'orders', setter: (rows: Order[]) => Database.setOrders(rows) },
     { name: 'inventory', setter: (rows: InventoryItem[]) => Database.setInventory(rows) },
     { name: 'warranties', setter: (rows: Warranty[]) => Database.setWarranties(rows) },
-    { name: 'expenses', setter: (rows: Expense[]) => Database.setActivityLogs as any }, // placeholder; expenses handled separately below
+    { name: 'expenses', setter: (rows: Expense[]) => Database.setExpenses(rows) },
   ];
 
   for (const t of tables) {
@@ -55,14 +55,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
       const { data, error } = await sb.from(t.name).select('*');
       if (error) throw error;
       const rows = (data || []).map((d: any) => reviveDates(toCamel(d)));
-      // special-case expenses setter not available in Database; load via direct localStorage write pattern used there
-      if (t.name === 'expenses') {
-        // reuse Database API shapes
-        const key = 'bongmin_expenses';
-        localStorage.setItem(key, JSON.stringify(rows));
-      } else {
-        (t.setter as any)(rows);
-      }
+      (t.setter as any)(rows);
     } catch (e) {
       console.warn('[SupabaseSync] hydrate table failed:', t.name, e);
     }
