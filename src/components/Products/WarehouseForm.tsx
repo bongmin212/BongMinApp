@@ -221,6 +221,11 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     return cols || [];
   }, [selectedPkg, item]);
 
+  // Filter columns that should be displayed in orders (includeInOrderInfo: true)
+  const displayColumns = useMemo<InventoryAccountColumn[]>(() => {
+    return pkgColumns.filter(col => col.includeInOrderInfo);
+  }, [pkgColumns]);
+
   // Debounce search inputs (300ms)
   useEffect(() => {
     const t = setTimeout(() => setDebouncedProductSearch(productSearch.trim().toLowerCase()), 300);
@@ -255,15 +260,13 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     if (currentProduct?.sharedInventoryPool && (!formData.customWarrantyMonths || formData.customWarrantyMonths < 1)) {
       newErrors.customWarrantyMonths = 'Nhập thời hạn hợp lệ (ít nhất 1 tháng)';
     }
-    // Validate account-based required fields when package is account-based
-    if (selectedPkg?.isAccountBased) {
-      (pkgColumns || []).forEach((col: InventoryAccountColumn) => {
-        const val = (formData.accountData || {})[col.id] || '';
-        if (!String(val).trim()) {
-          newErrors[`account_${col.id}`] = `Nhập "${col.title}"`;
-        }
-      });
-    }
+    // Validate required fields for columns that should be displayed in orders
+    displayColumns.forEach((col: InventoryAccountColumn) => {
+      const val = (formData.accountData || {})[col.id] || '';
+      if (!String(val).trim()) {
+        newErrors[`account_${col.id}`] = `Nhập "${col.title}"`;
+      }
+    });
     // no account config here; package defines structure
     if (Object.keys(newErrors).length) {
       setErrors(newErrors);
@@ -596,17 +599,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             />
           </div>
 
-          {/* Account-based values: render inputs for package-defined columns */}
-          {selectedPkg?.isAccountBased && (
+          {/* Account columns that should be displayed in orders */}
+          {displayColumns.length > 0 && (
             <div className="card mt-3">
               <div className="card-header">
-                <h5 className="mb-0">Thông tin tài khoản</h5>
+                <h5 className="mb-0">Thông tin hiển thị trong đơn hàng</h5>
               </div>
               <div className="card-body">
-                {(pkgColumns || []).length === 0 && (
-                  <div className="text-muted">Gói chưa cấu hình cột tài khoản.</div>
-                )}
-                {(pkgColumns || []).map((col: InventoryAccountColumn) => (
+                {displayColumns.map((col: InventoryAccountColumn) => (
                   <div key={col.id} className="form-group">
                     <label className="form-label">{col.title} <span className="text-danger">*</span></label>
                     <textarea
