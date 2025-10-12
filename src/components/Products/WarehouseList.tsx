@@ -35,16 +35,21 @@ const WarehouseList: React.FC = () => {
   const [viewingOrder, setViewingOrder] = useState<null | Order>(null);
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
+  const [hasStuckSlots, setHasStuckSlots] = useState(false);
+  const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
 
   const fixOrphanedSlots = async () => {
     const sb = getSupabase();
     if (!sb) return notify('Không thể kết nối database', 'error');
     
     setConfirmState({
-      message: 'Tìm và fix các slot kho hàng bị kẹt (có trạng thái SOLD nhưng không có đơn liên kết)?',
+      message: 'Tìm và fix các slot kho hàng bị kẹt (slot thường và account-based)?',
       onConfirm: async () => {
         try {
-          // 1. Tìm các slot có vấn đề: SOLD nhưng không có đơn liên kết (linked_order_id IS NULL)
+          let fixedCount = 0;
+          const fixedDetails: string[] = [];
+          
+          // 1. Fix regular slots: SOLD but no linked_order_id
           const { data: orphanedSlots, error: fetchError } = await sb
             .from('inventory')
             .select('id, code, status, linked_order_id')
@@ -57,12 +62,23 @@ const WarehouseList: React.FC = () => {
             return;
           }
           
-          if (!orphanedSlots || orphanedSlots.length === 0) {
-            notify('Không tìm thấy slot nào bị kẹt', 'info');
-            return;
+          if (orphanedSlots && orphanedSlots.length > 0) {
+            const slotIds = orphanedSlots.map(slot => slot.id);
+            const { error: updateError } = await sb
+              .from('inventory')
+              .update({ status: 'AVAILABLE', linked_order_id: null })
+              .in('id', slotIds);
+            
+            if (updateError) {
+              console.error('Error fixing orphaned slots:', updateError);
+              notify('Lỗi khi fix slot thường bị kẹt', 'error');
+            } else {
+              fixedCount += orphanedSlots.length;
+              fixedDetails.push(`${orphanedSlots.length} slot thường`);
+            }
           }
           
-          // 2. Kiểm tra xem các đơn hàng liên kết có còn tồn tại không
+          // 2. Fix account-based slots: profiles with assignedOrderId pointing to non-existent orders
           const { data: orders, error: ordersError } = await sb
             .from('orders')
             .select('id');
@@ -74,41 +90,66 @@ const WarehouseList: React.FC = () => {
           }
           
           const existingOrderIds = new Set((orders || []).map(o => o.id));
-          const trulyOrphaned = orphanedSlots.filter(slot => 
-            !slot.linked_order_id || 
-            slot.linked_order_id === '' || 
-            !existingOrderIds.has(slot.linked_order_id)
-          );
           
-          if (trulyOrphaned.length === 0) {
-            notify('Không có slot nào thực sự bị kẹt', 'info');
-            return;
-          }
-          
-          // 3. Fix các slot bị kẹt
-          const slotIds = trulyOrphaned.map(slot => slot.id);
-          const { error: updateError } = await sb
+          const { data: accountBasedItems, error: accountError } = await sb
             .from('inventory')
-            .update({ status: 'AVAILABLE', linked_order_id: null })
-            .in('id', slotIds);
+            .select('id, code, profiles')
+            .eq('is_account_based', true);
           
-          if (updateError) {
-            console.error('Error fixing orphaned slots:', updateError);
-            notify('Lỗi khi fix slot bị kẹt', 'error');
+          if (accountError) {
+            console.error('Error fetching account-based items:', accountError);
+            notify('Lỗi khi tìm account-based slot bị kẹt', 'error');
             return;
           }
           
-          // 4. Log hoạt động
+          let accountFixedCount = 0;
+          if (accountBasedItems) {
+            for (const item of accountBasedItems) {
+              const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+              const stuckProfiles = profiles.filter((p: any) => 
+                p.assignedOrderId && !existingOrderIds.has(p.assignedOrderId)
+              );
+              
+              if (stuckProfiles.length > 0) {
+                const nextProfiles = profiles.map((p: any) => (
+                  p.assignedOrderId && !existingOrderIds.has(p.assignedOrderId)
+                    ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
+                    : p
+                ));
+                
+                const { error: updateError } = await sb
+                  .from('inventory')
+                  .update({ profiles: nextProfiles })
+                  .eq('id', item.id);
+                
+                if (!updateError) {
+                  accountFixedCount += stuckProfiles.length;
+                }
+              }
+            }
+          }
+          
+          if (accountFixedCount > 0) {
+            fixedCount += accountFixedCount;
+            fixedDetails.push(`${accountFixedCount} profile account-based`);
+          }
+          
+          if (fixedCount === 0) {
+            notify('Không tìm thấy slot nào bị kẹt', 'info');
+            return;
+          }
+          
+          // 3. Log hoạt động
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ 
               employee_id: state.user?.id || 'system', 
               action: 'Fix slot bị kẹt', 
-              details: `Fixed ${trulyOrphaned.length} slots: ${slotIds.join(',')}` 
+              details: `Fixed ${fixedCount} slots: ${fixedDetails.join(', ')}` 
             });
           } catch {}
           
-          notify(`Đã fix ${trulyOrphaned.length} slot bị kẹt`, 'success');
+          notify(`Đã fix ${fixedCount} slot bị kẹt (${fixedDetails.join(', ')})`, 'success');
           refresh();
           
         } catch (error) {
@@ -193,6 +234,70 @@ const WarehouseList: React.FC = () => {
       refresh();
     } catch {
       notify('Không thể cập nhật slot', 'error');
+    }
+  };
+
+  const checkForStuckSlots = async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+    
+    try {
+      // 1. Check regular slots: SOLD but no linked_order_id
+      const { data: orphanedSlots, error: fetchError } = await sb
+        .from('inventory')
+        .select('id, code, status, linked_order_id')
+        .eq('status', 'SOLD')
+        .is('linked_order_id', null);
+      
+      if (fetchError) {
+        console.error('Error checking orphaned slots:', fetchError);
+        return;
+      }
+      
+      // 2. Check account-based slots: profiles with assignedOrderId pointing to non-existent orders
+      const { data: accountBasedItems, error: accountError } = await sb
+        .from('inventory')
+        .select('id, code, profiles')
+        .eq('is_account_based', true);
+      
+      if (accountError) {
+        console.error('Error checking account-based items:', accountError);
+        return;
+      }
+      
+      // Get all existing order IDs
+      const { data: orders, error: ordersError } = await sb
+        .from('orders')
+        .select('id');
+      
+      if (ordersError) {
+        console.error('Error fetching orders:', ordersError);
+        return;
+      }
+      
+      const existingOrderIds = new Set((orders || []).map(o => o.id));
+      
+      // Check for stuck account-based profiles
+      let hasStuckAccountProfiles = false;
+      if (accountBasedItems) {
+        for (const item of accountBasedItems) {
+          const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+          const stuckProfiles = profiles.filter((p: any) => 
+            p.assignedOrderId && !existingOrderIds.has(p.assignedOrderId)
+          );
+          if (stuckProfiles.length > 0) {
+            hasStuckAccountProfiles = true;
+            break;
+          }
+        }
+      }
+      
+      // Set hasStuckSlots based on findings
+      const hasRegularStuckSlots = orphanedSlots && orphanedSlots.length > 0;
+      setHasStuckSlots(hasRegularStuckSlots || hasStuckAccountProfiles);
+      
+    } catch (error) {
+      console.error('Error checking for stuck slots:', error);
     }
   };
 
@@ -289,6 +394,9 @@ const WarehouseList: React.FC = () => {
     setProducts(prods);
     setPackages(pkgs);
     setCustomers(custs);
+    
+    // Check for stuck slots after data is loaded
+    checkForStuckSlots();
   };
 
   useEffect(() => {
@@ -597,6 +705,12 @@ const WarehouseList: React.FC = () => {
     });
   };
 
+  const bulkUpdatePaymentStatus = () => {
+    const selectedItems = pageItems.filter(i => selectedIds.includes(i.id));
+    if (selectedItems.length === 0) return;
+    setPaymentStatusModal({ selectedIds: selectedItems.map(i => i.id) });
+  };
+
   const remove = (id: string) => {
     setConfirmState({
       message: 'Xóa mục này khỏi kho?',
@@ -885,6 +999,7 @@ const WarehouseList: React.FC = () => {
                 <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>
                 <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn</button>
                 <button className="btn btn-secondary" onClick={bulkUnlink}>Gỡ liên kết đã chọn</button>
+                <button className="btn btn-info" onClick={bulkUpdatePaymentStatus}>Cập nhật thanh toán</button>
               </>
             )}
             <button className="btn btn-primary" onClick={() => { 
@@ -894,7 +1009,9 @@ const WarehouseList: React.FC = () => {
                 setShowForm(true); // Then open with fresh state
               }, 50); // Small delay to ensure fresh state
             }}>Nhập kho</button>
-            <button className="btn btn-warning" onClick={fixOrphanedSlots}>Fix slot bị kẹt</button>
+            {hasStuckSlots && (
+              <button className="btn btn-warning" onClick={fixOrphanedSlots}>Fix slot bị kẹt</button>
+            )}
           </div>
         </div>
       </div>
@@ -1444,6 +1561,75 @@ const WarehouseList: React.FC = () => {
           </div>
         </div>
       )}
+
+      {paymentStatusModal && (() => {
+        const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
+        const selectedItems = pageItems.filter(i => paymentStatusModal.selectedIds.includes(i.id));
+        
+        return (
+          <div className="modal" role="dialog" aria-modal>
+            <div className="modal-content" style={{ maxWidth: 420 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Cập nhật trạng thái thanh toán</h3>
+                <button className="close" onClick={() => setPaymentStatusModal(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                <div className="mb-3">
+                  <strong>Đã chọn {selectedItems.length} mục kho:</strong>
+                  <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
+                    {selectedItems.map(item => (
+                      <li key={item.id}>{item.code || `KHO${item.id.slice(-4)}`}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Trạng thái thanh toán mới</label>
+                  <select 
+                    className="form-control" 
+                    value={selectedPaymentStatus} 
+                    onChange={(e) => setSelectedPaymentStatus(e.target.value as InventoryPaymentStatus)}
+                  >
+                    {INVENTORY_PAYMENT_STATUSES.map(status => (
+                      <option key={status.value} value={status.value}>{status.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button className="btn btn-secondary" onClick={() => setPaymentStatusModal(null)}>Hủy</button>
+                <button className="btn btn-primary" onClick={async () => {
+                  const sb = getSupabase();
+                  if (!sb) { notify('Không thể cập nhật trạng thái thanh toán', 'error'); return; }
+                  
+                  const { error } = await sb
+                    .from('inventory')
+                    .update({ payment_status: selectedPaymentStatus })
+                    .in('id', paymentStatusModal.selectedIds);
+                  
+                  if (error) {
+                    notify('Không thể cập nhật trạng thái thanh toán', 'error');
+                    return;
+                  }
+                  
+                  try {
+                    const sb2 = getSupabase();
+                    if (sb2) await sb2.from('activity_logs').insert({ 
+                      employee_id: state.user?.id || 'system', 
+                      action: 'Cập nhật trạng thái thanh toán hàng loạt', 
+                      details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}` 
+                    });
+                  } catch {}
+                  
+                  notify(`Đã cập nhật trạng thái thanh toán cho ${selectedItems.length} mục kho`, 'success');
+                  setSelectedIds([]);
+                  setPaymentStatusModal(null);
+                  refresh();
+                }}>Xác nhận</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

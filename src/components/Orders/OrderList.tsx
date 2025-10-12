@@ -1374,6 +1374,19 @@ const OrderList: React.FC = () => {
                   out.push(`Trạng thái: ${statusLabel}`);
                   out.push(`Thanh toán: ${paymentLabel}`);
                   
+                  // Add custom fields if they exist
+                  const customFieldValues = (o as any).customFieldValues || {};
+                  if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
+                    pkgInfo.package.customFields.forEach((cf: any) => {
+                      const value = customFieldValues[cf.id];
+                      if (value && String(value).trim()) {
+                        out.push(`${cf.title}:`);
+                        out.push(String(value).trim());
+                        out.push(''); // Add empty line between fields
+                      }
+                    });
+                  }
+                  
                   // Get filtered warehouse fields for copy
                   const inv = (() => {
                     if (o.inventoryItemId) {
@@ -1553,6 +1566,20 @@ const OrderList: React.FC = () => {
                   lines.push(`- Trạng thái: ${getStatusLabel(o.status)}`);
                   lines.push(`- Thanh toán: ${getPaymentLabel(o.paymentStatus || 'UNPAID')}`);
                   lines.push(`- Giá hiện tại: ${formatPrice(getOrderPrice(o))}`);
+                  
+                  // Add custom fields if they exist
+                  const customFieldValues = (o as any).customFieldValues || {};
+                  if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
+                    pkgInfo.package.customFields.forEach((cf: any) => {
+                      const value = customFieldValues[cf.id];
+                      if (value && String(value).trim()) {
+                        lines.push(`- ${cf.title}:`);
+                        lines.push(String(value).trim());
+                        lines.push(''); // Add empty line between fields
+                      }
+                    });
+                  }
+                  
                   // Append filtered warehouse fields under a header
                   {
                     const inv = (() => {
@@ -1762,6 +1789,20 @@ const OrderList: React.FC = () => {
                     `Ngày lỗi: ${new Date(refundState.errorDate).toLocaleDateString('vi-VN')}`,
                     `Số tiền hoàn: ${formatPrice(refundState.amount)}`
                   ];
+                  
+                  // Add custom fields if they exist
+                  const customFieldValues = (o as any).customFieldValues || {};
+                  if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
+                    pkgInfo.package.customFields.forEach((cf: any) => {
+                      const value = customFieldValues[cf.id];
+                      if (value && String(value).trim()) {
+                        baseLines.push(`${cf.title}:`);
+                        baseLines.push(String(value).trim());
+                        baseLines.push(''); // Add empty line between fields
+                      }
+                    });
+                  }
+                  
                   // Get filtered warehouse fields for copy
                   const inv = (() => {
                     if (o.inventoryItemId) {
