@@ -424,13 +424,22 @@ const WarehouseList: React.FC = () => {
   const filteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
     return items.filter(i => {
+      // Search in account data fields
+      const accountDataMatches = !norm || (() => {
+        if (!i.accountData || typeof i.accountData !== 'object') return false;
+        return Object.values(i.accountData).some(value => 
+          String(value || '').toLowerCase().includes(norm)
+        );
+      })();
+
       const matchesSearch = !norm ||
         (i.code || '').toLowerCase().includes(norm) ||
         (productMap.get(i.productId) || '').toLowerCase().includes(norm) ||
         (packageMap.get(i.packageId) || '').toLowerCase().includes(norm) ||
         (i.productInfo || '').toLowerCase().includes(norm) ||
         (i.sourceNote || '').toLowerCase().includes(norm) ||
-        (i.notes || '').toLowerCase().includes(norm);
+        (i.notes || '').toLowerCase().includes(norm) ||
+        accountDataMatches;
 
       const matchesProduct = !filterProduct || i.productId === filterProduct;
       const matchesPackage = !filterPackage || i.packageId === filterPackage;
@@ -896,7 +905,7 @@ const WarehouseList: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Tìm kiếm mã, sản phẩm, ghi chú..."
+              placeholder="Tìm kiếm mã, sản phẩm, ghi chú, thông tin tài khoản..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
