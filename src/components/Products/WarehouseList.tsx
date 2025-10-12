@@ -37,6 +37,7 @@ const WarehouseList: React.FC = () => {
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
 
   const fixOrphanedSlots = async () => {
     const sb = getSupabase();
@@ -708,6 +709,7 @@ const WarehouseList: React.FC = () => {
   const bulkUpdatePaymentStatus = () => {
     const selectedItems = pageItems.filter(i => selectedIds.includes(i.id));
     if (selectedItems.length === 0) return;
+    setSelectedPaymentStatus('UNPAID'); // Reset to default
     setPaymentStatusModal({ selectedIds: selectedItems.map(i => i.id) });
   };
 
@@ -1563,7 +1565,6 @@ const WarehouseList: React.FC = () => {
       )}
 
       {paymentStatusModal && (() => {
-        const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
         const selectedItems = pageItems.filter(i => paymentStatusModal.selectedIds.includes(i.id));
         
         return (
