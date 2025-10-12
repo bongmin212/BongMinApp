@@ -100,6 +100,35 @@ const PackageList: React.FC = () => {
           const currentPackages = Database.getPackages();
           Database.setPackages(currentPackages.filter(p => p.id !== id));
           
+          // Update related inventory items to remove package reference
+          try {
+            await sb.from('inventory')
+              .update({
+                package_id: null,
+                account_columns: null,
+                is_account_based: false,
+                total_slots: null
+              })
+              .eq('package_id', id);
+            
+            // Update local storage inventory items
+            const currentInventory = Database.getInventory();
+            const updatedInventory = currentInventory.map(item => {
+              if (item.packageId === id) {
+                return {
+                  ...item,
+                  packageId: '',
+                  accountColumns: [],
+                  isAccountBased: false,
+                  totalSlots: undefined,
+                  updatedAt: new Date()
+                };
+              }
+              return item;
+            });
+            Database.setInventory(updatedInventory);
+          } catch {}
+          
           // Force refresh form if it's open
           if (showForm && !editingPackage) {
             setShowForm(false);
@@ -152,6 +181,35 @@ const PackageList: React.FC = () => {
           // Update local storage immediately
           const currentPackages = Database.getPackages();
           Database.setPackages(currentPackages.filter(p => !selectedIds.includes(p.id)));
+          
+          // Update related inventory items to remove package references
+          try {
+            await sb.from('inventory')
+              .update({
+                package_id: null,
+                account_columns: null,
+                is_account_based: false,
+                total_slots: null
+              })
+              .in('package_id', selectedIds);
+            
+            // Update local storage inventory items
+            const currentInventory = Database.getInventory();
+            const updatedInventory = currentInventory.map(item => {
+              if (selectedIds.includes(item.packageId)) {
+                return {
+                  ...item,
+                  packageId: '',
+                  accountColumns: [],
+                  isAccountBased: false,
+                  totalSlots: undefined,
+                  updatedAt: new Date()
+                };
+              }
+              return item;
+            });
+            Database.setInventory(updatedInventory);
+          } catch {}
           
           // Force refresh form if it's open
           if (showForm && !editingPackage) {

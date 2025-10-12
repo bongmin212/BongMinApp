@@ -374,6 +374,37 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật gói sản phẩm', details: detail });
             } catch {}
+            
+            // Update related inventory items to reflect package changes
+            try {
+              const sb3 = getSupabase();
+              if (sb3) {
+                await sb3.from('inventory')
+                  .update({
+                    account_columns: normalizedForm.accountColumns,
+                    is_account_based: !!normalizedForm.isAccountBased,
+                    total_slots: normalizedForm.isAccountBased ? Math.max(1, (normalizedForm.defaultSlots ?? 5)) : null
+                  })
+                  .eq('package_id', pkg.id);
+                
+                // Update local storage inventory items
+                const currentInventory = Database.getInventory();
+                const updatedInventory = currentInventory.map(item => {
+                  if (item.packageId === pkg.id) {
+                    return {
+                      ...item,
+                      accountColumns: normalizedForm.accountColumns,
+                      isAccountBased: !!normalizedForm.isAccountBased,
+                      totalSlots: normalizedForm.isAccountBased ? Math.max(1, (normalizedForm.defaultSlots ?? 5)) : undefined,
+                      updatedAt: new Date()
+                    };
+                  }
+                  return item;
+                });
+                Database.setInventory(updatedInventory);
+              }
+            } catch {}
+            
             notify('Cập nhật gói sản phẩm thành công', 'success');
             onSuccess();
           } else {

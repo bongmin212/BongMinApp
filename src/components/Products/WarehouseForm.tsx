@@ -214,11 +214,13 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
 
   const selectedPkg = useMemo(() => packages.find(p => p.id === formData.packageId), [packages, formData.packageId]);
   const pkgColumns = useMemo<InventoryAccountColumn[]>(() => {
-    // Prefer columns from selected package; fallback to item columns in edit
-    const cols = (selectedPkg?.accountColumns && selectedPkg.accountColumns.length > 0)
-      ? selectedPkg.accountColumns
-      : (item?.accountColumns || []);
-    return cols || [];
+    // Always use columns from selected package, even if empty (to reflect deletions)
+    // Only fallback to item columns if no package is selected
+    if (selectedPkg) {
+      return selectedPkg.accountColumns || [];
+    }
+    // Fallback to item columns only when no package is selected (shouldn't happen in normal flow)
+    return item?.accountColumns || [];
   }, [selectedPkg, item]);
 
   // Filter columns that should be displayed in orders (includeInOrderInfo: true)

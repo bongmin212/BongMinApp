@@ -1225,16 +1225,6 @@ const OrderList: React.FC = () => {
               <div><strong>Ngày hết hạn:</strong> {formatDate(viewingOrder.expiryDate)}</div>
               <div><strong>Trạng thái:</strong> {getStatusLabel(viewingOrder.status)}</div>
               <div><strong>Thanh toán:</strong> {PAYMENT_STATUSES.find(p => p.value === viewingOrder.paymentStatus)?.label || 'Chưa thanh toán'}</div>
-                      {(() => {
-                        const info = buildFullOrderInfo(viewingOrder);
-                        if (!info.lines.length) return null;
-                        return (
-                          <div>
-                            <strong>Thông tin đơn hàng:</strong>
-                            <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{info.text}</pre>
-                          </div>
-                        );
-                      })()}
               {(() => {
                 const inv = (() => {
                   // First try to find by inventoryItemId if it exists
@@ -1373,7 +1363,6 @@ const OrderList: React.FC = () => {
                   const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
                   const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
                   const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
-                  const info = buildFullOrderInfo(o);
                   const out: string[] = [];
                   out.push(`Mã đơn hàng: ${o.code || '-'}`);
                   out.push(`Khách hàng: ${customerName}`);
@@ -1383,12 +1372,32 @@ const OrderList: React.FC = () => {
                   out.push(`Ngày hết hạn: ${expiryDate}`);
                   out.push(`Trạng thái: ${statusLabel}`);
                   out.push(`Thanh toán: ${paymentLabel}`);
-                  out.push('Thông tin đơn hàng:');
-                  if (info.lines.length) {
-                    info.lines.forEach((line, idx) => {
-                      out.push(line);
-                      if (idx < info.lines.length - 1) out.push('');
-                    });
+                  
+                  // Get filtered warehouse fields for copy
+                  const inv = (() => {
+                    if (o.inventoryItemId) {
+                      const found = inventory.find((i: any) => i.id === o.inventoryItemId);
+                      if (found) return found;
+                    }
+                    const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
+                    if (byLinked) return byLinked;
+                    return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+                  })();
+                  
+                  if (inv) {
+                    const packageInfo = packages.find(p => p.id === inv.packageId);
+                    const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                    const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                    
+                    if (displayColumns.length > 0) {
+                      out.push('Thông tin đơn hàng:');
+                      displayColumns.forEach((col: any) => {
+                        const value = (inv.accountData || {})[col.id] || '';
+                        if (value.trim()) {
+                          out.push(`${col.title}: ${value}`);
+                        }
+                      });
+                    }
                   }
                   const text = out.join('\n');
                   try {
@@ -1541,15 +1550,32 @@ const OrderList: React.FC = () => {
                   lines.push(`- Trạng thái: ${getStatusLabel(o.status)}`);
                   lines.push(`- Thanh toán: ${getPaymentLabel(o.paymentStatus || 'UNPAID')}`);
                   lines.push(`- Giá hiện tại: ${formatPrice(getOrderPrice(o))}`);
-                  // Append order info lines under a header
+                  // Append filtered warehouse fields under a header
                   {
-                    const info = buildFullOrderInfo(o);
-                    lines.push('- Thông tin đơn hàng:');
-                    if (info.lines.length) {
-                      info.lines.forEach((line, idx) => {
-                        lines.push(line);
-                        if (idx < info.lines.length - 1) lines.push('');
-                      });
+                    const inv = (() => {
+                      if (o.inventoryItemId) {
+                        const found = inventory.find((i: any) => i.id === o.inventoryItemId);
+                        if (found) return found;
+                      }
+                      const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
+                      if (byLinked) return byLinked;
+                      return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+                    })();
+                    
+                    if (inv) {
+                      const packageInfo = packages.find(p => p.id === inv.packageId);
+                      const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                      const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                      
+                      if (displayColumns.length > 0) {
+                        lines.push('- Thông tin đơn hàng:');
+                        displayColumns.forEach((col: any) => {
+                          const value = (inv.accountData || {})[col.id] || '';
+                          if (value.trim()) {
+                            lines.push(`${col.title}: ${value}`);
+                          }
+                        });
+                      }
                     }
                   }
                   lines.push('');
@@ -1650,12 +1676,38 @@ const OrderList: React.FC = () => {
                     <div><strong>Ngày lỗi:</strong> {errorDate}</div>
                     <div><strong>Số tiền hoàn:</strong> {formatPrice(refundAmount)}</div>
                     {(() => {
-                      const info = buildFullOrderInfo(o);
-                      if (!info.lines.length) return null;
+                      const inv = (() => {
+                        if (o.inventoryItemId) {
+                          const found = inventory.find((i: any) => i.id === o.inventoryItemId);
+                          if (found) return found;
+                        }
+                        const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
+                        if (byLinked) return byLinked;
+                        return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+                      })();
+                      
+                      if (!inv) return null;
+                      
+                      const packageInfo = packages.find(p => p.id === inv.packageId);
+                      const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                      const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                      
+                      if (displayColumns.length === 0) return null;
+                      
                       return (
                         <div style={{ marginTop: '8px' }}>
                           <strong>Thông tin đơn hàng:</strong>
-                          <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{info.text}</pre>
+                          <div style={{ marginTop: '4px' }}>
+                            {displayColumns.map((col: any) => {
+                              const value = (inv.accountData || {})[col.id] || '';
+                              if (!value.trim()) return null;
+                              return (
+                                <div key={col.id} style={{ marginBottom: '2px' }}>
+                                  <strong>{col.title}:</strong> {value}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
                     })()}
@@ -1704,14 +1756,31 @@ const OrderList: React.FC = () => {
                     `Ngày lỗi: ${new Date(refundState.errorDate).toLocaleDateString('vi-VN')}`,
                     `Số tiền hoàn: ${formatPrice(refundState.amount)}`
                   ];
-                  const info = buildFullOrderInfo(o);
-                  if (info.lines.length) {
-                    baseLines.push('', 'Thông tin đơn hàng:');
-                    // Insert a blank line between each info line for readability, like the view modal
-                    info.lines.forEach((line, idx) => {
-                      baseLines.push(line);
-                      if (idx < info.lines.length - 1) baseLines.push('');
-                    });
+                  // Get filtered warehouse fields for copy
+                  const inv = (() => {
+                    if (o.inventoryItemId) {
+                      const found = inventory.find((i: any) => i.id === o.inventoryItemId);
+                      if (found) return found;
+                    }
+                    const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
+                    if (byLinked) return byLinked;
+                    return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+                  })();
+                  
+                  if (inv) {
+                    const packageInfo = packages.find(p => p.id === inv.packageId);
+                    const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                    const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                    
+                    if (displayColumns.length > 0) {
+                      baseLines.push('', 'Thông tin đơn hàng:');
+                      displayColumns.forEach((col: any) => {
+                        const value = (inv.accountData || {})[col.id] || '';
+                        if (value.trim()) {
+                          baseLines.push(`${col.title}: ${value}`);
+                        }
+                      });
+                    }
                   }
                   const text = baseLines.join('\n');
                   try {
