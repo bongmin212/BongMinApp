@@ -382,69 +382,206 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <div><strong>Trạng thái:</strong> {getStatusLabel(viewingOrder!.status)}</div>
             <div><strong>Thanh toán:</strong> {PAYMENT_STATUSES.find(p => p.value === (viewingOrder as any).paymentStatus)?.label || 'Chưa thanh toán'}</div>
             {(() => {
-              const info = buildFullOrderInfo(viewingOrder!);
-              if (!info.lines.length) return null;
+              const inv = (() => {
+                // First try to find by inventoryItemId if it exists
+                if (viewingOrder!.inventoryItemId) {
+                  const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
+                  if (found) {
+                    return found; // If inventoryItemId exists, use it regardless of other conditions
+                  }
+                }
+                // Fallback 1: find by linkedOrderId (classic single-item link)
+                const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder!.id);
+                if (byLinked) return byLinked;
+                // Fallback 2: account-based items where a profile is assigned to this order
+                return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder!.id));
+              })();
+              
+              if (!inv) {
+                return (
+                  <div>
+                    <strong>Kho hàng:</strong> Không liên kết
+                  </div>
+                );
+              }
+              
+              const product = products.find(p => p.id === inv.productId);
+              const packageInfo = packages.find(p => p.id === inv.packageId);
+              const productName = product?.name || 'Không xác định';
+              const packageName = packageInfo?.name || 'Không xác định';
+              const isSharedPool = product?.sharedInventoryPool;
+              
               return (
-                <div>
-                  <strong>Thông tin đơn hàng:</strong>
-                  <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{info.text}</pre>
+                <div className="card mt-2">
+                  <div className="card-header">
+                    <strong>📦 Thông tin kho hàng</strong>
+                  </div>
+                  <div className="card-body">
+                    <div className="row">
+                      <div className="col-md-6">
+                        <div className="mb-2">
+                          <strong>Mã kho:</strong> <span className="badge bg-primary">{inv.code}</span>
+                        </div>
+                        <div className="mb-2">
+                          <strong>Sản phẩm:</strong> <span className="text-primary fw-bold">{productName}</span>
+                        </div>
+                        <div className="mb-2">
+                          <strong>Gói/Pool:</strong> 
+                          <span className="badge bg-info ms-1">
+                            {isSharedPool ? 'Pool chung' : packageName}
+                          </span>
+                        </div>
+                        <div className="mb-2">
+                          <strong>Trạng thái:</strong> 
+                          <span className={`badge ms-1 ${
+                            inv.status === 'AVAILABLE' ? 'bg-success' :
+                            inv.status === 'SOLD' ? 'bg-danger' :
+                            inv.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
+                          }`}>
+                            {inv.status === 'AVAILABLE' ? 'Có sẵn' :
+                             inv.status === 'SOLD' ? 'Đã bán' :
+                             inv.status === 'RESERVED' ? 'Đã giữ' : inv.status}
+                          </span>
+                        </div>
+                        <div className="mb-2">
+                          <strong>Ngày nhập:</strong> {inv.purchaseDate ? new Date(inv.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
+                        </div>
+                        <div className="mb-2">
+                          <strong>Hạn sử dụng:</strong> {inv.expiryDate ? new Date(inv.expiryDate).toLocaleDateString('vi-VN') : 'N/A'}
+                        </div>
+                      </div>
+                      <div className="col-md-6">
+                        {typeof inv.purchasePrice === 'number' && (
+                          <div className="mb-2">
+                            <strong>Giá nhập:</strong> 
+                            <span className="text-success fw-bold">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}
+                            </span>
+                          </div>
+                        )}
+                        {inv.sourceNote && (
+                          <div className="mb-2">
+                            <strong>Nguồn nhập:</strong> <em>{inv.sourceNote}</em>
+                          </div>
+                        )}
+                        {inv.isAccountBased && (
+                          <div className="mb-2">
+                            <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
+                          </div>
+                        )}
+                        {inv.notes && (
+                          <div className="mb-2">
+                            <strong>Ghi chú:</strong> <small className="text-muted">{inv.notes}</small>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {inv.productInfo && (
+                      <div className="mt-3">
+                        <strong>Thông tin sản phẩm:</strong>
+                        <div className="mt-1 p-2 bg-light rounded">
+                          <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{inv.productInfo}</pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })()}
-            <div>
-              <strong>Kho hàng:</strong>{' '}
-              {(() => {
-                const inv = (() => {
-                  // First try to find by inventoryItemId if it exists
-                  if (viewingOrder!.inventoryItemId) {
-                    const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
-                    if (found) {
-                      return found; // If inventoryItemId exists, use it regardless of other conditions
-                    }
-                  }
-                  // Fallback 1: find by linkedOrderId (classic single-item link)
-                  const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder!.id);
-                  if (byLinked) return byLinked;
-                  // Fallback 2: account-based items where a profile is assigned to this order
-                  return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder!.id));
-                })();
-                
-                if (!inv) return 'Không liên kết';
-                const code = inv.code ?? '';
-                const pDate = inv.purchaseDate ? new Date(inv.purchaseDate).toISOString().split('T')[0] : 'N/A';
-                const eDate = inv.expiryDate ? new Date(inv.expiryDate).toISOString().split('T')[0] : 'N/A';
-                
-                // Get product and package info for display
-                const product = products.find(p => p.id === inv.productId);
-                const packageInfo = packages.find(p => p.id === inv.packageId);
-                const productName = product?.name || 'Không xác định';
-                const packageName = packageInfo?.name || 'Không xác định';
-                
-                // Format like the warehouse dropdown: #KHO001 | email | product | package | Nhập: date | HSD: date
-                const header = `#${code || 'Không có'} | ${inv.productInfo || ''} | ${productName} | ${packageName} | Nhập: ${pDate} | HSD: ${eDate}`;
-                const extra: string[] = [];
-                if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
-                if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
-                
-                // Add profile information if this is an account-based item
-                if (inv.isAccountBased) {
-                  if ((viewingOrder as any).inventoryProfileId) {
-                    const profileId = (viewingOrder as any).inventoryProfileId;
-                    const profile = (inv.profiles || []).find((p: any) => p.id === profileId);
-                    if (profile) {
-                      extra.push(`| Slot: ${profile.label} (${profile.isAssigned ? 'Đã cấp' : 'Chưa cấp'})`);
-                    }
-                  } else {
-                    // Show slot count if no specific profile is assigned
-                    const assignedSlots = (inv.profiles || []).filter((p: any) => p.isAssigned).length;
-                    const totalSlots = inv.totalSlots || (inv.profiles || []).length;
-                    extra.push(`| Slots: ${assignedSlots}/${totalSlots} đã cấp`);
+            
+            {(() => {
+              const pkg = getPackageInfo(viewingOrder!.packageId)?.package;
+              const customFieldValues = (viewingOrder as any).customFieldValues || {};
+              
+              if (!pkg || !pkg.customFields || pkg.customFields.length === 0) {
+                return null;
+              }
+              
+              const fieldsWithValues = pkg.customFields.filter(cf => {
+                const value = customFieldValues[cf.id];
+                return value !== undefined && String(value).trim();
+              });
+              
+              if (fieldsWithValues.length === 0) {
+                return null;
+              }
+              
+              return (
+                <div className="card mt-2">
+                  <div className="card-header">
+                    <strong>📝 Trường tùy chỉnh</strong>
+                  </div>
+                  <div className="card-body">
+                    {fieldsWithValues.map(cf => {
+                      const value = customFieldValues[cf.id];
+                      return (
+                        <div key={cf.id} className="mb-3">
+                          <div><strong>{cf.title}:</strong></div>
+                          <div className="mt-1 p-2 bg-light rounded">
+                            <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{String(value).trim()}</pre>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+            
+            {(() => {
+              const inv = (() => {
+                // First try to find by inventoryItemId if it exists
+                if (viewingOrder!.inventoryItemId) {
+                  const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
+                  if (found) {
+                    return found; // If inventoryItemId exists, use it regardless of other conditions
                   }
                 }
-                
-                return [header, ...extra].join(' \n ');
-              })()}
-            </div>
+                // Fallback 1: find by linkedOrderId (classic single-item link)
+                const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder!.id);
+                if (byLinked) return byLinked;
+                // Fallback 2: account-based items where a profile is assigned to this order
+                return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder!.id));
+              })();
+              
+              if (!inv) {
+                return null;
+              }
+              
+              // Get the package to access accountColumns configuration
+              const packageInfo = packages.find(p => p.id === inv.packageId);
+              const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+              
+              // Filter columns to only those marked for display in orders
+              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              
+              if (displayColumns.length === 0) {
+                return null;
+              }
+              
+              return (
+                <div className="card mt-2">
+                  <div className="card-header">
+                    <strong>📋 Thông tin đơn hàng</strong>
+                  </div>
+                  <div className="card-body">
+                    {displayColumns.map((col: any) => {
+                      const value = (inv.accountData || {})[col.id] || '';
+                      if (!value.trim()) return null;
+                      return (
+                        <div key={col.id} className="mb-3">
+                          <div><strong>{col.title}:</strong></div>
+                          <div className="mt-1 p-2 bg-light rounded">
+                            <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{value}</pre>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             {viewingOrder!.notes && <div><strong>Ghi chú:</strong> {viewingOrder!.notes}</div>}
             {(() => {
               const list = Database.getWarrantiesByOrder(viewingOrder!.id);
