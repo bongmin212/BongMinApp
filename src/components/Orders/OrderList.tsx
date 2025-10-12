@@ -1235,64 +1235,62 @@ const OrderList: React.FC = () => {
                           </div>
                         );
                       })()}
-              <div>
-                <strong>Kho hàng:</strong>{' '}
-                {(() => {
-                  const inv = (() => {
-                    // First try to find by inventoryItemId if it exists
-                    if (viewingOrder.inventoryItemId) {
-                      const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
-                      if (found) {
-                        return found; // If inventoryItemId exists, use it regardless of other conditions
-                      }
-                    }
-                    // Fallback 1: find by linkedOrderId (classic single-item link)
-                    const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder.id);
-                    if (byLinked) return byLinked;
-                    // Fallback 2: account-based items where a profile is assigned to this order
-                    return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
-                  })();
-                  if (!inv) return 'Không liên kết';
-                  const code = inv.code ?? '';
-                  const pDate = inv.purchaseDate ? new Date(inv.purchaseDate).toISOString().split('T')[0] : 'N/A';
-                  const eDate = inv.expiryDate ? new Date(inv.expiryDate).toISOString().split('T')[0] : 'N/A';
-                  const status = inv.status;
-                  const statusLabel =
-                    status === 'SOLD' ? 'Đã bán' :
-                    status === 'AVAILABLE' ? 'Có sẵn' :
-                    status === 'RESERVED' ? 'Đã giữ' :
-                    status === 'EXPIRED' ? 'Hết hạn' : status;
-                  // Get product and package info for display
-                  const product = products.find(p => p.id === inv.productId);
-                  const packageInfo = packages.find(p => p.id === inv.packageId);
-                  const productName = product?.name || 'Không xác định';
-                  const packageName = packageInfo?.name || 'Không xác định';
-                  
-                  // Format like the warehouse dropdown: #KHO001 | email | product | package | Nhập: date | HSD: date
-                  const header = `#${code || 'Không có'} | ${inv.productInfo || ''} | ${productName} | ${packageName} | Nhập: ${pDate} | HSD: ${eDate}`;
-                  const extra: string[] = [];
-                  if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
-                  if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
-                  
-                  // Add profile information if this is an account-based item
-                  if (inv.isAccountBased) {
-                    if ((viewingOrder as any).inventoryProfileId) {
-                      const profileId = (viewingOrder as any).inventoryProfileId;
-                      const profile = (inv.profiles || []).find((p: any) => p.id === profileId);
-                      if (profile) {
-                        extra.push(`| Slot: ${profile.label} (${profile.isAssigned ? 'Đã cấp' : 'Chưa cấp'})`);
-                      }
-                    } else {
-                      // Show slot count if no specific profile is assigned
-                      const assignedSlots = (inv.profiles || []).filter((p: any) => p.isAssigned).length;
-                      const totalSlots = inv.totalSlots || (inv.profiles || []).length;
-                      extra.push(`| Slots: ${assignedSlots}/${totalSlots} đã cấp`);
+              {(() => {
+                const inv = (() => {
+                  // First try to find by inventoryItemId if it exists
+                  if (viewingOrder.inventoryItemId) {
+                    const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
+                    if (found) {
+                      return found; // If inventoryItemId exists, use it regardless of other conditions
                     }
                   }
-                  
-                  return [header, ...extra].join(' \n ');
-                })()}
-              </div>
+                  // Fallback 1: find by linkedOrderId (classic single-item link)
+                  const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder.id);
+                  if (byLinked) return byLinked;
+                  // Fallback 2: account-based items where a profile is assigned to this order
+                  return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
+                })();
+                
+                if (!inv) {
+                  return (
+                    <div>
+                      <strong>Kho hàng:</strong> Không liên kết
+                    </div>
+                  );
+                }
+                
+                // Get the package to access accountColumns configuration
+                const packageInfo = packages.find(p => p.id === inv.packageId);
+                const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                
+                // Filter columns to only those marked for display in orders
+                const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                
+                if (displayColumns.length === 0) {
+                  return (
+                    <div>
+                      <strong>Thông tin đơn hàng:</strong> Không có thông tin
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div>
+                    <strong>Thông tin đơn hàng:</strong>
+                    <div style={{ marginTop: '8px' }}>
+                      {displayColumns.map((col: any) => {
+                        const value = (inv.accountData || {})[col.id] || '';
+                        if (!value.trim()) return null;
+                        return (
+                          <div key={col.id} style={{ marginBottom: '4px' }}>
+                            <strong>{col.title}:</strong> {value}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
               {viewingOrder.notes && <div><strong>Ghi chú:</strong> {viewingOrder.notes}</div>}
               {(() => {
                 const list = Database.getWarrantiesByOrder(viewingOrder.id);
