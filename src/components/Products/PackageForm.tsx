@@ -813,56 +813,62 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                   />
                 </div>
               )}
-              <div className="form-group">
-                <div className="d-flex justify-content-between align-items-center">
-                  <label className="form-label mb-0">Cột hiển thị trong đơn hàng</label>
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-light"
-                    onClick={() => setFormData(prev => ({
+            </div>
+          </div>
+
+          <div className="card mt-3">
+            <div className="card-header d-flex justify-content-between align-items-center">
+              <h5 className="mb-0">Cột hiển thị trong đơn hàng</h5>
+              <button
+                type="button"
+                className="btn btn-sm btn-light"
+                onClick={() => setFormData(prev => ({
+                  ...prev,
+                  accountColumns: [...(prev.accountColumns || []), { id: `col-${Date.now()}`, title: '', includeInOrderInfo: true }]
+                }))}
+                disabled={sharedConfigLocked}
+              >Thêm cột</button>
+            </div>
+            <div className="card-body">
+              {sharedConfigLocked && (
+                <div className="alert alert-info py-2">Cấu hình cột hiển thị đang bị khóa theo gói đầu tiên của sản phẩm.</div>
+              )}
+              {(formData.accountColumns || []).map((col, idx) => (
+                <div key={col.id} className="d-flex align-items-center gap-2 mt-2">
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder={`Tên cột #${idx + 1} (vd: Email, Pass, Hướng dẫn)`}
+                    value={(col as any).title || ''}
+                    onChange={(e) => setFormData(prev => ({
                       ...prev,
-                      accountColumns: [...(prev.accountColumns || []), { id: `col-${Date.now()}`, title: '', includeInOrderInfo: true }]
+                      accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, title: e.target.value } : c)
                     }))}
                     disabled={sharedConfigLocked}
-                  >Thêm cột</button>
-                </div>
-                {(formData.accountColumns || []).map((col, idx) => (
-                  <div key={col.id} className="d-flex align-items-center gap-2 mt-2">
+                  />
+                  <div className="d-flex align-items-center gap-1">
                     <input
-                      type="text"
-                      className="form-control"
-                      placeholder={`Tên cột #${idx + 1} (vd: Email, Pass, Hướng dẫn)`}
-                      value={(col as any).title || ''}
+                      type="checkbox"
+                      checked={!!(col as any).includeInOrderInfo}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
-                        accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, title: e.target.value } : c)
+                        accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, includeInOrderInfo: e.target.checked } : c)
                       }))}
                       disabled={sharedConfigLocked}
                     />
-                    <div className="d-flex align-items-center gap-1">
-                      <input
-                        type="checkbox"
-                        checked={!!(col as any).includeInOrderInfo}
-                        onChange={(e) => setFormData(prev => ({
-                          ...prev,
-                          accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, includeInOrderInfo: e.target.checked } : c)
-                        }))}
-                        disabled={sharedConfigLocked}
-                      />
-                      <span style={{ whiteSpace: 'nowrap' }}>Hiển thị</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-danger"
-                      onClick={() => setFormData(prev => ({
-                        ...prev,
-                        accountColumns: (prev.accountColumns || []).filter(c => c.id !== col.id)
-                      }))}
-                      disabled={sharedConfigLocked}
-                    >Xóa</button>
+                    <span style={{ whiteSpace: 'nowrap' }}>Hiển thị</span>
                   </div>
-                ))}
-              </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      accountColumns: (prev.accountColumns || []).filter(c => c.id !== col.id)
+                    }))}
+                    disabled={sharedConfigLocked}
+                  >Xóa</button>
+                </div>
+              ))}
             </div>
           </div>
 
