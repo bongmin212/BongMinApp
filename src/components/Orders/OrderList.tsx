@@ -1272,8 +1272,9 @@ const OrderList: React.FC = () => {
                         const value = (inv.accountData || {})[col.id] || '';
                         if (!value.trim()) return null;
                         return (
-                          <div key={col.id} style={{ marginBottom: '4px' }}>
-                            <strong>{col.title}:</strong> {value}
+                          <div key={col.id} style={{ marginBottom: '8px' }}>
+                            <div><strong>{col.title}:</strong></div>
+                            <div style={{ marginTop: '2px', whiteSpace: 'pre-wrap' }}>{value}</div>
                           </div>
                         );
                       })}
@@ -1394,7 +1395,9 @@ const OrderList: React.FC = () => {
                       displayColumns.forEach((col: any) => {
                         const value = (inv.accountData || {})[col.id] || '';
                         if (value.trim()) {
-                          out.push(`${col.title}: ${value}`);
+                          out.push(`${col.title}:`);
+                          out.push(value);
+                          out.push(''); // Add empty line between fields
                         }
                       });
                     }
@@ -1572,7 +1575,9 @@ const OrderList: React.FC = () => {
                         displayColumns.forEach((col: any) => {
                           const value = (inv.accountData || {})[col.id] || '';
                           if (value.trim()) {
-                            lines.push(`${col.title}: ${value}`);
+                            lines.push(`${col.title}:`);
+                            lines.push(value);
+                            lines.push(''); // Add empty line between fields
                           }
                         });
                       }
@@ -1702,8 +1707,9 @@ const OrderList: React.FC = () => {
                               const value = (inv.accountData || {})[col.id] || '';
                               if (!value.trim()) return null;
                               return (
-                                <div key={col.id} style={{ marginBottom: '2px' }}>
-                                  <strong>{col.title}:</strong> {value}
+                                <div key={col.id} style={{ marginBottom: '8px' }}>
+                                  <div><strong>{col.title}:</strong></div>
+                                  <div style={{ marginTop: '2px', whiteSpace: 'pre-wrap' }}>{value}</div>
                                 </div>
                               );
                             })}
@@ -1777,7 +1783,9 @@ const OrderList: React.FC = () => {
                       displayColumns.forEach((col: any) => {
                         const value = (inv.accountData || {})[col.id] || '';
                         if (value.trim()) {
-                          baseLines.push(`${col.title}: ${value}`);
+                          baseLines.push(`${col.title}:`);
+                          baseLines.push(value);
+                          baseLines.push(''); // Add empty line between fields
                         }
                       });
                     }
