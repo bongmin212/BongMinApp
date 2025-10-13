@@ -1360,14 +1360,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         return expiry.toISOString().split('T')[0];
                       })();
                       
-                      const statusText = item.status === 'AVAILABLE' ? 'Sẵn có' : 
-                                        item.status === 'SOLD' ? 'Đã bán' : 
-                                        item.status === 'EXPIRED' ? 'Hết hạn' : item.status;
-                      const paymentText = item.paymentStatus === 'PAID' ? 'Đã TT' : 'Chưa TT';
+                      // Get product info for display - Updated to remove status and payment
+                      const productInfo = item.productInfo ? item.productInfo.split('\n')[0] : '';
+                      const displayProductInfo = productInfo.length > 50 ? productInfo.substring(0, 50) + '...' : productInfo;
                       
                       return (
                         <option key={item.id} value={item.id}>
-                          #{item.code} | {productName} | {packageName} | {statusText} | {paymentText} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
+                          #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
                         </option>
                       );
                     })}
