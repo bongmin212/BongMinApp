@@ -476,8 +476,8 @@ const Dashboard: React.FC = () => {
                   <IconProfit />
                 </div>
                 <div className="stat-content">
-                  <h3>{formatCurrency(stats.totalProfit)}</h3>
-                  <p>Tổng lãi</p>
+                  <h3>{formatCurrency(stats.netProfit)}</h3>
+                  <p>Tổng lãi thực tế</p>
                 </div>
               </div>
             </div>
