@@ -1,163 +1,204 @@
-# BongMin App - Quản lý đơn hàng, sản phẩm và khách hàng
+# BongMin App - Order, Product & Customer Management System
 
-Ứng dụng quản lý đơn hàng, sản phẩm và khách hàng dành cho lĩnh vực phân phối key bản quyền số và dịch vụ giải trí.
+A comprehensive order, product, and customer management application designed for digital license key distribution and entertainment services.
 
-## Tính năng chính
+## Key Features
 
-### 🔐 Hệ thống xác thực và phân quyền
-- Đăng nhập bằng tên đăng nhập và mật khẩu
-- 2 loại tài khoản: Quản lý và Nhân viên
-- Phân quyền chi tiết theo vai trò
-- Lưu lịch sử hoạt động của nhân viên
+### 🔐 Authentication & Authorization System
+- Login with username and password
+- 2 account types: Manager and Employee
+- Detailed role-based permissions
+- Employee activity logging
 
-### 📦 Quản lý sản phẩm
-- Quản lý danh sách sản phẩm bản quyền
-- Mỗi sản phẩm có nhiều gói với thời hạn bảo hành khác nhau
-- Giá riêng cho Cộng tác viên và Khách lẻ
-- Hỗ trợ gói "vĩnh viễn" (mặc định 2 năm)
+### 📦 Product Management
+- Manage digital license product catalog
+- Multiple packages per product with different warranty periods
+- Separate pricing for Partners and Retail customers
+- Support for "lifetime" packages (default 2 years)
 
-### 👥 Quản lý khách hàng
-- 2 loại khách hàng: Cộng Tác Viên và Khách Lẻ
-- Theo dõi nguồn khách hàng (Facebook, Telegram, Page, Web, Zalo)
-- Lưu thông tin chi tiết và ghi chú
-- Xem lịch sử đơn hàng của từng khách hàng
+### 👥 Customer Management
+- 2 customer types: Partners and Retail customers
+- Track customer sources (Facebook, Telegram, Page, Web, Zalo)
+- Store detailed information and notes
+- View order history for each customer
 
-### 🛒 Quản lý đơn hàng
-- Tạo đơn hàng với thông tin đầy đủ
-- Tự động tính ngày hết hạn dựa trên thời hạn gói
-- Theo dõi trạng thái đơn hàng (Đang xử lý, Hoàn thành, Đã hủy)
-- Tìm kiếm và lọc đơn hàng theo nhiều tiêu chí
+### 🛒 Order Management
+- Create orders with complete information
+- Automatic expiration date calculation based on package duration
+- Track order status (Processing, Completed, Cancelled)
+- Search and filter orders by multiple criteria
 
-### 📊 Báo cáo và xuất dữ liệu
-- Xuất dữ liệu ra Excel và PDF
-- Thống kê doanh thu và đơn hàng
-- Báo cáo chi tiết theo thời gian
+### 📊 Reports & Data Export
+- Export data to Excel and PDF formats
+- Revenue and order statistics
+- Detailed time-based reports
 
-## Cài đặt và chạy ứng dụng
+### 💰 Expense Management
+- Track business expenses
+- Categorize expenses by type
+- Generate expense reports
 
-### Yêu cầu hệ thống
-- Node.js 16+ 
-- npm hoặc yarn
+### 📦 Inventory Management
+- Warehouse management
+- Inventory tracking
+- Payment status monitoring
+- Warranty management
 
-### Cài đặt
+## Installation & Setup
+
+### System Requirements
+- Node.js 16+
+- npm or yarn
+
+### Installation
 ```bash
 # Clone repository
 git clone <repository-url>
 cd BongMinApp
 
-# Cài đặt dependencies
+# Install dependencies
 npm install
 
-# Chạy ứng dụng
+# Start application
 npm start
 ```
 
-### Tài khoản
-- Hãy tạo tài khoản quản trị đầu tiên của bạn sau khi khởi chạy
+### Account Setup
+- Create your first admin account after launching the application
 
-## Cấu trúc dự án
+## Project Structure
 
 ```
 src/
-├── components/          # Các component React
-│   ├── Auth/           # Xác thực
-│   ├── Layout/         # Layout chính
-│   ├── Products/       # Quản lý sản phẩm
-│   ├── Customers/      # Quản lý khách hàng
-│   ├── Orders/         # Quản lý đơn hàng
-│   ├── Employees/      # Quản lý nhân viên
-│   ├── ActivityLogs/   # Lịch sử hoạt động
-│   └── Export/         # Xuất dữ liệu
+├── components/          # React components
+│   ├── Auth/           # Authentication
+│   ├── Layout/         # Main layout
+│   ├── Products/       # Product management
+│   ├── Customers/      # Customer management
+│   ├── Orders/         # Order management
+│   ├── Employees/      # Employee management
+│   ├── Expenses/       # Expense management
+│   ├── ActivityLogs/   # Activity history
+│   ├── Notifications/  # Notification system
+│   └── Export/         # Data export
 ├── contexts/           # React Context
 ├── types/             # TypeScript types
 ├── utils/             # Utilities
 │   ├── database.ts   # Database operations
-│   └── export.ts     # Export functionality
-└── App.tsx           # Component chính
+│   ├── excel.ts      # Excel export
+│   ├── supabaseClient.ts # Supabase client
+│   └── supabaseAuth.ts   # Supabase authentication
+└── App.tsx           # Main component
 ```
 
-## Tính năng chi tiết
+## Detailed Features
 
-### Quản lý sản phẩm
-- ✅ Thêm, sửa, xóa sản phẩm
-- ✅ Quản lý gói sản phẩm với giá khác nhau
-- ✅ Thời hạn bảo hành linh hoạt
-- ✅ Tìm kiếm và lọc sản phẩm
+### Product Management
+- ✅ Add, edit, delete products
+- ✅ Manage product packages with different pricing
+- ✅ Flexible warranty periods
+- ✅ Search and filter products
 
-### Quản lý khách hàng
-- ✅ Thêm, sửa, xóa khách hàng
-- ✅ Phân loại khách hàng (CTV/Khách lẻ)
-- ✅ Theo dõi nguồn khách hàng
-- ✅ Xem lịch sử đơn hàng
+### Customer Management
+- ✅ Add, edit, delete customers
+- ✅ Customer classification (Partner/Retail)
+- ✅ Track customer sources
+- ✅ View order history
 
-### Quản lý đơn hàng
-- ✅ Tạo đơn hàng mới
-- ✅ Tự động tính ngày hết hạn
-- ✅ Theo dõi trạng thái đơn hàng
-- ✅ Tìm kiếm và lọc đơn hàng
-- ✅ Thống kê doanh thu
+### Order Management
+- ✅ Create new orders
+- ✅ Automatic expiration calculation
+- ✅ Order status tracking
+- ✅ Search and filter orders
+- ✅ Revenue statistics
 
-### Hệ thống phân quyền
-- ✅ Đăng nhập/đăng xuất
-- ✅ Phân quyền theo vai trò
-- ✅ Lưu lịch sử hoạt động
-- ✅ Quản lý nhân viên (chỉ quản lý)
+### Authorization System
+- ✅ Login/logout functionality
+- ✅ Role-based permissions
+- ✅ Activity logging
+- ✅ Employee management (Manager only)
 
-### Xuất dữ liệu
-- ✅ Xuất Excel cho tất cả danh sách
-- ✅ Xuất PDF cho đơn hàng và khách hàng
-- ✅ Định dạng tiếng Việt
+### Data Export
+- ✅ Excel export for all lists
+- ✅ PDF export for orders and customers
+- ✅ Vietnamese formatting support
 
-## Công nghệ sử dụng
+### Expense Management
+- ✅ Track business expenses
+- ✅ Expense categorization
+- ✅ Generate expense reports
+
+### Inventory Management
+- ✅ Warehouse management
+- ✅ Inventory tracking
+- ✅ Payment status monitoring
+- ✅ Warranty management
+
+## Technology Stack
 
 - **Frontend:** React 18 + TypeScript
-- **Styling:** CSS3 với responsive design
+- **Styling:** CSS3 with responsive design
 - **State Management:** React Context + Hooks
-- **Database:** LocalStorage (có thể nâng cấp lên real database)
-- **Export:** xlsx, jspdf
+- **Database:** Supabase (PostgreSQL)
+- **Authentication:** Supabase Auth
+- **Export:** xlsx, jspdf, html2canvas
 - **Build Tool:** Create React App
+- **Deployment:** Vercel
 
-## Hướng dẫn sử dụng
+## Usage Guide
 
-### 1. Đăng nhập
-- Đăng nhập bằng tài khoản bạn đã tạo
-- Tài khoản quản lý có đầy đủ quyền
-- Tài khoản nhân viên có quyền hạn chế
+### 1. Authentication
+- Login with your created account
+- Manager accounts have full permissions
+- Employee accounts have limited permissions
 
-### 2. Quản lý sản phẩm
-- Vào tab "Sản phẩm" để quản lý danh sách sản phẩm
-- Vào tab "Gói sản phẩm" để quản lý các gói của sản phẩm
-- Thiết lập giá cho từng loại khách hàng
+### 2. Product Management
+- Navigate to "Products" tab to manage product list
+- Navigate to "Product Packages" tab to manage product packages
+- Set pricing for each customer type
 
-### 3. Quản lý khách hàng
-- Vào tab "Khách hàng" để quản lý danh sách khách hàng
-- Phân loại khách hàng và theo dõi nguồn
-- Xem lịch sử đơn hàng của từng khách
+### 3. Customer Management
+- Navigate to "Customers" tab to manage customer list
+- Classify customers and track sources
+- View order history for each customer
 
-### 4. Tạo đơn hàng
-- Vào tab "Đơn hàng" để quản lý đơn hàng
-- Tạo đơn hàng mới với thông tin đầy đủ
-- Hệ thống tự động tính ngày hết hạn
+### 4. Order Creation
+- Navigate to "Orders" tab to manage orders
+- Create new orders with complete information
+- System automatically calculates expiration dates
 
-### 5. Xuất báo cáo
-- Sử dụng nút "Xuất dữ liệu" trên mỗi trang
-- Chọn định dạng Excel hoặc PDF
-- File sẽ được tải về máy tính
+### 5. Expense Management
+- Navigate to "Expenses" tab to track business expenses
+- Categorize expenses by type
+- Generate expense reports
 
-## Lưu ý quan trọng
+### 6. Data Export
+- Use "Export Data" button on each page
+- Choose Excel or PDF format
+- Files will be downloaded to your computer
 
-- Dữ liệu được lưu trong LocalStorage của trình duyệt
-- Để backup dữ liệu, có thể xuất ra Excel/PDF
-- Ứng dụng hoạt động offline hoàn toàn
-- Có thể nâng cấp lên database thật khi cần thiết
+## Important Notes
 
-## Hỗ trợ
+- Data is stored in Supabase database
+- Real-time synchronization across devices
+- Offline capability with local storage backup
+- Automatic data backup and recovery
+- Multi-user support with role-based access
 
-Nếu gặp vấn đề, vui lòng liên hệ qua:
-- Email: support@bongminapp.com
-- Hotline: 0123-456-789
+## Development
 
-## License
+### Available Scripts
+- `npm start` - Start development server
+- `npm build` - Build for production
+- `npm test` - Run tests
+- `npm eject` - Eject from Create React App
 
-© 2024 BongMin App. All rights reserved.
+### Dependencies
+- React 18.2.0
+- TypeScript 4.9.5
+- Supabase 2.58.0
+- React Router DOM 6.8.0
+- XLSX 0.18.0
+- jsPDF 2.5.0
+- HTML2Canvas 1.4.0
 
