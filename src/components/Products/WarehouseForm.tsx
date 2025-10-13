@@ -495,8 +495,16 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             <input
               type="date"
               className={`form-control ${errors.purchaseDate ? 'is-invalid' : ''}`}
-              value={formData.purchaseDate.toISOString().split('T')[0]}
-              onChange={(e) => setFormData(prev => ({ ...prev, purchaseDate: new Date(e.target.value) }))}
+              value={formData.purchaseDate && !isNaN(formData.purchaseDate.getTime()) ? formData.purchaseDate.toISOString().split('T')[0] : ''}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                if (dateValue) {
+                  const newDate = new Date(dateValue);
+                  if (!isNaN(newDate.getTime())) {
+                    setFormData(prev => ({ ...prev, purchaseDate: newDate }));
+                  }
+                }
+              }}
             />
           </div>
 
