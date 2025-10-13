@@ -1354,9 +1354,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         return expiry.toISOString().split('T')[0];
                       })();
                       
+                      const statusText = item.status === 'AVAILABLE' ? 'Sẵn có' : 
+                                        item.status === 'SOLD' ? 'Đã bán' : 
+                                        item.status === 'EXPIRED' ? 'Hết hạn' : item.status;
+                      const paymentText = item.paymentStatus === 'PAID' ? 'Đã TT' : 'Chưa TT';
+                      
                       return (
                         <option key={item.id} value={item.id}>
-                          #{item.code} | {item.productInfo || ''} | {productName} | {packageName} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
+                          #{item.code} | {productName} | {packageName} | {statusText} | {paymentText} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
                         </option>
                       );
                     })}
@@ -1461,6 +1466,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 {item.isAccountBased && (
                                   <div className="mb-2">
                                     <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
+                                  </div>
+                                )}
+                                {item.paymentStatus && (
+                                  <div className="mb-2">
+                                    <strong>Thanh toán:</strong> 
+                                    <span className={`badge ms-1 ${item.paymentStatus === 'PAID' ? 'bg-success' : 'bg-warning'}`}>
+                                      {item.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                                    </span>
                                   </div>
                                 )}
                                 {item.notes && (

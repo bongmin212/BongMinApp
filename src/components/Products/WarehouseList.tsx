@@ -422,21 +422,34 @@ const WarehouseList: React.FC = () => {
     try {
       const params = new URLSearchParams(window.location.search);
       
-      // Clear non-warehouse URL params (from other tabs like orders)
-      const warehouseParams = ['q', 'product', 'package', 'status', 'paymentStatus', 'from', 'to', 'accounts', 'free', 'page', 'limit'];
-      const hasNonWarehouseParams = Array.from(params.keys()).some(key => !warehouseParams.includes(key));
+      // Check if we have order-related params that shouldn't be in warehouse
+      const orderParams = ['payment', 'expiry', 'onlyExpiringNotSent'];
+      const hasOrderParams = Array.from(params.keys()).some(key => orderParams.includes(key));
       
-      if (hasNonWarehouseParams) {
-        // Clean URL by keeping only warehouse-related params
-        const cleanParams = new URLSearchParams();
-        warehouseParams.forEach(param => {
-          const value = params.get(param);
-          if (value) cleanParams.set(param, value);
-        });
-        const cleanUrl = `${window.location.pathname}${cleanParams.toString() ? `?${cleanParams.toString()}` : ''}`;
-        window.history.replaceState(null, '', cleanUrl);
+      // Also check for order-specific status values
+      const orderStatusValues = ['PROCESSING', 'COMPLETED', 'CANCELLED'];
+      const hasOrderStatus = params.get('status') && orderStatusValues.includes(params.get('status')!);
+      
+      if (hasOrderParams || hasOrderStatus) {
+        // Clear URL completely when coming from orders tab
+        window.history.replaceState(null, '', window.location.pathname);
+        // Reset all filters to default
+        setSearchTerm('');
+        setDebouncedSearchTerm('');
+        setFilterProduct('');
+        setFilterPackage('');
+        setFilterStatus('');
+        setFilterPaymentStatus('');
+        setDateFrom('');
+        setDateTo('');
+        setOnlyAccounts(false);
+        setOnlyFreeSlots(false);
+        setPage(1);
+        setLimit(parseInt(localStorage.getItem('warehouseList.limit') || '10', 10));
+        return;
       }
       
+      // Normal warehouse params initialization
       const q = params.get('q') || '';
       const prod = params.get('product') || '';
       const pkg = params.get('package') || '';
