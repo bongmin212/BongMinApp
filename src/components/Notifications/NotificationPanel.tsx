@@ -28,8 +28,8 @@ const NotificationPanel: React.FC = () => {
         return <IconPackage className="text-blue-500" />;
       case 'PAYMENT_REMINDER':
         return <IconCreditCard className="text-red-500" />;
-      case 'LOW_STOCK':
-        return <IconAlertTriangle className="text-yellow-500" />;
+      case 'PROCESSING_DELAY':
+        return <IconAlertTriangle className="text-red-600" />;
       default:
         return <IconBell className="text-gray-500" />;
     }

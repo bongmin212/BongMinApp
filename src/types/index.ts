@@ -386,7 +386,7 @@ export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [
 ];
 
 // Notification types
-export type NotificationType = 'EXPIRY_WARNING' | 'NEW_ORDER' | 'PAYMENT_REMINDER' | 'LOW_STOCK';
+export type NotificationType = 'EXPIRY_WARNING' | 'NEW_ORDER' | 'PAYMENT_REMINDER' | 'PROCESSING_DELAY';
 
 export interface Notification {
   id: string;
@@ -402,11 +402,9 @@ export interface Notification {
 
 export interface NotificationSettings {
   expiryWarningDays: number; // Days before expiry to warn
-  lowStockThreshold: number; // Minimum stock level to trigger warning
   enableNewOrderNotifications: boolean;
   enablePaymentReminders: boolean;
   enableExpiryWarnings: boolean;
-  enableLowStockWarnings: boolean;
 }
 
 // Expense types

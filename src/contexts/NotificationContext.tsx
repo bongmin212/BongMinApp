@@ -23,11 +23,9 @@ export const useNotifications = (): NotificationContextValue => {
 
 const DEFAULT_SETTINGS: NotificationSettings = {
   expiryWarningDays: 7,
-  lowStockThreshold: 5,
   enableNewOrderNotifications: true,
   enablePaymentReminders: true,
   enableExpiryWarnings: true,
-  enableLowStockWarnings: true,
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -142,80 +140,44 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return reminders;
   }, [settings]);
 
-  const checkLowStock = useCallback((inventory: InventoryItem[], packages: ProductPackage[], products: Product[]): Notification[] => {
-    if (!settings.enableLowStockWarnings) return [];
-
+  const checkProcessingOrders = useCallback((orders: Order[]): Notification[] => {
     const warnings: Notification[] = [];
-    // key format: `product:PRODUCT_ID` when shared pool, otherwise `package:PACKAGE_ID`
-    const stockCounts = new Map<string, number>();
-    const productById = new Map(products.map(p => [p.id, p]));
-    const packageById = new Map(packages.map(p => [p.id, p]));
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-    // Count available stock respecting shared inventory pools
-    inventory.forEach(item => {
-      if (item.status !== 'AVAILABLE') return;
-      const product = productById.get(item.productId);
-      const usesSharedPool = !!product?.sharedInventoryPool;
-      const key = usesSharedPool ? `product:${item.productId}` : `package:${item.packageId}`;
-      const prev = stockCounts.get(key) || 0;
-      stockCounts.set(key, prev + 1);
-    });
-
-    // Check for low stock
-    stockCounts.forEach((count, key) => {
-      const [scope, id] = key.split(':');
-      if (count > settings.lowStockThreshold) return;
-
-      if (scope === 'product') {
-        const prod = productById.get(id);
-        const productLabel = prod?.name || id;
+    orders.forEach(order => {
+      if (order.status === 'PROCESSING' && new Date(order.createdAt) <= threeDaysAgo) {
+        const daysProcessing = Math.ceil((new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+        
         warnings.push({
-          id: `low-stock-product-${id}`,
-          type: 'LOW_STOCK',
-          title: 'Cảnh báo tồn kho thấp',
-          message: `Sản phẩm ${productLabel} chỉ còn ${count} sản phẩm trong kho`,
-          priority: count === 0 ? 'high' : 'medium',
+          id: `processing-delay-${order.id}`,
+          type: 'PROCESSING_DELAY',
+          title: 'Đơn hàng xử lý quá lâu',
+          message: `Đơn hàng ${order.code} đang xử lý ${daysProcessing} ngày`,
+          priority: daysProcessing >= 7 ? 'high' : 'medium',
           isRead: false,
           createdAt: new Date(),
-          relatedId: id,
-          actionUrl: '/warehouse'
+          relatedId: order.id,
+          actionUrl: '/orders'
         });
-        return;
       }
-
-      const pkg = packageById.get(id);
-      const product = pkg ? productById.get(pkg.productId) : undefined;
-      const label = pkg && product ? `${pkg.name} · ${product.name}` : (pkg?.name || id);
-      warnings.push({
-        id: `low-stock-package-${id}`,
-        type: 'LOW_STOCK',
-        title: 'Cảnh báo tồn kho thấp',
-        message: `Gói ${label} chỉ còn ${count} sản phẩm trong kho`,
-        priority: count === 0 ? 'high' : 'medium',
-        isRead: false,
-        createdAt: new Date(),
-        relatedId: id,
-        actionUrl: '/warehouse'
-      });
     });
 
     return warnings;
-  }, [settings]);
+  }, []);
 
   const generateNotifications = useCallback(async () => {
     try {
-      const [orders, packages, inventory, products] = await Promise.all([
+      const [orders, packages] = await Promise.all([
         Database.getOrders(),
-        Database.getPackages(),
-        Database.getInventory(),
-        Database.getProducts()
+        Database.getPackages()
       ]);
 
       const allNotifications = [
         ...checkExpiryWarnings(orders, packages),
         ...checkNewOrders(orders),
         ...checkPaymentReminders(orders),
-        ...checkLowStock(inventory, packages, products)
+        ...checkProcessingOrders(orders)
       ];
 
       // Remove duplicates and update existing notifications
@@ -227,7 +189,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('Error generating notifications:', error);
     }
-  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkLowStock]);
+  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders]);
 
   const refreshNotifications = useCallback(() => {
     generateNotifications();
