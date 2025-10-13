@@ -1450,15 +1450,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 </div>
                               </div>
                               <div className="col-md-6">
-                                {typeof item.purchasePrice === 'number' && (
+                                {(item.purchasePrice !== null && item.purchasePrice !== undefined) && (
                                   <div className="mb-2">
                                     <strong>Giá nhập:</strong> 
                                     <span className="text-success fw-bold">
-                                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchasePrice)}
+                                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(item.purchasePrice))}
                                     </span>
                                   </div>
                                 )}
-                                {item.sourceNote && (
+                                {(item.sourceNote && item.sourceNote.trim()) && (
                                   <div className="mb-2">
                                     <strong>Nguồn nhập:</strong> <em>{item.sourceNote}</em>
                                   </div>
