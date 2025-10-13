@@ -1450,15 +1450,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 </div>
                               </div>
                               <div className="col-md-6">
-                                {(item.purchasePrice !== null && item.purchasePrice !== undefined) && (
+                                {typeof item.purchasePrice === 'number' && (
                                   <div className="mb-2">
                                     <strong>Giá nhập:</strong> 
                                     <span className="text-success fw-bold">
-                                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(item.purchasePrice))}
+                                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchasePrice)}
                                     </span>
                                   </div>
                                 )}
-                                {(item.sourceNote && item.sourceNote.trim()) && (
+                                {item.sourceNote && (
                                   <div className="mb-2">
                                     <strong>Nguồn nhập:</strong> <em>{item.sourceNote}</em>
                                   </div>
@@ -1466,14 +1466,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 {item.isAccountBased && (
                                   <div className="mb-2">
                                     <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
-                                  </div>
-                                )}
-                                {item.paymentStatus && (
-                                  <div className="mb-2">
-                                    <strong>Thanh toán:</strong> 
-                                    <span className={`badge ms-1 ${item.paymentStatus === 'PAID' ? 'bg-success' : 'bg-warning'}`}>
-                                      {item.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}
-                                    </span>
                                   </div>
                                 )}
                                 {item.notes && (
