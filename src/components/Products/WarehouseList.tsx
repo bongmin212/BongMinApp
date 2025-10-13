@@ -421,6 +421,22 @@ const WarehouseList: React.FC = () => {
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
+      
+      // Clear non-warehouse URL params (from other tabs like orders)
+      const warehouseParams = ['q', 'product', 'package', 'status', 'paymentStatus', 'from', 'to', 'accounts', 'free', 'page', 'limit'];
+      const hasNonWarehouseParams = Array.from(params.keys()).some(key => !warehouseParams.includes(key));
+      
+      if (hasNonWarehouseParams) {
+        // Clean URL by keeping only warehouse-related params
+        const cleanParams = new URLSearchParams();
+        warehouseParams.forEach(param => {
+          const value = params.get(param);
+          if (value) cleanParams.set(param, value);
+        });
+        const cleanUrl = `${window.location.pathname}${cleanParams.toString() ? `?${cleanParams.toString()}` : ''}`;
+        window.history.replaceState(null, '', cleanUrl);
+      }
+      
       const q = params.get('q') || '';
       const prod = params.get('product') || '';
       const pkg = params.get('package') || '';
