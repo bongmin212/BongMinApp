@@ -252,6 +252,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           productInfo: i.product_info,
           purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(),
           expiryDate: i.expiry_date ? new Date(i.expiry_date) : undefined,
+          purchasePrice: i.purchase_price,
+          sourceNote: i.source_note,
           createdAt: i.created_at ? new Date(i.created_at) : new Date(),
           updatedAt: i.updated_at ? new Date(i.updated_at) : new Date(),
           isAccountBased: i.is_account_based,
@@ -295,6 +297,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             productInfo: linked.product_info,
             purchaseDate: linked.purchase_date ? new Date(linked.purchase_date) : new Date(),
             expiryDate: linked.expiry_date ? new Date(linked.expiry_date) : undefined,
+            purchasePrice: linked.purchase_price,
+            sourceNote: linked.source_note,
             createdAt: linked.created_at ? new Date(linked.created_at) : new Date(),
             updatedAt: linked.updated_at ? new Date(linked.updated_at) : new Date(),
             isAccountBased: linked.is_account_based,
@@ -326,6 +330,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             productInfo: l.product_info,
             purchaseDate: l.purchase_date ? new Date(l.purchase_date) : new Date(),
             expiryDate: l.expiry_date ? new Date(l.expiry_date) : undefined,
+            purchasePrice: l.purchase_price,
+            sourceNote: l.source_note,
             createdAt: l.created_at ? new Date(l.created_at) : new Date(),
             updatedAt: l.updated_at ? new Date(l.updated_at) : new Date(),
             isAccountBased: l.is_account_based,
@@ -1390,6 +1396,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     console.log('Product name:', productName);
                     console.log('Package name:', packageName);
                     console.log('Is shared pool:', isSharedPool);
+                    console.log('Purchase price:', item.purchasePrice, 'Type:', typeof item.purchasePrice);
+                    console.log('Source note:', item.sourceNote);
                     
                     return (
                       <div className="mt-3">
