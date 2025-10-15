@@ -261,6 +261,10 @@ const ActivityLogList: React.FC = () => {
     if (inventoryItem) {
       parts.push(`Kho ${inventoryItem.code}`);
     }
+    // Explicit inventory code (for cases where we don't have inventoryId yet, e.g. immediate "Nhập kho")
+    if (!inventoryItem && kv.inventoryCode) {
+      parts.push(`Kho ${kv.inventoryCode}`);
+    }
     if (kv.status) {
       parts.push(`Trạng thái: ${statusLabelMap[kv.status] || kv.status}`);
     }
