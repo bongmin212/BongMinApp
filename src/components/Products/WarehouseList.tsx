@@ -391,7 +391,6 @@ const WarehouseList: React.FC = () => {
       accountColumns: r.account_columns || [],
       accountData: r.account_data || {},
       totalSlots: r.total_slots || 0,
-      customWarrantyMonths: r.custom_warranty_months || undefined,
       profiles: (() => {
         const profiles = Array.isArray(r.profiles) ? r.profiles : [];
         // Generate missing profiles for account-based inventory
@@ -691,7 +690,7 @@ const WarehouseList: React.FC = () => {
   const pageItems = sortedItems.slice(start, start + limit);
 
   const exportInventoryXlsx = (items: InventoryItem[], filename: string) => {
-    const rows = items.map((i, idx) => {
+      const rows = items.map((i, idx) => {
       const prodName = productMap.get(i.productId) || i.productId;
       const pkg = packages.find(p => p.id === i.packageId) as any;
       const pool = (() => {
@@ -710,7 +709,7 @@ const WarehouseList: React.FC = () => {
         warrantyMonths: (() => {
           const prod = products.find(p => p.id === i.productId);
           if (prod?.sharedInventoryPool) {
-            return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
+            return '-';
           }
           const pkg = packages.find(p => p.id === i.packageId);
           return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
@@ -1252,14 +1251,14 @@ const WarehouseList: React.FC = () => {
                   <td className="text-truncate" title={(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
-                      return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
+                      return '-';
                     }
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
                   })()}>{(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
-                      return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
+                      return '-';
                     }
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';

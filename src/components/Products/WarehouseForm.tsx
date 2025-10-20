@@ -30,8 +30,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     isAccountBased: false,
     accountColumns: [],
     accountData: {},
-    totalSlots: undefined,
-    customWarrantyMonths: undefined
+    totalSlots: undefined
   });
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
@@ -100,8 +99,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       isAccountBased: !!item.isAccountBased,
       accountColumns: item.accountColumns || [],
       accountData: item.accountData || {},
-      totalSlots: item.totalSlots,
-      customWarrantyMonths: item.customWarrantyMonths
+      totalSlots: item.totalSlots
     });
   }, [item]);
 
@@ -145,8 +143,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             isAccountBased: false,
             accountColumns: [],
             accountData: {},
-            totalSlots: 5,
-            customWarrantyMonths: undefined
+            totalSlots: 5
           });
         } catch {
           // Fallback to local storage method
@@ -164,8 +161,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             isAccountBased: false,
             accountColumns: [],
             accountData: {},
-            totalSlots: 5,
-            customWarrantyMonths: undefined
+            totalSlots: 5
           });
         }
       })();
@@ -261,10 +257,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     if (!formData.sourceNote || !formData.sourceNote.trim()) newErrors.sourceNote = 'Nhập từ nguồn là bắt buộc';
     if (!formData.productInfo || !formData.productInfo.trim()) newErrors.productInfo = 'Nhập thông tin sản phẩm';
     if (formData.purchasePrice == null || isNaN(formData.purchasePrice) || formData.purchasePrice < 0) newErrors.purchasePrice = 'Giá mua không được âm';
-    // Validate custom warranty for shared pool products
-    if (currentProduct?.sharedInventoryPool && (!formData.customWarrantyMonths || formData.customWarrantyMonths < 1)) {
-      newErrors.customWarrantyMonths = 'Nhập thời hạn hợp lệ (ít nhất 1 tháng)';
-    }
+    // No custom warranty validation for inventory anymore
     // Validate required fields for columns that should be displayed in orders
     displayColumns.forEach((col: InventoryAccountColumn) => {
       const val = (formData.accountData || {})[col.id] || '';
@@ -286,15 +279,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         // Recalculate expiry = purchase date + warranty period (ignore past renewals)
         const recomputedExpiryIso = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
-          const months = (() => {
-            // If custom months is explicitly set (any product), use it; otherwise default by product/package
-            if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
-              return formData.customWarrantyMonths;
-            }
-            return currentProduct?.sharedInventoryPool
-              ? 1
-              : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-          })();
+          const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
           const d = new Date(purchaseDate);
           d.setMonth(d.getMonth() + months);
           return d.toISOString();
@@ -313,10 +298,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             product_info: formData.productInfo,
             notes: formData.notes,
             payment_status: formData.paymentStatus || 'UNPAID',
-            account_data: formData.accountData,
-            custom_warranty_months: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
-              ? formData.customWarrantyMonths
-              : null
+            account_data: formData.accountData
           })
           .eq('id', item.id);
         if (error) throw new Error(error.message || 'Không thể cập nhật kho');
@@ -333,14 +315,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 // Reset expiry to purchase + warranty, dropping past renewals
                 expiryDate: (() => {
                   const purchaseDate = new Date(formData.purchaseDate);
-                  const months = (() => {
-                    if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
-                      return formData.customWarrantyMonths;
-                    }
-                    return currentProduct?.sharedInventoryPool
-                      ? 1
-                      : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-                  })();
+                  const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
                   const d = new Date(purchaseDate);
                   d.setMonth(d.getMonth() + months);
                   return d;
@@ -351,9 +326,6 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 notes: formData.notes,
                 paymentStatus: formData.paymentStatus || 'UNPAID',
                 accountData: formData.accountData,
-                customWarrantyMonths: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
-                  ? formData.customWarrantyMonths
-                  : undefined,
                 updatedAt: new Date()
               }
             : it);
@@ -370,14 +342,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         // Calculate expiry date for DB to avoid NULL constraints and keep consistent
         const expiryDateForDb = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
-          const months = (() => {
-            if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
-              return formData.customWarrantyMonths;
-            }
-            return currentProduct?.sharedInventoryPool
-              ? 1
-              : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-          })();
+          const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
           const d = new Date(purchaseDate);
           d.setMonth(d.getMonth() + months);
           return d.toISOString();
@@ -401,9 +366,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             account_data: formData.accountData,
             is_account_based: !!selectedPkg?.isAccountBased,
             total_slots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : null,
-            custom_warranty_months: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
-              ? formData.customWarrantyMonths
-              : null
+            
           });
         if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
         
@@ -411,14 +374,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         const purchaseDate = new Date(formData.purchaseDate);
         const expiryDate = (() => {
           const date = new Date(purchaseDate);
-          const months = (() => {
-            if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
-              return formData.customWarrantyMonths;
-            }
-            return currentProduct?.sharedInventoryPool
-              ? 1
-              : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-          })();
+          const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
           date.setMonth(date.getMonth() + months);
           return date;
         })();
@@ -441,9 +397,6 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           accountData: formData.accountData,
           totalSlots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : undefined,
           profiles: selectedPkg?.isAccountBased ? Array.from({ length: Math.max(1, Number(selectedPkg?.defaultSlots || 5)) }, (_, idx) => ({ id: `slot-${idx + 1}`, label: `Slot ${idx + 1}`, isAssigned: false })) : undefined,
-          customWarrantyMonths: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
-            ? formData.customWarrantyMonths
-            : undefined,
           createdAt: new Date(),
           updatedAt: new Date()
         };
@@ -617,57 +570,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             </select>
           </div>
 
-          {/* Custom warranty field for shared pool products */}
-          {currentProduct?.sharedInventoryPool ? (
-            <div className="form-group">
-              <label className="form-label">Thời hạn (tháng) <span className="text-danger">*</span></label>
-              <input
-                type="number"
-                className={`form-control ${errors.customWarrantyMonths ? 'is-invalid' : ''}`}
-                value={formData.customWarrantyMonths || ''}
-                onChange={(e) => {
-                  const value = e.target.value ? Number(e.target.value) : undefined;
-                  setFormData(prev => ({ ...prev, customWarrantyMonths: value }));
-                  if (errors.customWarrantyMonths) setErrors(prev => ({ ...prev, customWarrantyMonths: '' }));
-                }}
-                placeholder="Nhập số tháng"
-                min="1"
-                max="999"
-              />
-              {errors.customWarrantyMonths && (
-                <div className="text-danger small mt-1">{errors.customWarrantyMonths}</div>
-              )}
-            </div>
-          ) : (
-            <div className="form-group">
-              <label className="form-label">Hạn tùy chỉnh (tháng)</label>
-              <div className="d-flex gap-2">
-                <input
-                  type="checkbox"
-                  className="form-control"
-                  style={{ width: 22, height: 22 }}
-                  checked={typeof formData.customWarrantyMonths === 'number' && (formData.customWarrantyMonths as any) > 0}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setFormData(prev => ({ ...prev, customWarrantyMonths: checked ? (prev.customWarrantyMonths || (selectedPkg?.warrantyPeriod || 1)) : undefined }));
-                  }}
-                />
-                <input
-                  type="number"
-                  className="form-control"
-                  value={typeof formData.customWarrantyMonths === 'number' ? String(formData.customWarrantyMonths) : ''}
-                  onChange={(e) => {
-                    const val = e.target.value ? Math.max(1, Number(e.target.value)) : undefined;
-                    setFormData(prev => ({ ...prev, customWarrantyMonths: val }));
-                  }}
-                  placeholder={selectedPkg ? `Mặc định: ${selectedPkg.warrantyPeriod} tháng` : 'Nhập số tháng'}
-                  min="1"
-                  max="999"
-                  disabled={!(typeof formData.customWarrantyMonths === 'number' && (formData.customWarrantyMonths as any) > 0)}
-                />
-              </div>
-            </div>
-          )}
+          {/* Bỏ toàn bộ UI hạn tùy chỉnh trong kho. Hạn tính như hiện tại theo sản phẩm/gói. */}
 
           <div className="form-group">
             <label className="form-label">Thông tin sản phẩm <span className="text-danger">*</span></label>
