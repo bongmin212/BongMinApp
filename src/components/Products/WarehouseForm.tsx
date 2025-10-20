@@ -286,9 +286,15 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         // Recalculate expiry = purchase date + warranty period (ignore past renewals)
         const recomputedExpiryIso = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
-          const months = currentProduct?.sharedInventoryPool
-            ? (formData.customWarrantyMonths || 1)
-            : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const months = (() => {
+            // If custom months is explicitly set (any product), use it; otherwise default by product/package
+            if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
+              return formData.customWarrantyMonths;
+            }
+            return currentProduct?.sharedInventoryPool
+              ? 1
+              : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          })();
           const d = new Date(purchaseDate);
           d.setMonth(d.getMonth() + months);
           return d.toISOString();
@@ -325,9 +331,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 // Reset expiry to purchase + warranty, dropping past renewals
                 expiryDate: (() => {
                   const purchaseDate = new Date(formData.purchaseDate);
-                  const months = currentProduct?.sharedInventoryPool
-                    ? (formData.customWarrantyMonths || 1)
-                    : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+                  const months = (() => {
+                    if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
+                      return formData.customWarrantyMonths;
+                    }
+                    return currentProduct?.sharedInventoryPool
+                      ? 1
+                      : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+                  })();
                   const d = new Date(purchaseDate);
                   d.setMonth(d.getMonth() + months);
                   return d;
@@ -355,9 +366,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         // Calculate expiry date for DB to avoid NULL constraints and keep consistent
         const expiryDateForDb = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
-          const months = currentProduct?.sharedInventoryPool
-            ? (formData.customWarrantyMonths || 1)
-            : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const months = (() => {
+            if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
+              return formData.customWarrantyMonths;
+            }
+            return currentProduct?.sharedInventoryPool
+              ? 1
+              : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          })();
           const d = new Date(purchaseDate);
           d.setMonth(d.getMonth() + months);
           return d.toISOString();
@@ -389,9 +405,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         const purchaseDate = new Date(formData.purchaseDate);
         const expiryDate = (() => {
           const date = new Date(purchaseDate);
-          const months = currentProduct?.sharedInventoryPool
-            ? (formData.customWarrantyMonths || 1)
-            : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const months = (() => {
+            if (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0) {
+              return formData.customWarrantyMonths;
+            }
+            return currentProduct?.sharedInventoryPool
+              ? 1
+              : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          })();
           date.setMonth(date.getMonth() + months);
           return date;
         })();
@@ -527,6 +548,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 if (dateValue) {
                   const newDate = new Date(dateValue);
                   if (!isNaN(newDate.getTime())) {
+                    // When changing purchase date, reset expiry logic by recomputing months baseline (handled on submit)
                     setFormData(prev => ({ ...prev, purchaseDate: newDate }));
                   }
                 }
@@ -588,7 +610,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           </div>
 
           {/* Custom warranty field for shared pool products */}
-          {currentProduct?.sharedInventoryPool && (
+          {currentProduct?.sharedInventoryPool ? (
             <div className="form-group">
               <label className="form-label">Thời hạn (tháng) <span className="text-danger">*</span></label>
               <input
@@ -607,6 +629,35 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               {errors.customWarrantyMonths && (
                 <div className="text-danger small mt-1">{errors.customWarrantyMonths}</div>
               )}
+            </div>
+          ) : (
+            <div className="form-group">
+              <label className="form-label">Hạn tùy chỉnh (tháng)</label>
+              <div className="d-flex gap-2">
+                <input
+                  type="checkbox"
+                  className="form-control"
+                  style={{ width: 22, height: 22 }}
+                  checked={typeof formData.customWarrantyMonths === 'number' && (formData.customWarrantyMonths as any) > 0}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData(prev => ({ ...prev, customWarrantyMonths: checked ? (prev.customWarrantyMonths || (selectedPkg?.warrantyPeriod || 1)) : undefined }));
+                  }}
+                />
+                <input
+                  type="number"
+                  className="form-control"
+                  value={typeof formData.customWarrantyMonths === 'number' ? String(formData.customWarrantyMonths) : ''}
+                  onChange={(e) => {
+                    const val = e.target.value ? Math.max(1, Number(e.target.value)) : undefined;
+                    setFormData(prev => ({ ...prev, customWarrantyMonths: val }));
+                  }}
+                  placeholder={selectedPkg ? `Mặc định: ${selectedPkg.warrantyPeriod} tháng` : 'Nhập số tháng'}
+                  min="1"
+                  max="999"
+                  disabled={!(typeof formData.customWarrantyMonths === 'number' && (formData.customWarrantyMonths as any) > 0)}
+                />
+              </div>
             </div>
           )}
 
