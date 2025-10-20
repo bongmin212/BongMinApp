@@ -736,7 +736,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             if (nextInventoryId) {
               console.log('=== INVENTORY UPDATE DEBUG ===');
               console.log('nextInventoryId:', nextInventoryId);
-              console.log('selectedProfileId:', selectedProfileId);
+              console.log('selectedProfileIds:', selectedProfileIds);
               
               const { data: inv } = await sb.from('inventory').select('*').eq('id', nextInventoryId).single();
               console.log('Found inventory item:', inv);
@@ -805,7 +805,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         console.log('inventoryItemId:', orderData.inventoryItemId, 'Type:', typeof orderData.inventoryItemId);
         console.log('inventoryProfileId:', orderData.inventoryProfileId, 'Type:', typeof orderData.inventoryProfileId);
         console.log('selectedInventoryId:', selectedInventoryId, 'Type:', typeof selectedInventoryId);
-        console.log('selectedProfileId:', selectedProfileId, 'Type:', typeof selectedProfileId);
+        console.log('selectedProfileIds:', selectedProfileIds, 'Type:', typeof selectedProfileIds);
         console.log('inventory_profile_id being sent:', orderData.inventoryProfileId);
         
         const insertData = {
@@ -923,7 +923,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         }
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileId=${selectedProfileId || '-'}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
         } catch {}
         notify('Tạo đơn hàng thành công', 'success');
         onSuccess();
