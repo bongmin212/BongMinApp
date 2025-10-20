@@ -157,6 +157,43 @@ const OrderList: React.FC = () => {
       sb.from('products').select('*'),
       sb.from('inventory').select('*')
     ]);
+
+    // Auto-update order status based on expiry_date
+    try {
+      const now = new Date();
+      const raw = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+
+      const toExpireIds: string[] = [];
+      const toUnexpireIds: string[] = [];
+
+      for (const r of raw) {
+        const expiry = r.expiry_date ? new Date(r.expiry_date) : null;
+        const isExpiredNow = !!expiry && expiry < now;
+        const isCompleted = r.status === 'COMPLETED';
+        const isExpiredStatus = r.status === 'EXPIRED';
+        const isCancelled = r.status === 'CANCELLED';
+
+        // Mark to EXPIRED when past due and COMPLETED (not CANCELLED)
+        if (isExpiredNow && isCompleted && !isExpiredStatus && !isCancelled) {
+          toExpireIds.push(r.id);
+        }
+
+        // Revert EXPIRED -> COMPLETED if renewed and not cancelled
+        if (!isExpiredNow && isExpiredStatus && !isCancelled) {
+          toUnexpireIds.push(r.id);
+        }
+      }
+
+      if (toExpireIds.length > 0) {
+        await sb.from('orders').update({ status: 'EXPIRED' }).in('id', toExpireIds);
+      }
+      if (toUnexpireIds.length > 0) {
+        await sb.from('orders').update({ status: 'COMPLETED' }).in('id', toUnexpireIds);
+      }
+    } catch (e) {
+      // Best-effort; ignore failures and continue rendering
+      console.error('Auto-expire orders sweep failed', e);
+    }
     const allOrders = (ordersRes.data || []).map((r: any) => {
       console.log('Raw order from Supabase:', r);
       console.log('Order inventory_profile_id:', r.inventory_profile_id);
