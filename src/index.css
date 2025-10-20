@@ -1145,11 +1145,6 @@ body:has(.modal) .main-content * {
   justify-content: flex-end;
 }
 
-.warehouse-card-actions .btn {
-  padding: 4px 8px;
-  font-size: 0.75rem;
-}
-
 /* Column-specific widths for warehouse table */
 .table th:has(input[type="checkbox"]),
 .table td:has(input[type="checkbox"]) {

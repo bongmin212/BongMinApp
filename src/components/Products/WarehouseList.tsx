@@ -1307,8 +1307,8 @@ const WarehouseList: React.FC = () => {
               </div>
 
               <div className="warehouse-card-actions">
-                <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(item)}>Xem</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
+                <button className="btn btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
+                <button className="btn btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
               </div>
             </div>
           ))}
