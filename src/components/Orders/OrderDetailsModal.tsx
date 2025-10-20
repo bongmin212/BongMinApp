@@ -72,6 +72,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 		const productName = product?.name || 'Không xác định';
 		const packageName = packageInfo?.name || 'Không xác định';
 		const isSharedPool = product?.sharedInventoryPool;
+			const linkedSlots: string[] = Array.isArray(inv.profiles)
+				? (inv.profiles as any[])
+					.filter(p => p.assignedOrderId === order.id)
+					.map(p => (p.label || p.id))
+				: [];
 		return (
 			<div className="card mt-2">
 				<div className="card-header">
@@ -130,6 +135,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 									<strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
 								</div>
 							)}
+								{linkedSlots.length > 0 && (
+									<div className="mb-2">
+										<strong>Slot liên kết:</strong> {linkedSlots.join(', ')}
+									</div>
+								)}
 							{inv.notes && (
 								<div className="mb-2">
 									<strong>Ghi chú:</strong> <small className="text-muted">{inv.notes}</small>
