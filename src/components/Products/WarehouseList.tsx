@@ -1206,25 +1206,25 @@ const WarehouseList: React.FC = () => {
           <table className="table">
             <thead>
               <tr>
-                <th className="col-checkbox">
+                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
                     checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
                     onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
                   />
                 </th>
-                <th className="col-code">Mã kho</th>
-                <th className="col-product">Sản phẩm</th>
-                <th className="col-package">Gói / Pool</th>
-                <th className="col-date">Ngày nhập</th>
-                <th className="col-date">Hết hạn</th>
-                <th className="col-duration">Thời hạn</th>
-                <th className="col-source">Nguồn</th>
-                <th className="col-price">Giá mua</th>
-                <th className="col-payment">Thanh toán</th>
-                <th className="col-status">Trạng thái</th>
-                <th className="col-slot">Slot</th>
-                <th className="col-actions">Thao tác</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
+                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá mua</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
+                <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Slot</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -1233,18 +1233,31 @@ const WarehouseList: React.FC = () => {
                   <td>
                     <input type="checkbox" checked={selectedIds.includes(i.id)} onChange={(e) => toggleSelect(i.id, e.target.checked)} />
                   </td>
-                  <td className="table-cell-truncate">{i.code || `KHO${index + 1}`}</td>
-                  <td className="table-cell-wrap">{productMap.get(i.productId) || i.productId}</td>
-                  <td className="table-cell-wrap">{(() => {
+                  <td className="text-truncate" title={i.code || `KHO${index + 1}`}>{i.code || `KHO${index + 1}`}</td>
+                  <td className="text-truncate" title={productMap.get(i.productId) || i.productId}>{productMap.get(i.productId) || i.productId}</td>
+                  <td className="text-truncate" title={(() => {
+                    const prod = products.find(p => p.id === i.productId);
+                    if (prod?.sharedInventoryPool) {
+                      return 'Pool chung';
+                    }
+                    return packageMap.get(i.packageId) || i.packageId;
+                  })()}>{(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
                       return <span className="text-muted">Pool chung</span>;
                     }
                     return packageMap.get(i.packageId) || i.packageId;
                   })()}</td>
-                  <td className="table-cell-truncate">{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
-                  <td className="table-cell-truncate">{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
-                  <td className="table-cell-truncate">{(() => {
+                  <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
+                  <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
+                  <td className="text-truncate" title={(() => {
+                    const prod = products.find(p => p.id === i.productId);
+                    if (prod?.sharedInventoryPool) {
+                      return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
+                    }
+                    const pkg = packages.find(p => p.id === i.packageId);
+                    return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                  })()}>{(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
                       return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
@@ -1252,8 +1265,8 @@ const WarehouseList: React.FC = () => {
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
                   })()}</td>
-                  <td className="table-cell-wrap">{i.sourceNote || '-'}</td>
-                  <td className="table-cell-truncate">{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
+                  <td className="text-truncate" title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
+                  <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td>
                     <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
                       {INVENTORY_PAYMENT_STATUSES.find(s => s.value === i.paymentStatus)?.label || 'Chưa TT'}
