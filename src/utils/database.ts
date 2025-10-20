@@ -417,7 +417,7 @@ export class Database {
           const profile = (inventory.profiles || []).find(p => p.assignedOrderId === o.id);
           // Use the order's package columns to avoid mismatch when inventory package changes
           const inventoryForOrder = { ...inventory, packageId: o.packageId } as InventoryItem;
-          return this.buildOrderInfoFromAccount(inventoryForOrder, profile?.id);
+          return this.buildOrderInfoFromAccount(inventoryForOrder, profile?.id ? [profile.id] : undefined);
         }
         return inventory.productInfo || '';
       })();
@@ -519,7 +519,7 @@ export class Database {
     if (changed) saveToStorage(STORAGE_KEYS.INVENTORY, next);
   }
 
-  static buildOrderInfoFromAccount(item: InventoryItem, chosenProfileId?: string): string {
+  static buildOrderInfoFromAccount(item: InventoryItem, chosenProfileIds?: string[]): string {
     const lines: string[] = [];
     // Always prefer latest package-level column definitions to avoid stale titles/flags
     const pkg = this.getPackages().find(p => p.id === item.packageId);
@@ -527,26 +527,41 @@ export class Database {
       ? pkg.accountColumns
       : (item.accountColumns || []);
     const data = item.accountData || {};
-    columns.forEach(col => {
-      if (col.includeInOrderInfo) {
-        const val = data[col.id] ?? '';
-        if (String(val).trim()) {
-          const valueStr = String(val);
-          if (valueStr.includes('\n')) {
-            lines.push(`${col.title}:`);
-            // preserve user-entered newlines per line
-            valueStr.split('\n').forEach((ln) => lines.push(ln));
-          } else {
-            lines.push(`${col.title}: ${valueStr}`);
+    
+    // Nếu có nhiều slot, hiển thị từng slot
+    if (chosenProfileIds && chosenProfileIds.length > 0) {
+      chosenProfileIds.forEach((profileId, index) => {
+        const profile = (item.profiles || []).find(p => p.id === profileId);
+        lines.push(`--- Slot ${index + 1}: ${profile?.label || profileId} ---`);
+        columns.forEach(col => {
+          if (col.includeInOrderInfo) {
+            const val = data[col.id] ?? '';
+            if (String(val).trim()) {
+              const valueStr = String(val);
+              if (valueStr.includes('\n')) {
+                lines.push(`${col.title}:`);
+                // preserve user-entered newlines per line
+                valueStr.split('\n').forEach((ln) => lines.push(ln));
+              } else {
+                lines.push(`${col.title}: ${valueStr}`);
+              }
+            }
+          }
+        });
+        lines.push(''); // blank line between slots
+      });
+      const usage = this.computeSlotUsage(item);
+      if (usage.total > 0) lines.push(`Tổng slot: ${chosenProfileIds.length} | Đã dùng: ${usage.used}/${usage.total}`);
+    } else {
+      // Fallback: không có slot được chọn
+      columns.forEach(col => {
+        if (col.includeInOrderInfo) {
+          const val = data[col.id] ?? '';
+          if (String(val).trim()) {
+            lines.push(`${col.title}: ${val}`);
           }
         }
-      }
-    });
-    if (item.isAccountBased && chosenProfileId) {
-      const profile = (item.profiles || []).find(p => p.id === chosenProfileId);
-      if (profile) lines.push(`Slot: ${profile.label}`);
-      const usage = this.computeSlotUsage(item);
-      if (usage.total > 0) lines.push(`Slot: ${usage.used}/${usage.total}`);
+      });
     }
     return lines.join('\n');
   }

@@ -36,7 +36,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [availableInventory, setAvailableInventory] = useState<InventoryItem[]>([]);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
+  const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
   const [inventoryError, setInventoryError] = useState<string>('');
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
@@ -115,8 +115,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         useCustomExpiry: false,
         customExpiryDate: order.expiryDate ? new Date(order.expiryDate) : undefined
       });
-      if ((order as any).inventoryProfileId) {
-        setSelectedProfileId((order as any).inventoryProfileId as any);
+      if ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds)) {
+        setSelectedProfileIds((order as any).inventoryProfileIds);
+      } else if ((order as any).inventoryProfileId) {
+        // Backward compatibility
+        setSelectedProfileIds([(order as any).inventoryProfileId]);
       }
     } else {
       // Prefill auto code for new order (from Supabase)
@@ -395,7 +398,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
   // Auto-pick slot for account-based inventory
   // For new orders: do NOT auto-select; require explicit user choice
-  // For editing: preserve the slot already assigned to this order if present; otherwise select the first available
+  // For editing: preserve the slots already assigned to this order if present
   useEffect(() => {
     if (!selectedInventoryId) return;
     const inv = availableInventory.find(i => i.id === selectedInventoryId);
@@ -404,21 +407,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     const profiles = Array.isArray(inv?.profiles) ? (inv as any).profiles : [];
     const allowed = profiles.filter((p: any) => !p.isAssigned || p.assignedOrderId === (order?.id || ''));
     if (!allowed.length) {
-      setSelectedProfileId('');
+      setSelectedProfileIds([]);
       return;
     }
-    // New order: don't auto-pick a slot
+    // New order: don't auto-pick slots
     if (!order) {
-      setSelectedProfileId(prev => (prev && allowed.some((p: any) => p.id === prev)) ? prev : '');
+      setSelectedProfileIds(prev => prev.filter(id => allowed.some((p: any) => p.id === id)));
       return;
     }
-    // Editing existing order: keep current/assigned or fallback to first allowed
-    setSelectedProfileId(prev => {
-      if (prev && allowed.some((p: any) => p.id === prev)) return prev;
-      const existing = (order as any)?.inventoryProfileId;
-      if (existing && allowed.some((p: any) => p.id === existing)) return existing as string;
-      return allowed[0].id as string;
-    });
+    // Editing existing order: keep current/assigned slots
+    const existingIds = (order as any)?.inventoryProfileIds || [];
+    const existingId = (order as any)?.inventoryProfileId; // backward compatibility
+    const validExistingIds = existingIds.filter((id: string) => allowed.some((p: any) => p.id === id));
+    const validExistingId = existingId && allowed.some((p: any) => p.id === existingId) ? [existingId] : [];
+    setSelectedProfileIds(validExistingIds.length > 0 ? validExistingIds : validExistingId);
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
 
   // Reset custom fields and selected slot when package changes (new order flow)
@@ -429,7 +431,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         ...prev,
         customFieldValues: {}
       }));
-      setSelectedProfileId('');
+      setSelectedProfileIds([]);
     }
   }, [formData.packageId, order]);
 
@@ -501,17 +503,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     if (selectedInventoryId) {
       const inv = availableInventory.find(i => i.id === selectedInventoryId);
       const pkg = packages.find(p => p.id === formData.packageId);
-      if ((inv?.isAccountBased || pkg?.isAccountBased) && !selectedProfileId) {
-        newErrors["inventoryProfileId"] = 'Vui lòng chọn slot để cấp';
+      if ((inv?.isAccountBased || pkg?.isAccountBased) && selectedProfileIds.length === 0) {
+        newErrors["inventoryProfileId"] = 'Vui lòng chọn ít nhất 1 slot để cấp';
       }
       // Enforce exclusive linking: prevent selecting an inventory item that already has any assignment/link other than this order
       if (inv) {
         if (inv.isAccountBased) {
-          // Only validate chosen slot availability; ignore other occupied slots
-          if (selectedProfileId) {
-            const chosen = (inv.profiles || []).find(p => p.id === selectedProfileId);
-            if (!chosen || (chosen as any).needsUpdate || (chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '')) {
-              newErrors["inventoryProfileId"] = 'Slot không hợp lệ, vui lòng chọn slot trống';
+          // Only validate chosen slots availability; ignore other occupied slots
+          if (selectedProfileIds.length > 0) {
+            const invalidSlots = selectedProfileIds.filter(profileId => {
+              const chosen = (inv.profiles || []).find(p => p.id === profileId);
+              return !chosen || (chosen as any).needsUpdate || (chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '');
+            });
+            if (invalidSlots.length > 0) {
+              newErrors["inventoryProfileId"] = 'Một số slot không hợp lệ, vui lòng chọn slot trống';
             }
           }
         } else {
@@ -563,7 +568,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         if (!pickedInventory) return '';
         if (pickedInventory.isAccountBased || pkgConfig?.isAccountBased) {
           // Rebuild using latest package columns to avoid drift
-          return Database.buildOrderInfoFromAccount({ ...pickedInventory, packageId: formData.packageId } as any, selectedProfileId || undefined);
+          return Database.buildOrderInfoFromAccount({ ...pickedInventory, packageId: formData.packageId } as any, selectedProfileIds.length > 0 ? selectedProfileIds : undefined);
         }
         return pickedInventory.productInfo || '';
       })();
@@ -574,7 +579,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         expiryDate,
         createdBy: state.user?.id || '',
         inventoryItemId: selectedInventoryId || undefined,
-        inventoryProfileId: (pickedInventory?.isAccountBased || pkgConfig?.isAccountBased) ? (selectedProfileId || undefined) : undefined,
+        inventoryProfileIds: (pickedInventory?.isAccountBased || pkgConfig?.isAccountBased) 
+          ? (selectedProfileIds.length > 0 ? selectedProfileIds : undefined) 
+          : undefined,
         useCustomPrice: formData.useCustomPrice || false,
         customPrice: formData.useCustomPrice ? formData.customPrice : undefined,
         customFieldValues,
@@ -640,7 +647,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             notes: orderData.notes || null,
             expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
             inventory_item_id: orderData.inventoryItemId || null,
-            inventory_profile_id: orderData.inventoryProfileId || null,
+            inventory_profile_ids: orderData.inventoryProfileIds || null,
             use_custom_price: orderData.useCustomPrice || false,
             custom_price: orderData.customPrice || null,
             custom_field_values: orderData.customFieldValues || null
@@ -682,7 +689,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               orderInfo: updateResult.order_info,
               notes: updateResult.notes,
               inventoryItemId: updateResult.inventory_item_id,
-              inventoryProfileId: updateResult.inventory_profile_id,
+              inventoryProfileIds: updateResult.inventory_profile_ids || undefined,
+              inventoryProfileId: updateResult.inventory_profile_id || undefined, // Backward compatibility
               cogs: updateResult.cogs,
               useCustomPrice: updateResult.use_custom_price,
               customPrice: updateResult.custom_price,
@@ -734,7 +742,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               console.log('Found inventory item:', inv);
               
               if (inv && inv.is_account_based) {
-                if (!selectedProfileId) {
+                if (selectedProfileIds.length === 0) {
                   notify('Vui lòng chọn slot để cấp', 'warning');
                 } else {
                   let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
@@ -750,9 +758,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     }));
                   }
                   
-                  const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
-                    ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
-                    : p);
+                  const nextProfiles = profiles.map((p: any) => 
+                    selectedProfileIds.includes(p.id)
+                      ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
+                      : p);
                   console.log('Updated profiles:', nextProfiles);
                   
                   const { error: updateError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', nextInventoryId);
@@ -810,7 +819,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           notes: orderData.notes || null,
           expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
           inventory_item_id: orderData.inventoryItemId || null,
-          inventory_profile_id: orderData.inventoryProfileId || null,
+          inventory_profile_ids: orderData.inventoryProfileIds || null,
           use_custom_price: orderData.useCustomPrice || false,
           custom_price: orderData.customPrice || null,
           custom_field_values: orderData.customFieldValues || null,
@@ -842,7 +851,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           orderInfo: createData.order_info,
           notes: createData.notes,
           inventoryItemId: createData.inventory_item_id,
-          inventoryProfileId: createData.inventory_profile_id,
+          inventoryProfileIds: createData.inventory_profile_ids || undefined,
+          inventoryProfileId: createData.inventory_profile_id || undefined, // Backward compatibility
           cogs: createData.cogs,
           useCustomPrice: createData.use_custom_price,
           customPrice: createData.custom_price,
@@ -861,14 +871,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             if (sb2) {
               console.log('=== CREATE ORDER INVENTORY UPDATE DEBUG ===');
               console.log('selectedInventoryId:', selectedInventoryId);
-              console.log('selectedProfileId:', selectedProfileId);
+              console.log('selectedProfileIds:', selectedProfileIds);
               console.log('created order id:', created.id);
               
               const { data: inv } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
               console.log('Found inventory item:', inv);
               
               if (inv && inv.is_account_based) {
-                if (!selectedProfileId) {
+                if (selectedProfileIds.length === 0) {
                   notify('Vui lòng chọn profile để cấp', 'warning');
                 } else {
                   let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
@@ -884,9 +894,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     }));
                   }
                   
-                  const nextProfiles = profiles.map((p: any) => p.id === selectedProfileId
-                    ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
-                    : p);
+                  const nextProfiles = profiles.map((p: any) => 
+                    selectedProfileIds.includes(p.id)
+                      ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
+                      : p);
                   console.log('Updated profiles:', nextProfiles);
                   
                   const { error: updateError } = await sb2.from('inventory').update({ profiles: nextProfiles }).eq('id', selectedInventoryId);
@@ -1495,24 +1506,37 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                             {item.isAccountBased && (
                               <div className="mt-3">
                                 <label className="form-label">
-                                  <strong>Chọn slot để cấp</strong>
+                                  <strong>Chọn các slot để cấp (có thể chọn nhiều)</strong>
                                 </label>
-                                <select
-                                  className="form-control"
-                                  value={selectedProfileId}
-                                  onChange={(e) => {
-                                    console.log('Profile selection changed to:', e.target.value);
-                                    setSelectedProfileId(e.target.value);
-                                  }}
-                                  required
-                                >
-                                  <option value="">-- Chọn slot --</option>
-                                  {(item.profiles || []).filter(p => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate).map(p => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}
-                                    </option>
-                                  ))}
-                                </select>
+                                <div className="row">
+                                  {(item.profiles || [])
+                                    .filter(p => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate)
+                                    .map(p => (
+                                      <div key={p.id} className="col-md-6 mb-2">
+                                        <div className="form-check">
+                                          <input
+                                            className="form-check-input"
+                                            type="checkbox"
+                                            id={`slot-${p.id}`}
+                                            checked={selectedProfileIds.includes(p.id)}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setSelectedProfileIds(prev => [...prev, p.id]);
+                                              } else {
+                                                setSelectedProfileIds(prev => prev.filter(id => id !== p.id));
+                                              }
+                                            }}
+                                          />
+                                          <label className="form-check-label" htmlFor={`slot-${p.id}`}>
+                                            {p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}
+                                          </label>
+                                        </div>
+                                      </div>
+                                    ))}
+                                </div>
+                                <div className="small text-muted mt-2">
+                                  Đã chọn: {selectedProfileIds.length} slot
+                                </div>
                                 <div className="small text-muted mt-1">
                                   Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.
                                 </div>
@@ -1847,7 +1871,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 if (item.isAccountBased) {
                   // Build using the currently selected package columns to avoid drift
                   const itemForOrder = { ...item, packageId: formData.packageId } as InventoryItem;
-                  return Database.buildOrderInfoFromAccount(itemForOrder, selectedProfileId || undefined);
+                  return Database.buildOrderInfoFromAccount(itemForOrder, selectedProfileIds.length > 0 ? selectedProfileIds : undefined);
                 }
                 return item.productInfo || '';
               })()}

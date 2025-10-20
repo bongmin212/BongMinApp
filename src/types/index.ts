@@ -72,7 +72,8 @@ export interface Order {
   createdAt: Date;
   updatedAt: Date;
   inventoryItemId?: string; // Liên kết tới kho hàng nếu có
-  inventoryProfileId?: string; // Nếu là tài khoản nhiều profile, id profile đã cấp
+  inventoryProfileIds?: string[]; // Array of profile IDs for multi-slot orders
+  inventoryProfileId?: string; // Backward compatibility - deprecated
   cogs?: number; // Giá vốn snapshot từ kho tại thời điểm liên kết
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh
   customPrice?: number; // Giá tùy chỉnh
@@ -242,7 +243,8 @@ export interface OrderFormData {
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh
   customPrice?: number; // Giá tùy chỉnh
   customFieldValues?: Record<string, string>;
-  inventoryProfileId?: string;
+  inventoryProfileIds?: string[];
+  inventoryProfileId?: string; // Backward compatibility - deprecated
   // Expiry overrides
   useCustomExpiry?: boolean; // Sử dụng hạn tùy chỉnh
   customExpiryDate?: Date; // Ngày hết hạn tùy chỉnh

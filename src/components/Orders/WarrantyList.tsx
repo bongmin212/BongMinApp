@@ -280,7 +280,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       if (!selectedItem) return undefined;
       if (selectedItem.isAccountBased) {
         const itemForOrder = { ...selectedItem, packageId: selectedItem.packageId } as InventoryItem;
-        const text = Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId || undefined);
+        const text = Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId ? [replacementProfileId] : undefined);
         return text || undefined;
       }
       return selectedItem.productInfo || undefined;
@@ -639,7 +639,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 if (!item) return form.newOrderInfo || '';
                 if (item.isAccountBased) {
                   const itemForOrder = { ...item } as InventoryItem;
-                  return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId || undefined);
+                  return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId ? [replacementProfileId] : undefined);
                 }
                 return item.productInfo || '';
               })()} 
