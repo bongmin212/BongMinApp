@@ -355,18 +355,18 @@ const ProductList: React.FC = () => {
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}>
+                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
                     checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
                     onChange={(e) => handleToggleSelectAll(e.target.checked, paginatedProducts.map(p => p.id))}
                   />
                 </th>
-                <th style={{ width: '15%' }}>Mã sản phẩm</th>
-                <th style={{ width: '20%' }}>Tên sản phẩm</th>
-                <th style={{ width: '35%' }}>Mô tả</th>
-                <th style={{ width: '15%' }}>Ngày tạo</th>
-                <th style={{ width: '15%' }}>Thao tác</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã sản phẩm</th>
+                <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Tên sản phẩm</th>
+                <th style={{ width: '200px', minWidth: '200px', maxWidth: '250px' }}>Mô tả</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>

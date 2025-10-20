@@ -378,21 +378,21 @@ const CustomerList: React.FC = () => {
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}>
+                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
                     checked={paginatedCustomers.length > 0 && paginatedCustomers.every(c => selectedIds.includes(c.id))}
                     onChange={(e) => handleToggleSelectAll(e.target.checked, paginatedCustomers.map(c => c.id))}
                   />
                 </th>
-                <th>Mã KH</th>
-                <th>Tên khách hàng</th>
-                <th>Loại</th>
-                <th>SĐT</th>
-                <th>Email</th>
-                <th>Nguồn</th>
-                <th>Ngày tạo</th>
-                <th>Thao tác</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã KH</th>
+                <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Tên khách hàng</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Loại</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>SĐT</th>
+                <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Email</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>

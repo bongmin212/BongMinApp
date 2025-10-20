@@ -380,21 +380,21 @@ const PackageList: React.FC = () => {
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}>
+                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
                     checked={pageItems.length > 0 && pageItems.every(p => selectedIds.includes(p.id))}
                     onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(p => p.id))}
                   />
                 </th>
-                <th>Mã gói</th>
-                <th>Tên gói</th>
-                <th>Sản phẩm</th>
-                <th>Thời hạn bảo hành</th>
-                <th>Giá gốc</th>
-                <th>Giá CTV</th>
-                <th>Giá khách lẻ</th>
-                <th>Thao tác</th>
+                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã gói</th>
+                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Tên gói</th>
+                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thời hạn bảo hành</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá gốc</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá CTV</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá khách lẻ</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>

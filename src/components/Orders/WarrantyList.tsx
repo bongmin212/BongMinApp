@@ -1084,22 +1084,22 @@ const handleDelete = (id: string) => {
         <table className="table">
           <thead>
             <tr>
-              <th style={{ width: 36 }}>
+              <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                 <input
                   type="checkbox"
                   checked={pageItems.length > 0 && pageItems.every(w => selectedIds.includes(w.id))}
                   onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(w => w.id))}
                 />
               </th>
-              <th>Mã bảo hành</th>
-              <th>Ngày tạo</th>
-              <th>Khách hàng</th>
-              <th>Sản phẩm/Gói</th>
-              <th>Lý do</th>
-              <th>Trạng thái</th>
-              <th>Sản phẩm thay thế</th>
-              <th>Thông tin đơn mới</th>
-							<th>Hành động</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã bảo hành</th>
+              <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
+              <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Khách hàng</th>
+              <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm/Gói</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Lý do</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
+              <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm thay thế</th>
+              <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Thông tin đơn mới</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Hành động</th>
             </tr>
           </thead>
           <tbody>

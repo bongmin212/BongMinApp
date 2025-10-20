@@ -473,10 +473,10 @@ const ActivityLogList: React.FC = () => {
           <table className="table">
             <thead>
               <tr>
-                <th>Thời gian</th>
-                <th>Nhân viên</th>
-                <th>Hành động</th>
-                <th>Chi tiết</th>
+                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Thời gian</th>
+                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Nhân viên</th>
+                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Hành động</th>
+                <th style={{ width: '200px', minWidth: '200px', maxWidth: '250px' }}>Chi tiết</th>
               </tr>
             </thead>
             <tbody>

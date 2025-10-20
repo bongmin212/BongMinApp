@@ -283,16 +283,16 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <table className="table" style={{ tableLayout: 'auto' }}>
               <thead>
                 <tr>
-                  <th style={{ width: 120 }}>Mã đơn hàng</th>
-                  <th style={{ width: 120 }}>Ngày mua</th>
-                  <th>Sản phẩm</th>
-                  <th style={{ width: 160 }}>Gói</th>
-                  <th style={{ width: 130 }}>Ngày hết hạn</th>
-                  <th style={{ width: 140 }}>Trạng thái</th>
-                  <th style={{ width: 120 }}>Thanh toán</th>
-                  <th style={{ width: 120 }}>Giá</th>
-                  <th>Ghi chú</th>
-                  <th style={{ width: 90 }}>Thao tác</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã đơn hàng</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày mua</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Gói</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày hết hạn</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Ghi chú</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>

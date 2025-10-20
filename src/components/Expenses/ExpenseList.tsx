@@ -379,19 +379,19 @@ const ExpenseList: React.FC = () => {
           <table className="table">
           <thead>
             <tr>
-              <th style={{ width: 36 }}>
+              <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                 <input
                   type="checkbox"
                   checked={pageItems.length > 0 && pageItems.every(e => selectedIds.includes(e.id))}
                   onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(e => e.id))}
                 />
               </th>
-              <th>Mã</th>
-              <th>Loại</th>
-              <th>Mô tả</th>
-              <th>Số tiền</th>
-              <th>Ngày</th>
-              <th>Thao tác</th>
+              <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Loại</th>
+              <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Mô tả</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Số tiền</th>
+              <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
