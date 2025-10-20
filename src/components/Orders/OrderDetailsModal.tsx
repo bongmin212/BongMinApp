@@ -150,9 +150,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					{inv.productInfo && (
 						<div className="mt-3">
 							<strong>Thông tin sản phẩm:</strong>
-							<div className="mt-1 p-2 bg-light rounded">
-								<pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{inv.productInfo}</pre>
-							</div>
+								<div className="mt-1 p-2 bg-light rounded">
+									<pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{inv.productInfo}</pre>
+								</div>
 						</div>
 					)}
 				</div>
@@ -209,9 +209,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 						return (
 							<div key={col.id} className="mb-3">
 								<div><strong>{col.title}:</strong></div>
-								<div className="mt-1 p-2 bg-light rounded">
-									<pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{value}</pre>
-								</div>
+									<div className="mt-1 p-2 bg-light rounded">
+										<pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{value}</pre>
+									</div>
 							</div>
 						);
 					})}

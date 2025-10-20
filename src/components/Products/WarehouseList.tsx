@@ -571,6 +571,37 @@ const WarehouseList: React.FC = () => {
         );
       })();
 
+      // Search in linked orders (classic linked_order_id and account-based profiles)
+      const linkedOrderMatches = !norm || (() => {
+        const orderIds: string[] = [];
+        if (i.linkedOrderId) orderIds.push(i.linkedOrderId);
+        const profiles = Array.isArray(i.profiles) ? i.profiles : [];
+        profiles.forEach((p: any) => { if (p.assignedOrderId) orderIds.push(p.assignedOrderId); });
+        const unique = Array.from(new Set(orderIds));
+        if (unique.length === 0) return false;
+        const allOrders = Database.getOrders();
+        return unique.some(id => {
+          const o = allOrders.find((x: any) => x.id === id);
+          if (!o) return false;
+          const customerNameLower = (customerMap.get(o.customerId) || '').toLowerCase();
+          const pkgInfo = getPackageInfo(o.packageId);
+          const productNameLower = (pkgInfo.product?.name || '').toLowerCase();
+          const packageNameLower = (pkgInfo.pkg?.name || '').toLowerCase();
+          const detailsLower = buildFullOrderInfo(o).text.toLowerCase();
+          const notesLower = (o.notes ? String(o.notes) : '').toLowerCase();
+          const orderInfoLower = (o as any).orderInfo ? String((o as any).orderInfo).toLowerCase() : '';
+          return (
+            (o.code || '').toLowerCase().includes(norm) ||
+            customerNameLower.includes(norm) ||
+            productNameLower.includes(norm) ||
+            packageNameLower.includes(norm) ||
+            detailsLower.includes(norm) ||
+            notesLower.includes(norm) ||
+            orderInfoLower.includes(norm)
+          );
+        });
+      })();
+
       const matchesSearch = !norm ||
         (i.code || '').toLowerCase().includes(norm) ||
         (productMap.get(i.productId) || '').toLowerCase().includes(norm) ||
@@ -578,7 +609,8 @@ const WarehouseList: React.FC = () => {
         (i.productInfo || '').toLowerCase().includes(norm) ||
         (i.sourceNote || '').toLowerCase().includes(norm) ||
         (i.notes || '').toLowerCase().includes(norm) ||
-        accountDataMatches;
+        accountDataMatches ||
+        linkedOrderMatches;
 
       const matchesProduct = !filterProduct || i.productId === filterProduct;
       const matchesPackage = !filterPackage || i.packageId === filterPackage;
