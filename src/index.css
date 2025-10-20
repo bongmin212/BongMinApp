@@ -1038,6 +1038,18 @@ body:has(.modal) .main-content * {
   }
 }
 
+/* Table Responsive Container */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: var(--space-4);
+}
+
+.table-responsive .table {
+  min-width: max-content;
+  margin-bottom: 0;
+}
+
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 8px;
