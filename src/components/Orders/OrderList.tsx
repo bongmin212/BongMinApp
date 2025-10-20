@@ -1180,7 +1180,69 @@ const OrderList: React.FC = () => {
           <p>Không có đơn hàng nào</p>
         </div>
       ) : (
-        <div className="table-responsive">
+        <>
+        {/* Mobile cards */}
+        <div className="orders-mobile">
+          {paginatedOrders.map((order) => (
+            <div key={order.id} className="order-card">
+              <div className="order-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(order.id)}
+                    onChange={(e) => handleToggleSelect(order.id, e.target.checked)}
+                  />
+                  <div className="order-card-title">{order.code}</div>
+                </div>
+                <div className="order-card-subtitle">{formatDate(order.purchaseDate)}</div>
+              </div>
+
+              <div className="order-card-row">
+                <div className="order-card-label">Khách</div>
+                <div className="order-card-value">{getCustomerName(order.customerId)}</div>
+              </div>
+              <div className="order-card-row">
+                <div className="order-card-label">Sản phẩm</div>
+                <div className="order-card-value">{getPackageInfo(order.packageId)?.product?.name || '-'}</div>
+              </div>
+              <div className="order-card-row">
+                <div className="order-card-label">Gói</div>
+                <div className="order-card-value">{getPackageInfo(order.packageId)?.package.name || '-'}</div>
+              </div>
+              <div className="order-card-row">
+                <div className="order-card-label">Hết hạn</div>
+                <div className="order-card-value">{formatDate(order.expiryDate)}</div>
+              </div>
+              <div className="order-card-row">
+                <div className="order-card-label">Trạng thái</div>
+                <div className="order-card-value"><span className="status-badge">{getStatusLabel(order.status)}</span></div>
+              </div>
+              <div className="order-card-row">
+                <div className="order-card-label">Thanh toán</div>
+                <div className="order-card-value"><span className="status-badge">{getPaymentLabel(order.paymentStatus)}</span></div>
+              </div>
+              <div className="order-card-row">
+                <div className="order-card-label">Giá</div>
+                <div className="order-card-value">{formatPrice(getOrderPrice(order))}</div>
+              </div>
+
+              <div className="order-card-actions">
+                <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
+                <button
+                  onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
+                  className="btn btn-warning"
+                >Tính tiền hoàn</button>
+                <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
+                {new Date(order.expiryDate) < new Date() && (
+                  <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive orders-table">
           <table className="table">
             <thead>
               <tr>
@@ -1210,6 +1272,7 @@ const OrderList: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">
