@@ -36,6 +36,29 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
 
+  // Helper: resolve a possibly-local product id to a real Supabase UUID
+  const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
+  const resolveProductUuid = async (inputId: string): Promise<string> => {
+    if (looksLikeUuid(inputId)) return inputId;
+    const sb = getSupabase();
+    const selected = products.find(p => p.id === inputId);
+    if (!sb || !selected) return inputId;
+    try {
+      let productUuid: string | undefined;
+      if ((selected as any).code) {
+        const byCode = await sb.from('products').select('id').eq('code', (selected as any).code).maybeSingle();
+        productUuid = byCode.data?.id as any;
+      }
+      if (!productUuid && selected.name) {
+        const byName = await sb.from('products').select('id').eq('name', selected.name).maybeSingle();
+        productUuid = byName.data?.id as any;
+      }
+      return productUuid || inputId;
+    } catch {
+      return inputId;
+    }
+  };
+
   useEffect(() => {
     const allProducts = Database.getProducts();
     setProducts(allProducts);
@@ -174,7 +197,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         const sb = getSupabase();
         if (!sb) return;
         // Check if product uses shared pool
-        const pr = await sb.from('products').select('id, shared_inventory_pool').eq('id', formData.productId).maybeSingle();
+        const productUuid = await resolveProductUuid(formData.productId);
+        const pr = await sb.from('products').select('id, shared_inventory_pool').eq('id', productUuid).maybeSingle();
         const shared = !!(pr.data && pr.data.shared_inventory_pool);
         if (!shared) {
           setSharedConfigLocked(false);
@@ -185,7 +209,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         const first = await sb
           .from('packages')
           .select('id, custom_fields, is_account_based, account_columns, default_slots')
-          .eq('product_id', formData.productId)
+          .eq('product_id', productUuid)
           .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
