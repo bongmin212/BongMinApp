@@ -600,7 +600,6 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 onChange={(e) => setPoolMonths(Math.max(1, parseInt(e.target.value || '1', 10)))}
                 min={1}
               />
-              <div className="small text-muted mt-1">Không lưu DB, chỉ dùng tính ngày hết hạn.</div>
             </div>
           )}
 
