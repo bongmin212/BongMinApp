@@ -1130,16 +1130,19 @@ body:has(.modal) .main-content * {
   .orders-mobile { display: block; }
 
   /* Orders header actions: enable horizontal scroll for action buttons on mobile */
+  .card-header .d-flex.justify-content-between { align-items: center; }
   .card-header .d-flex.justify-content-between > .d-flex {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     flex-wrap: nowrap;
     gap: 8px;
     padding-bottom: 4px;
+    align-items: center;
   }
   .card-header .d-flex.justify-content-between > .d-flex .d-flex {
     flex-wrap: nowrap;
     gap: 6px;
+    align-items: center;
   }
   .card-header .d-flex.justify-content-between > .d-flex::-webkit-scrollbar { height: 4px; }
   .card-header .d-flex.justify-content-between > .d-flex::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
@@ -1152,6 +1155,7 @@ body:has(.modal) .main-content * {
     line-height: 32px;
     display: inline-flex;
     align-items: center;
+    box-sizing: border-box;
   }
 
   /* Improve button legibility on iOS Safari */
