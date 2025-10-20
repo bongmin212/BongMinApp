@@ -1307,8 +1307,8 @@ const WarehouseList: React.FC = () => {
               </div>
 
               <div className="warehouse-card-actions">
-                <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(item)}>Xem</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
+                <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
               </div>
             </div>
           ))}
@@ -1424,8 +1424,8 @@ const WarehouseList: React.FC = () => {
                   </td>
                   <td>
                     <div className="d-flex gap-2">
-                      <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(i)}>Xem</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
+                      <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(i)}>Xem</button>
+                      <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
                     </div>
                   </td>
                 </tr>

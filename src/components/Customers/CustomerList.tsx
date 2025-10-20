@@ -429,19 +429,19 @@ const CustomerList: React.FC = () => {
                     <div className="d-flex gap-2">
                       <button
                         onClick={() => handleViewOrders(customer)}
-                        className="btn btn-info btn-sm"
+                        className="btn btn-info"
                       >
                         Lịch sử
                       </button>
                       <button
                         onClick={() => handleEdit(customer)}
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-secondary"
                       >
                         Sửa
                       </button>
                       <button
                         onClick={() => handleDelete(customer.id)}
-                        className="btn btn-danger btn-sm"
+                        className="btn btn-danger"
                       >
                         Xóa
                       </button>

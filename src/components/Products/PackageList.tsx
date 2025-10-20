@@ -418,13 +418,13 @@ const PackageList: React.FC = () => {
                     <div className="d-flex gap-2">
                       <button
                         onClick={() => handleEdit(pkg)}
-                        className="btn btn-secondary btn-sm"
+                        className="btn btn-secondary"
                       >
                         Sửa
                       </button>
                       <button
                         onClick={() => handleDelete(pkg.id)}
-                        className="btn btn-danger btn-sm"
+                        className="btn btn-danger"
                       >
                         Xóa
                       </button>
