@@ -283,6 +283,17 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       if (!sb) throw new Error('Supabase not configured');
       if (item) {
         // Edit mode → update inventory row
+        // Recalculate expiry = purchase date + warranty period (ignore past renewals)
+        const recomputedExpiryIso = (() => {
+          const purchaseDate = new Date(formData.purchaseDate);
+          const months = currentProduct?.sharedInventoryPool
+            ? (formData.customWarrantyMonths || 1)
+            : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const d = new Date(purchaseDate);
+          d.setMonth(d.getMonth() + months);
+          return d.toISOString();
+        })();
+
         const { error } = await sb
           .from('inventory')
           .update({
@@ -290,6 +301,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             product_id: selectedProduct,
             package_id: currentProduct?.sharedInventoryPool ? null : formData.packageId,
             purchase_date: formData.purchaseDate.toISOString().split('T')[0],
+            expiry_date: recomputedExpiryIso,
             source_note: formData.sourceNote,
             purchase_price: formData.purchasePrice,
             product_info: formData.productInfo,
@@ -310,6 +322,16 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 productId: selectedProduct,
                 packageId: formData.packageId,
                 purchaseDate: new Date(formData.purchaseDate),
+                // Reset expiry to purchase + warranty, dropping past renewals
+                expiryDate: (() => {
+                  const purchaseDate = new Date(formData.purchaseDate);
+                  const months = currentProduct?.sharedInventoryPool
+                    ? (formData.customWarrantyMonths || 1)
+                    : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+                  const d = new Date(purchaseDate);
+                  d.setMonth(d.getMonth() + months);
+                  return d;
+                })(),
                 sourceNote: formData.sourceNote,
                 purchasePrice: formData.purchasePrice,
                 productInfo: formData.productInfo,
