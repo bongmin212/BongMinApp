@@ -391,6 +391,7 @@ const WarehouseList: React.FC = () => {
       accountColumns: r.account_columns || [],
       accountData: r.account_data || {},
       totalSlots: r.total_slots || 0,
+      poolWarrantyMonths: r.pool_warranty_months || undefined,
       profiles: (() => {
         const profiles = Array.isArray(r.profiles) ? r.profiles : [];
         // Generate missing profiles for account-based inventory
@@ -709,7 +710,7 @@ const WarehouseList: React.FC = () => {
         warrantyMonths: (() => {
           const prod = products.find(p => p.id === i.productId);
           if (prod?.sharedInventoryPool) {
-            return '-';
+            return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
           }
           const pkg = packages.find(p => p.id === i.packageId);
           return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
@@ -1251,14 +1252,14 @@ const WarehouseList: React.FC = () => {
                   <td className="text-truncate" title={(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
-                      return '-';
+                      return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
                     }
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
                   })()}>{(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
-                      return '-';
+                      return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
                     }
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';

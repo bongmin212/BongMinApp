@@ -264,7 +264,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           accountData: i.account_data,
           totalSlots: i.total_slots,
           profiles: i.profiles,
-          
+          poolWarrantyMonths: i.pool_warranty_months
         } as InventoryItem;
         
         // Generate missing profiles for account-based inventory
@@ -309,7 +309,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             accountData: linked.account_data,
             totalSlots: linked.total_slots,
             profiles: linked.profiles,
-            
+            poolWarrantyMonths: linked.pool_warranty_months
           } as any;
           
           // Generate missing profiles for account-based inventory
@@ -341,7 +341,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             accountColumns: l.account_columns,
             accountData: l.account_data,
             totalSlots: l.total_slots,
-            profiles: l.profiles
+            profiles: l.profiles,
+            poolWarrantyMonths: l.pool_warranty_months
           } as any;
           
           // Generate missing profiles for account-based inventory
@@ -1355,13 +1356,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         if (item.expiryDate) {
                           return new Date(item.expiryDate).toISOString().split('T')[0];
                         }
-                        // Calculate expiry date preview: if shared pool, use warehouse item's custom warranty or selected package's warranty
+                        // Calculate expiry date preview: if shared pool, use warehouse item's stored pool months or selected package's warranty
                         const product = products.find(p => p.id === item.productId);
                         const purchaseDate = new Date(item.purchaseDate);
                         const expiry = new Date(purchaseDate);
                         if (product?.sharedInventoryPool) {
-                          // Use selected package warranty
-                          const months = getSelectedPackage()?.warrantyPeriod || 1;
+                          const months = (item as any).poolWarrantyMonths || getSelectedPackage()?.warrantyPeriod || 1;
                           expiry.setMonth(expiry.getMonth() + months);
                         } else {
                           const packageInfo = packages.find(p => p.id === item.packageId);
@@ -1456,7 +1456,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                     const expiry = new Date(purchaseDate);
                                     if (isSharedPool) {
                                       const selPkg = getSelectedPackage();
-                                      const months = selPkg?.warrantyPeriod || 1;
+                                      const months = (item as any).poolWarrantyMonths || selPkg?.warrantyPeriod || 1;
                                       expiry.setMonth(expiry.getMonth() + months);
                                     } else {
                                       const packageInfo = packages.find(p => p.id === item.packageId);

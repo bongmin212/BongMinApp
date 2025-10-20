@@ -90,7 +90,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     setSelectedProduct(item.productId);
     // If shared pool, try infer months from existing expiry/purchase
     try {
-      if (item.purchaseDate && item.expiryDate) {
+      if ((item as any).poolWarrantyMonths) {
+        setPoolMonths(Math.max(1, Number((item as any).poolWarrantyMonths)));
+      } else if (item.purchaseDate && item.expiryDate) {
         const start = new Date(item.purchaseDate);
         const end = new Date(item.expiryDate);
         const months = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
@@ -311,7 +313,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             product_info: formData.productInfo,
             notes: formData.notes,
             payment_status: formData.paymentStatus || 'UNPAID',
-            account_data: formData.accountData
+            account_data: formData.accountData,
+            pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null
           })
           .eq('id', item.id);
         if (error) throw new Error(error.message || 'Không thể cập nhật kho');
@@ -339,6 +342,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 notes: formData.notes,
                 paymentStatus: formData.paymentStatus || 'UNPAID',
                 accountData: formData.accountData,
+                poolWarrantyMonths: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : undefined,
                 updatedAt: new Date()
               }
             : it);
@@ -379,6 +383,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             account_data: formData.accountData,
             is_account_based: !!selectedPkg?.isAccountBased,
             total_slots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : null,
+            pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null
             
           });
         if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
@@ -410,6 +415,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           accountData: formData.accountData,
           totalSlots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : undefined,
           profiles: selectedPkg?.isAccountBased ? Array.from({ length: Math.max(1, Number(selectedPkg?.defaultSlots || 5)) }, (_, idx) => ({ id: `slot-${idx + 1}`, label: `Slot ${idx + 1}`, isAssigned: false })) : undefined,
+          poolWarrantyMonths: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : undefined,
           createdAt: new Date(),
           updatedAt: new Date()
         };
