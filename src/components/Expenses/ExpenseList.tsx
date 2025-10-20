@@ -410,21 +410,23 @@ const ExpenseList: React.FC = () => {
                 <td className="amount">{formatCurrency(expense.amount)}</td>
                 <td>{formatDate(expense.date)}</td>
                 <td>
-                  <button
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => {
-                      setEditingExpense(expense);
-                      setShowForm(true);
-                    }}
-                  >
-                    <IconEdit />
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    onClick={() => handleDelete(expense.id)}
-                  >
-                    <IconTrash />
-                  </button>
+                  <div className="d-flex gap-2">
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        setEditingExpense(expense);
+                        setShowForm(true);
+                      }}
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDelete(expense.id)}
+                    >
+                      Xóa
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

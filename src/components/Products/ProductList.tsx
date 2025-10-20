@@ -408,37 +408,25 @@ const ProductList: React.FC = () => {
                     {new Date(product.createdAt).toLocaleDateString('vi-VN')}
                   </td>
                   <td style={{ width: '15%' }}>
-                    <div className="d-flex" style={{ gap: 8 }}>
+                    <div className="d-flex gap-2">
                       <button
                         onClick={() => handleCopyDescription(product)}
                         className="btn btn-light btn-sm"
-                        style={{ transition: 'all 0.2s ease' }}
                         title="Copy mô tả"
                       >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <IconClipboard />
-                          <span className="ms-1">Copy</span>
-                        </span>
+                        Copy
                       </button>
                       <button
                         onClick={() => handleEdit(product)}
                         className="btn btn-secondary btn-sm"
-                        style={{ transition: 'all 0.2s ease' }}
                       >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <IconEdit />
-                          <span className="ms-1">Sửa</span>
-                        </span>
+                        Sửa
                       </button>
                       <button
                         onClick={() => handleDelete(product.id)}
                         className="btn btn-danger btn-sm"
-                        style={{ transition: 'all 0.2s ease' }}
                       >
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <IconTrash />
-                          <span className="ms-1">Xóa</span>
-                        </span>
+                        Xóa
                       </button>
                     </div>
                   </td>
