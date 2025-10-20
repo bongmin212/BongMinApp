@@ -1367,7 +1367,7 @@ const WarehouseList: React.FC = () => {
         const inv = items.find(x => x.id === renewalDialog.id);
         if (!inv) return null;
         return (
-          <div className="modal" role="dialog" aria-modal>
+          <div className="modal" role="dialog" aria-modal style={{ zIndex: 10002 }}>
             <div className="modal-content" style={{ maxWidth: 420 }}>
               <div className="modal-header">
                 <h3 className="modal-title">Gia hạn kho {inv.code}</h3>
@@ -1455,7 +1455,7 @@ const WarehouseList: React.FC = () => {
               <div className="d-flex justify-content-end gap-2">
                 <button
                   className="btn btn-success"
-                  onClick={() => renewInventory(inv.id)}
+                  onClick={() => { setViewingInventory(null); renewInventory(inv.id); }}
                 >
                   Gia hạn
                 </button>
