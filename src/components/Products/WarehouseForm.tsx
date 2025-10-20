@@ -17,6 +17,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   const [products, setProducts] = useState<Product[]>([]);
   const [packages, setPackages] = useState<ProductPackage[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('');
+  // Transient months for shared pool products; not stored in DB
+  const [poolMonths, setPoolMonths] = useState<number>(1);
   const [formData, setFormData] = useState<InventoryFormData>({
     code: '',
     productId: '',
@@ -86,6 +88,15 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     if (!item) return;
     // Prefill for edit
     setSelectedProduct(item.productId);
+    // If shared pool, try infer months from existing expiry/purchase
+    try {
+      if (item.purchaseDate && item.expiryDate) {
+        const start = new Date(item.purchaseDate);
+        const end = new Date(item.expiryDate);
+        const months = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()));
+        setPoolMonths(months || 1);
+      }
+    } catch {}
     setFormData({
       code: item.code || '',
       productId: item.productId,
@@ -208,6 +219,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     if (prod?.sharedInventoryPool) {
       const firstPkg = packages.find(pk => pk.productId === selectedProduct);
       setFormData(prev => ({ ...prev, packageId: firstPkg ? firstPkg.id : '' }));
+      // Reset to 1 month by default for shared pool
+      setPoolMonths(1);
     }
   }, [selectedProduct, products, packages]);
 
@@ -279,7 +292,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         // Recalculate expiry = purchase date + warranty period (ignore past renewals)
         const recomputedExpiryIso = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
-          const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
           const d = new Date(purchaseDate);
           d.setMonth(d.getMonth() + months);
           return d.toISOString();
@@ -315,7 +328,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 // Reset expiry to purchase + warranty, dropping past renewals
                 expiryDate: (() => {
                   const purchaseDate = new Date(formData.purchaseDate);
-                  const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+                  const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
                   const d = new Date(purchaseDate);
                   d.setMonth(d.getMonth() + months);
                   return d;
@@ -342,7 +355,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         // Calculate expiry date for DB to avoid NULL constraints and keep consistent
         const expiryDateForDb = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
-          const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
           const d = new Date(purchaseDate);
           d.setMonth(d.getMonth() + months);
           return d.toISOString();
@@ -374,7 +387,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         const purchaseDate = new Date(formData.purchaseDate);
         const expiryDate = (() => {
           const date = new Date(purchaseDate);
-          const months = currentProduct?.sharedInventoryPool ? 1 : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+          const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
           date.setMonth(date.getMonth() + months);
           return date;
         })();
@@ -570,7 +583,20 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             </select>
           </div>
 
-          {/* Bỏ toàn bộ UI hạn tùy chỉnh trong kho. Hạn tính như hiện tại theo sản phẩm/gói. */}
+          {/* Shared pool: allow entering months transiently to compute expiry (not persisted) */}
+          {currentProduct?.sharedInventoryPool && (
+            <div className="form-group">
+              <label className="form-label">Thời hạn (tháng)</label>
+              <input
+                type="number"
+                className="form-control"
+                value={poolMonths || ''}
+                onChange={(e) => setPoolMonths(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                min={1}
+              />
+              <div className="small text-muted mt-1">Không lưu DB, chỉ dùng tính ngày hết hạn.</div>
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label">Thông tin sản phẩm <span className="text-danger">*</span></label>
