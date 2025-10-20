@@ -666,6 +666,7 @@ p {
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
+  overflow-x: hidden; /* prevent horizontal scroll in modals (edit order) */
   box-shadow: var(--shadow-xl);
   border: 1px solid var(--border-color);
   animation: scaleIn 0.3s ease-out;

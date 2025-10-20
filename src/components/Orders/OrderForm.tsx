@@ -1108,7 +1108,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   return (
     <>
     <div className="modal">
-      <div className="modal-content" style={{ maxWidth: '600px' }}>
+      <div className="modal-content" style={{ maxWidth: '600px', overflowX: 'hidden' }}>
         <div className="modal-header">
           <h3 className="modal-title">
             {order ? 'Sửa đơn hàng' : 'Tạo đơn hàng mới'}
