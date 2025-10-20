@@ -1128,6 +1128,22 @@ body:has(.modal) .main-content * {
   /* Switch to card layout for Orders on mobile */
   .table-responsive.orders-table { display: none; }
   .orders-mobile { display: block; }
+
+  /* Orders header actions: enable horizontal scroll for action buttons on mobile */
+  .card-header .d-flex.justify-content-between > .d-flex {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+  .card-header .d-flex.justify-content-between > .d-flex .d-flex {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .card-header .d-flex.justify-content-between > .d-flex::-webkit-scrollbar { height: 4px; }
+  .card-header .d-flex.justify-content-between > .d-flex::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
+  .card-header .btn { white-space: nowrap; }
 }
 
 /* Scrollbar Styling */
