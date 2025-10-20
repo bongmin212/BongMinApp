@@ -1202,7 +1202,120 @@ const WarehouseList: React.FC = () => {
           <p>Không có dữ liệu</p>
         </div>
       ) : (
-        <div className="table-responsive">
+        <>
+        {/* Mobile cards */}
+        <div className="warehouse-mobile">
+          {pageItems.map((item, index) => (
+            <div key={item.id} className="warehouse-card">
+              <div className="warehouse-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(item.id)}
+                    onChange={(e) => toggleSelect(item.id, e.target.checked)}
+                  />
+                  <div className="warehouse-card-title">{item.code || `KHO${index + 1}`}</div>
+                </div>
+                <div className="warehouse-card-subtitle">{formatDate(item.purchaseDate)}</div>
+              </div>
+
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Sản phẩm</div>
+                <div className="warehouse-card-value">{productMap.get(item.productId) || item.productId}</div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Gói/Pool</div>
+                <div className="warehouse-card-value">{(() => {
+                  const prod = products.find(p => p.id === item.productId);
+                  if (prod?.sharedInventoryPool) {
+                    return 'Pool chung';
+                  }
+                  return packageMap.get(item.packageId) || item.packageId;
+                })()}</div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Hết hạn</div>
+                <div className="warehouse-card-value">{formatDate(item.expiryDate)}</div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Thời hạn</div>
+                <div className="warehouse-card-value">{(() => {
+                  const prod = products.find(p => p.id === item.productId);
+                  if (prod?.sharedInventoryPool) {
+                    return item.poolWarrantyMonths ? `${item.poolWarrantyMonths} tháng` : '-';
+                  }
+                  const pkg = packages.find(p => p.id === item.packageId);
+                  return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                })()}</div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Giá mua</div>
+                <div className="warehouse-card-value">{item.purchasePrice ? formatPrice(item.purchasePrice) : '-'}</div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Thanh toán</div>
+                <div className="warehouse-card-value">
+                  <span className={`status-badge ${item.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
+                    {INVENTORY_PAYMENT_STATUSES.find(s => s.value === item.paymentStatus)?.label || 'Chưa TT'}
+                  </span>
+                </div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Trạng thái</div>
+                <div className="warehouse-card-value">
+                  <div className="d-flex align-items-center gap-2">
+                    {statusBadge(item)}
+                    {item.status === 'NEEDS_UPDATE' && (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => setConfirmState({
+                          message: `Chuyển ${item.code} từ Cần update -> Sẵn có?`,
+                          onConfirm: async () => {
+                            const sb = getSupabase();
+                            if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
+                            const { error } = await sb.from('inventory').update({ status: 'AVAILABLE' }).eq('id', item.id);
+                            if (error) return notify('Không thể cập nhật trạng thái', 'error');
+                            try {
+                              const sb2 = getSupabase();
+                              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; code=${item.code}` });
+                            } catch {}
+                            notify('Đã chuyển về Sẵn có', 'success');
+                            refresh();
+                          }
+                        })}
+                        title="Đặt lại trạng thái Sẵn có"
+                      >
+                        Mark Sẵn có
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="warehouse-card-row">
+                <div className="warehouse-card-label">Slot</div>
+                <div className="warehouse-card-value">
+                  {(item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased) ? (() => {
+                    const used = (item.profiles || []).filter(p => p.isAssigned).length;
+                    const total = item.totalSlots || 0;
+                    return (
+                      <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item })}>
+                        {used}/{total}
+                      </button>
+                    );
+                  })() : '-'}
+                </div>
+              </div>
+
+              <div className="warehouse-card-actions">
+                <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
+                <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive warehouse-table">
           <table className="table">
             <thead>
               <tr>
@@ -1320,6 +1433,7 @@ const WarehouseList: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">

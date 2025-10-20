@@ -1028,6 +1028,10 @@ body:has(.modal) .main-content * {
 .table-responsive.orders-table { display: block; }
 .orders-mobile { display: none; }
 
+/* Warehouse mobile card layout visibility (desktop default hidden) */
+.table-responsive.warehouse-table { display: block; }
+.warehouse-mobile { display: none; }
+
 /* Orders mobile card styles */
 .order-card {
   background: var(--bg-primary);
@@ -1083,6 +1087,69 @@ body:has(.modal) .main-content * {
   justify-content: flex-end;
 }
 
+/* Warehouse mobile card styles */
+.warehouse-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.warehouse-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.warehouse-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.warehouse-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.warehouse-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.warehouse-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.warehouse-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.warehouse-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+.warehouse-card-actions .btn {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+
 /* Column-specific widths for warehouse table */
 .table th:has(input[type="checkbox"]),
 .table td:has(input[type="checkbox"]) {
@@ -1129,6 +1196,10 @@ body:has(.modal) .main-content * {
   /* Switch to card layout for Orders on mobile */
   .table-responsive.orders-table { display: none; }
   .orders-mobile { display: block; }
+
+  /* Switch to card layout for Warehouse on mobile */
+  .table-responsive.warehouse-table { display: none; }
+  .warehouse-mobile { display: block; }
 
   /* Orders header actions: enable horizontal scroll for action buttons on mobile */
   .card-header .d-flex.justify-content-between { align-items: center; }
