@@ -1219,7 +1219,6 @@ const WarehouseList: React.FC = () => {
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
                 <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá mua</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
                 <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
@@ -1265,7 +1264,6 @@ const WarehouseList: React.FC = () => {
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
                   })()}</td>
-                  <td className="text-truncate" title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
                   <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td>
                     <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
