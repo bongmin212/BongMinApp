@@ -1206,25 +1206,25 @@ const WarehouseList: React.FC = () => {
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 36 }}>
+                <th className="col-checkbox">
                   <input
                     type="checkbox"
                     checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
                     onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
                   />
                 </th>
-                <th>Mã kho</th>
-                <th>Sản phẩm</th>
-                <th>Gói / Pool</th>
-                <th>Ngày nhập</th>
-                <th>Hết hạn</th>
-                <th>Thời hạn</th>
-                <th>Nguồn</th>
-                <th>Giá mua</th>
-                <th>Thanh toán</th>
-                <th>Trạng thái</th>
-                <th>Slot</th>
-                <th>Thao tác</th>
+                <th className="col-code">Mã kho</th>
+                <th className="col-product">Sản phẩm</th>
+                <th className="col-package">Gói / Pool</th>
+                <th className="col-date">Ngày nhập</th>
+                <th className="col-date">Hết hạn</th>
+                <th className="col-duration">Thời hạn</th>
+                <th className="col-source">Nguồn</th>
+                <th className="col-price">Giá mua</th>
+                <th className="col-payment">Thanh toán</th>
+                <th className="col-status">Trạng thái</th>
+                <th className="col-slot">Slot</th>
+                <th className="col-actions">Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -1233,18 +1233,18 @@ const WarehouseList: React.FC = () => {
                   <td>
                     <input type="checkbox" checked={selectedIds.includes(i.id)} onChange={(e) => toggleSelect(i.id, e.target.checked)} />
                   </td>
-                  <td>{i.code || `KHO${index + 1}`}</td>
-                  <td>{productMap.get(i.productId) || i.productId}</td>
-                  <td>{(() => {
+                  <td className="table-cell-truncate">{i.code || `KHO${index + 1}`}</td>
+                  <td className="table-cell-wrap">{productMap.get(i.productId) || i.productId}</td>
+                  <td className="table-cell-wrap">{(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
                       return <span className="text-muted">Pool chung</span>;
                     }
                     return packageMap.get(i.packageId) || i.packageId;
                   })()}</td>
-                  <td>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
-                  <td>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
-                  <td>{(() => {
+                  <td className="table-cell-truncate">{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
+                  <td className="table-cell-truncate">{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
+                  <td className="table-cell-truncate">{(() => {
                     const prod = products.find(p => p.id === i.productId);
                     if (prod?.sharedInventoryPool) {
                       return i.customWarrantyMonths ? `${i.customWarrantyMonths} tháng` : '-';
@@ -1252,8 +1252,8 @@ const WarehouseList: React.FC = () => {
                     const pkg = packages.find(p => p.id === i.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
                   })()}</td>
-                  <td>{i.sourceNote || '-'}</td>
-                  <td>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
+                  <td className="table-cell-wrap">{i.sourceNote || '-'}</td>
+                  <td className="table-cell-truncate">{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td>
                     <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
                       {INVENTORY_PAYMENT_STATUSES.find(s => s.value === i.paymentStatus)?.label || 'Chưa TT'}

@@ -279,8 +279,8 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <p>Khách hàng chưa có đơn hàng nào</p>
           </div>
         ) : (
-          <div className="table-responsive">
-            <table className="table">
+          <div className="table-responsive" style={{ overflowX: 'visible' }}>
+            <table className="table" style={{ tableLayout: 'auto' }}>
               <thead>
                 <tr>
                   <th style={{ width: 120 }}>Mã đơn hàng</th>

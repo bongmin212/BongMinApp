@@ -331,6 +331,7 @@ p {
   overflow: hidden;
   box-shadow: var(--shadow-md);
   animation: fadeInUp 0.3s ease-out;
+  table-layout: fixed;
 }
 
 .table th,
@@ -361,6 +362,41 @@ p {
 .table tbody tr:last-child td {
   border-bottom: none;
 }
+
+/* Table text handling */
+.table-cell-wrap {
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.4;
+}
+
+.table-cell-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-cell-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+
+/* Column width utilities */
+.col-checkbox { width: 40px; }
+.col-code { width: 100px; }
+.col-product { width: 200px; }
+.col-package { width: 150px; }
+.col-date { width: 100px; }
+.col-duration { width: 80px; }
+.col-source { width: 120px; }
+.col-price { width: 100px; }
+.col-payment { width: 100px; }
+.col-status { width: 120px; }
+.col-slot { width: 80px; }
+.col-actions { width: 120px; }
 
 /* Cards */
 .card {
@@ -1036,18 +1072,6 @@ body:has(.modal) .main-content * {
   .table td {
     padding: var(--space-2);
   }
-}
-
-/* Table Responsive Container */
-.table-responsive {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  margin-bottom: var(--space-4);
-}
-
-.table-responsive .table {
-  min-width: max-content;
-  margin-bottom: 0;
 }
 
 /* Scrollbar Styling */
