@@ -1143,7 +1143,16 @@ body:has(.modal) .main-content * {
   }
   .card-header .d-flex.justify-content-between > .d-flex::-webkit-scrollbar { height: 4px; }
   .card-header .d-flex.justify-content-between > .d-flex::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
-  .card-header .btn { white-space: nowrap; flex: 0 0 auto; padding: 6px 10px; font-size: 0.8rem; line-height: 1; }
+  .card-header .btn {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    padding: 0 10px;
+    font-size: 0.8rem;
+    height: 32px;
+    line-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
 
   /* Improve button legibility on iOS Safari */
   .btn:before { display: none; }
