@@ -313,6 +313,47 @@ const WarehouseList: React.FC = () => {
       sb.from('packages').select('*').order('created_at', { ascending: true }),
       sb.from('customers').select('*').order('created_at', { ascending: true })
     ]);
+
+    // Auto-update inventory status based on expiry_date
+    try {
+      const now = new Date();
+      const raw = Array.isArray(invRes.data) ? invRes.data : [];
+
+      const toExpireIds: string[] = [];
+      const toUnexpireIds: string[] = [];
+
+      for (const r of raw) {
+        const expiry = r.expiry_date ? new Date(r.expiry_date) : null;
+        const isExpiredNow = !!expiry && expiry < now;
+        const isSold = r.status === 'SOLD';
+        const isExpiredStatus = r.status === 'EXPIRED';
+
+        // Determine if account-based item currently has any assigned profiles
+        const hasAssignedProfiles = !!r.is_account_based && Array.isArray(r.profiles)
+          ? r.profiles.some((p: any) => !!p.isAssigned)
+          : false;
+
+        // Mark to EXPIRED when past due and not SOLD
+        if (isExpiredNow && !isSold && !isExpiredStatus) {
+          toExpireIds.push(r.id);
+        }
+
+        // Revert EXPIRED -> AVAILABLE if renewed and no active assignment
+        if (!isExpiredNow && isExpiredStatus && !isSold && !r.linked_order_id && !hasAssignedProfiles) {
+          toUnexpireIds.push(r.id);
+        }
+      }
+
+      if (toExpireIds.length > 0) {
+        await sb.from('inventory').update({ status: 'EXPIRED' }).in('id', toExpireIds);
+      }
+      if (toUnexpireIds.length > 0) {
+        await sb.from('inventory').update({ status: 'AVAILABLE' }).in('id', toUnexpireIds);
+      }
+    } catch (e) {
+      // Best-effort; ignore failures and continue rendering
+      console.error('Auto-expire sweep failed', e);
+    }
     const inv = (invRes.data || []).map((r: any) => {
       const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
       let expiryDate = r.expiry_date ? new Date(r.expiry_date) : null;

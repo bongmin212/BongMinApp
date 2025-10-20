@@ -314,7 +314,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             notes: formData.notes,
             payment_status: formData.paymentStatus || 'UNPAID',
             account_data: formData.accountData,
-            custom_warranty_months: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : null
+            custom_warranty_months: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
+              ? formData.customWarrantyMonths
+              : null
           })
           .eq('id', item.id);
         if (error) throw new Error(error.message || 'Không thể cập nhật kho');
@@ -349,7 +351,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 notes: formData.notes,
                 paymentStatus: formData.paymentStatus || 'UNPAID',
                 accountData: formData.accountData,
-                customWarrantyMonths: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : undefined,
+                customWarrantyMonths: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
+                  ? formData.customWarrantyMonths
+                  : undefined,
                 updatedAt: new Date()
               }
             : it);
@@ -397,7 +401,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             account_data: formData.accountData,
             is_account_based: !!selectedPkg?.isAccountBased,
             total_slots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : null,
-            custom_warranty_months: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : null
+            custom_warranty_months: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
+              ? formData.customWarrantyMonths
+              : null
           });
         if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
         
@@ -435,7 +441,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           accountData: formData.accountData,
           totalSlots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : undefined,
           profiles: selectedPkg?.isAccountBased ? Array.from({ length: Math.max(1, Number(selectedPkg?.defaultSlots || 5)) }, (_, idx) => ({ id: `slot-${idx + 1}`, label: `Slot ${idx + 1}`, isAssigned: false })) : undefined,
-          customWarrantyMonths: currentProduct?.sharedInventoryPool ? formData.customWarrantyMonths : undefined,
+          customWarrantyMonths: (typeof formData.customWarrantyMonths === 'number' && formData.customWarrantyMonths > 0)
+            ? formData.customWarrantyMonths
+            : undefined,
           createdAt: new Date(),
           updatedAt: new Date()
         };
