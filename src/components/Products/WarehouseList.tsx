@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
 import { getSupabase } from '../../utils/supabaseClient';
+import OrderDetailsModal from '../Orders/OrderDetailsModal';
 
 const WarehouseList: React.FC = () => {
   const { state } = useAuth();
@@ -1227,11 +1228,7 @@ const WarehouseList: React.FC = () => {
                   <td>
                     <div className="d-flex gap-2">
                       <button className="btn btn-sm btn-light" onClick={() => setViewingInventory(i)}>Xem</button>
-                      <button className="btn btn-sm btn-success" onClick={() => renewInventory(i.id)}>Gia hạn</button>
                       <button className="btn btn-sm btn-secondary" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
-                      {i.status === 'AVAILABLE' && (
-                        <button className="btn btn-sm btn-danger" onClick={() => remove(i.id)}>Xóa</button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -1424,6 +1421,12 @@ const WarehouseList: React.FC = () => {
                 </div>
               </div>
               <div className="d-flex justify-content-end gap-2">
+                <button
+                  className="btn btn-success"
+                  onClick={() => renewInventory(inv.id)}
+                >
+                  Gia hạn
+                </button>
                 <button className="btn btn-secondary" onClick={() => setViewingInventory(null)}>Đóng</button>
               </div>
             </div>
@@ -1448,149 +1451,34 @@ const WarehouseList: React.FC = () => {
       )}
 
       {viewingOrder && (
-        <div className="modal" role="dialog" aria-modal>
-          <div className="modal-content" style={{ maxWidth: 640 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Chi tiết đơn hàng</h3>
-              <button className="close" onClick={() => setViewingOrder(null)}>×</button>
-            </div>
-            <div className="mb-3">
-              {(() => {
-                const o = viewingOrder;
-                const { pkg, product } = getPackageInfo(o.packageId);
-                const customerName = customerMap.get(o.customerId) || 'Không xác định';
-                const info = buildFullOrderInfo(o);
-                return (
-                  <div>
-                    <div><strong>Mã đơn hàng:</strong> {o.code}</div>
-                    <div><strong>Khách hàng:</strong> {customerName}</div>
-                    <div><strong>Sản phẩm:</strong> {product?.name || 'Không xác định'}</div>
-                    <div><strong>Gói:</strong> {pkg?.name || 'Không xác định'}</div>
-                    <div><strong>Ngày mua:</strong> {formatDate(o.purchaseDate)}</div>
-                    <div><strong>Ngày hết hạn:</strong> {formatDate(o.expiryDate)}</div>
-                    <div><strong>Trạng thái:</strong> {getStatusLabel(o.status)}</div>
-                    <div><strong>Thanh toán:</strong> {getPaymentLabel((o as any).paymentStatus)}</div>
-                    {info.lines.length > 0 && (
-                      <div>
-                        <strong>Thông tin đơn hàng:</strong>
-                        <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{info.text}</pre>
-                      </div>
-                    )}
-                    <div>
-                      <strong>Kho hàng:</strong>{' '}
-                      {(() => {
-                        const inv = (() => {
-                          if (o.inventoryItemId) {
-                            const found = items.find(i => i.id === o.inventoryItemId);
-                            if (found) {
-                              if (found.linkedOrderId === o.id) return found;
-                              if (found.isAccountBased && (found.profiles || []).some(p => p.assignedOrderId === o.id)) return found;
-                            }
-                          }
-                          const byLinked = items.find(i => i.linkedOrderId === o.id);
-                          if (byLinked) return byLinked;
-                          return items.find(i => i.isAccountBased && (i.profiles || []).some(p => p.assignedOrderId === o.id));
-                        })();
-                        if (!inv) return 'Không liên kết';
-                        const code = inv.code ?? '';
-                        const pDate = inv.purchaseDate ? new Date(inv.purchaseDate).toISOString().split('T')[0] : 'N/A';
-                        const eDate = inv.expiryDate ? new Date(inv.expiryDate).toISOString().split('T')[0] : 'N/A';
-                        const status = inv.status;
-                        const statusLabel =
-                          status === 'SOLD' ? 'Đã bán' :
-                          status === 'AVAILABLE' ? 'Có sẵn' :
-                          status === 'EXPIRED' ? 'Hết hạn' : status;
-                        // Get product and package info for display
-                        const product = products.find(p => p.id === inv.productId);
-                        const packageInfo = packages.find(p => p.id === inv.packageId);
-                        const productName = product?.name || 'Không xác định';
-                        const packageName = packageInfo?.name || 'Không xác định';
-                        
-                        // Format like the warehouse dropdown: #KHO001 | email | product | package | Nhập: date | HSD: date
-                        const header = `#${code || 'Không có'} | ${inv.productInfo || ''} | ${productName} | ${packageName} | Nhập: ${pDate} | HSD: ${eDate}`;
-                        const extra: string[] = [];
-                        if (inv.sourceNote) extra.push(`Nguồn: ${inv.sourceNote}`);
-                        if (typeof inv.purchasePrice === 'number') extra.push(`| Giá nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}`);
-                        return [header, ...extra].join(' \n ');
-                      })()}
-                    </div>
-                    {o.notes && <div><strong>Ghi chú:</strong> {o.notes}</div>}
-                    {(() => {
-                      const list = Database.getWarrantiesByOrder(o.id);
-                      return (
-                        <div style={{ marginTop: '12px' }}>
-                          <strong>Lịch sử bảo hành:</strong>
-                          {list.length === 0 ? (
-                            <div>Chưa có</div>
-                          ) : (
-                            <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                              {list.map(w => (
-                                <li key={w.id}>
-                                  {new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.reason} ({w.status === 'DONE' ? 'đã xong' : 'chưa xong'})
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      );
-                    })()}
-                    {(() => {
-                      const renewals = ((o as any).renewals || []) as Array<{
-                        id: string;
-                        months: number;
-                        packageId?: string;
-                        price?: number;
-                        useCustomPrice?: boolean;
-                        previousExpiryDate: Date;
-                        newExpiryDate: Date;
-                        note?: string;
-                        paymentStatus: PaymentStatus;
-                        createdAt: Date;
-                        createdBy: string;
-                      }>;
-                      return (
-                        <div style={{ marginTop: '12px' }}>
-                          <strong>Lịch sử gia hạn:</strong>
-                          {renewals.length === 0 ? (
-                            <div>Chưa có</div>
-                          ) : (
-                            <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                              {renewals.map(r => (
-                                <li key={r.id}>
-                                  {new Date(r.createdAt).toLocaleDateString('vi-VN')} · +{r.months} tháng · HSD: {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → {new Date(r.newExpiryDate).toLocaleDateString('vi-VN')} · Gói: {getPackageInfo(r.packageId || o.packageId).pkg?.name || 'Không xác định'} · Giá: {typeof r.price === 'number' ? formatPrice(r.price) : '-'} · TT: {getPaymentLabel(r.paymentStatus)}{r.note ? ` · Ghi chú: ${r.note}` : ''}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button
-                className="btn btn-light"
-                onClick={async () => {
-                  const o = viewingOrder;
-                  const info = buildFullOrderInfo(o);
-                  const linesForCopy = info.lines.flatMap((line, idx) => idx < info.lines.length - 1 ? [line, ''] : [line]);
-                  const text = linesForCopy.join('\n');
-                  try {
-                    await navigator.clipboard.writeText(text);
-                    notify('Đã copy thông tin đơn hàng', 'success');
-                  } catch (e) {
-                    notify('Không thể copy vào clipboard', 'error');
-                  }
-                }}
-              >
-                Copy thông tin
-              </button>
-              <button className="btn btn-secondary" onClick={() => setViewingOrder(null)}>Đóng</button>
-            </div>
-          </div>
-        </div>
+        <OrderDetailsModal
+          order={viewingOrder}
+          onClose={() => setViewingOrder(null)}
+          inventory={items as any}
+          products={products as any}
+          packages={packages as any}
+          getCustomerName={(id: string) => customerMap.get(id) || 'Không xác định'}
+          getPackageInfo={(packageId: string) => {
+            const { pkg, product } = getPackageInfo(packageId);
+            return { package: pkg, product } as any;
+          }}
+          getStatusLabel={getStatusLabel as any}
+          getPaymentLabel={getPaymentLabel as any}
+          formatDate={formatDate}
+          formatPrice={formatPrice}
+          onCopyInfo={async () => {
+            const o = viewingOrder;
+            const info = buildFullOrderInfo(o);
+            const linesForCopy = info.lines.flatMap((line, idx) => idx < info.lines.length - 1 ? [line, ''] : [line]);
+            const text = linesForCopy.join('\n');
+            try {
+              await navigator.clipboard.writeText(text);
+              notify('Đã copy thông tin đơn hàng', 'success');
+            } catch (e) {
+              notify('Không thể copy vào clipboard', 'error');
+            }
+          }}
+        />
       )}
 
       {paymentStatusModal && (() => {

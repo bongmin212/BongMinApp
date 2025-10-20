@@ -4,6 +4,7 @@ import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, 
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
 import OrderForm from './OrderForm';
+import OrderDetailsModal from './OrderDetailsModal';
 // removed export button
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -1210,371 +1211,92 @@ const OrderList: React.FC = () => {
       )}
 
       {viewingOrder && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Chi tiết đơn hàng</h3>
-              <button type="button" className="close" onClick={() => setViewingOrder(null)}>×</button>
-            </div>
-            <div className="mb-3">
-              <div><strong>Mã đơn hàng:</strong> {viewingOrder.code}</div>
-              <div><strong>Khách hàng:</strong> {getCustomerName(viewingOrder.customerId)}</div>
-              <div><strong>Sản phẩm:</strong> {getPackageInfo(viewingOrder.packageId)?.product?.name || 'Không xác định'}</div>
-              <div><strong>Gói:</strong> {getPackageInfo(viewingOrder.packageId)?.package?.name || 'Không xác định'}</div>
-              <div><strong>Ngày mua:</strong> {formatDate(viewingOrder.purchaseDate)}</div>
-              <div><strong>Ngày hết hạn:</strong> {formatDate(viewingOrder.expiryDate)}</div>
-              <div><strong>Trạng thái:</strong> {getStatusLabel(viewingOrder.status)}</div>
-              <div><strong>Thanh toán:</strong> {PAYMENT_STATUSES.find(p => p.value === viewingOrder.paymentStatus)?.label || 'Chưa thanh toán'}</div>
-              {(() => {
-                const inv = (() => {
-                  // First try to find by inventoryItemId if it exists
-                  if (viewingOrder.inventoryItemId) {
-                    const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
-                    if (found) {
-                      return found; // If inventoryItemId exists, use it regardless of other conditions
-                    }
+        <OrderDetailsModal
+          order={viewingOrder}
+          onClose={() => setViewingOrder(null)}
+          inventory={inventory}
+          products={products}
+          packages={packages}
+          getCustomerName={getCustomerName}
+          getPackageInfo={getPackageInfo}
+          getStatusLabel={getStatusLabel}
+          getPaymentLabel={getPaymentLabel}
+          formatDate={formatDate}
+          formatPrice={formatPrice}
+          onOpenRenew={() => {
+            setRenewState({
+              order: viewingOrder,
+              packageId: viewingOrder.packageId,
+              useCustomPrice: false,
+              customPrice: 0,
+              note: '',
+              paymentStatus: viewingOrder.paymentStatus || 'UNPAID'
+            });
+          }}
+          onCopyInfo={async () => {
+            const o = viewingOrder;
+            const customerName = getCustomerName(o.customerId);
+            const pkgInfo = getPackageInfo(o.packageId);
+            const productName = pkgInfo?.product?.name || 'Không xác định';
+            const packageName = pkgInfo?.package?.name || 'Không xác định';
+            const statusLabel = getStatusLabel(o.status);
+            const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
+            const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
+            const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
+            const out: string[] = [];
+            out.push(`Mã đơn hàng: ${o.code || '-'}`);
+            out.push(`Khách hàng: ${customerName}`);
+            out.push(`Sản phẩm: ${productName}`);
+            out.push(`Gói: ${packageName}`);
+            out.push(`Ngày mua: ${purchaseDate}`);
+            out.push(`Ngày hết hạn: ${expiryDate}`);
+            out.push(`Trạng thái: ${statusLabel}`);
+            out.push(`Thanh toán: ${paymentLabel}`);
+            const customFieldValues = (o as any).customFieldValues || {};
+            if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
+              pkgInfo.package.customFields.forEach((cf: any) => {
+                const value = customFieldValues[cf.id];
+                if (value && String(value).trim()) {
+                  out.push(`${cf.title}:`);
+                  out.push(String(value).trim());
+                  out.push('');
+                }
+              });
+            }
+            const inv = (() => {
+              if (o.inventoryItemId) {
+                const found = inventory.find((i: any) => i.id === o.inventoryItemId);
+                if (found) return found;
+              }
+              const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
+              if (byLinked) return byLinked;
+              return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+            })();
+            if (inv) {
+              const packageInfo = packages.find(p => p.id === inv.packageId);
+              const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
+              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              if (displayColumns.length > 0) {
+                out.push('Thông tin đơn hàng:');
+                displayColumns.forEach((col: any) => {
+                  const value = (inv.accountData || {})[col.id] || '';
+                  if (String(value).trim()) {
+                    out.push(`${col.title}:`);
+                    out.push(value);
+                    out.push('');
                   }
-                  // Fallback 1: find by linkedOrderId (classic single-item link)
-                  const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder.id);
-                  if (byLinked) return byLinked;
-                  // Fallback 2: account-based items where a profile is assigned to this order
-                  return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
-                })();
-                
-                if (!inv) {
-                  return (
-                    <div>
-                      <strong>Kho hàng:</strong> Không liên kết
-                    </div>
-                  );
-                }
-                
-                const product = products.find(p => p.id === inv.productId);
-                const packageInfo = packages.find(p => p.id === inv.packageId);
-                const productName = product?.name || 'Không xác định';
-                const packageName = packageInfo?.name || 'Không xác định';
-                const isSharedPool = product?.sharedInventoryPool;
-                
-                return (
-                  <div className="card mt-2">
-                    <div className="card-header">
-                      <strong>📦 Thông tin kho hàng</strong>
-                    </div>
-                    <div className="card-body">
-                      <div className="row">
-                        <div className="col-md-6">
-                          <div className="mb-2">
-                            <strong>Mã kho:</strong> <span className="badge bg-primary">{inv.code}</span>
-                          </div>
-                          <div className="mb-2">
-                            <strong>Sản phẩm:</strong> <span className="text-primary fw-bold">{productName}</span>
-                          </div>
-                          <div className="mb-2">
-                            <strong>Gói/Pool:</strong> 
-                            <span className="badge bg-info ms-1">
-                              {isSharedPool ? 'Pool chung' : packageName}
-                            </span>
-                          </div>
-                          <div className="mb-2">
-                            <strong>Trạng thái:</strong> 
-                            <span className={`badge ms-1 ${
-                              inv.status === 'AVAILABLE' ? 'bg-success' :
-                              inv.status === 'SOLD' ? 'bg-danger' :
-                              inv.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
-                            }`}>
-                              {inv.status === 'AVAILABLE' ? 'Có sẵn' :
-                               inv.status === 'SOLD' ? 'Đã bán' :
-                               inv.status === 'RESERVED' ? 'Đã giữ' : inv.status}
-                            </span>
-                          </div>
-                          <div className="mb-2">
-                            <strong>Ngày nhập:</strong> {inv.purchaseDate ? new Date(inv.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
-                          </div>
-                          <div className="mb-2">
-                            <strong>Hạn sử dụng:</strong> {inv.expiryDate ? new Date(inv.expiryDate).toLocaleDateString('vi-VN') : 'N/A'}
-                          </div>
-                        </div>
-                        <div className="col-md-6">
-                          {typeof inv.purchasePrice === 'number' && (
-                            <div className="mb-2">
-                              <strong>Giá nhập:</strong> 
-                              <span className="text-success fw-bold">
-                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(inv.purchasePrice)}
-                              </span>
-                            </div>
-                          )}
-                          {inv.sourceNote && (
-                            <div className="mb-2">
-                              <strong>Nguồn nhập:</strong> <em>{inv.sourceNote}</em>
-                            </div>
-                          )}
-                          {inv.isAccountBased && (
-                            <div className="mb-2">
-                              <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
-                            </div>
-                          )}
-                          {inv.notes && (
-                            <div className="mb-2">
-                              <strong>Ghi chú:</strong> <small className="text-muted">{inv.notes}</small>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {inv.productInfo && (
-                        <div className="mt-3">
-                          <strong>Thông tin sản phẩm:</strong>
-                          <div className="mt-1 p-2 bg-light rounded">
-                            <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{inv.productInfo}</pre>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-              
-              {(() => {
-                const pkg = getPackageInfo(viewingOrder.packageId)?.package;
-                const customFieldValues = (viewingOrder as any).customFieldValues || {};
-                
-                if (!pkg || !pkg.customFields || pkg.customFields.length === 0) {
-                  return null;
-                }
-                
-                const fieldsWithValues = pkg.customFields.filter(cf => {
-                  const value = customFieldValues[cf.id];
-                  return value !== undefined && String(value).trim();
                 });
-                
-                if (fieldsWithValues.length === 0) {
-                  return null;
-                }
-                
-                return (
-                  <div className="card mt-2">
-                    <div className="card-header">
-                      <strong>📝 Trường tùy chỉnh</strong>
-                    </div>
-                    <div className="card-body">
-                      {fieldsWithValues.map(cf => {
-                        const value = customFieldValues[cf.id];
-                        return (
-                          <div key={cf.id} className="mb-3">
-                            <div><strong>{cf.title}:</strong></div>
-                            <div className="mt-1 p-2 bg-light rounded">
-                              <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{String(value).trim()}</pre>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-              
-              {(() => {
-                const inv = (() => {
-                  // First try to find by inventoryItemId if it exists
-                  if (viewingOrder.inventoryItemId) {
-                    const found = inventory.find((i: any) => i.id === (viewingOrder as any).inventoryItemId);
-                    if (found) {
-                      return found; // If inventoryItemId exists, use it regardless of other conditions
-                    }
-                  }
-                  // Fallback 1: find by linkedOrderId (classic single-item link)
-                  const byLinked = inventory.find((i: any) => i.linked_order_id === viewingOrder.id);
-                  if (byLinked) return byLinked;
-                  // Fallback 2: account-based items where a profile is assigned to this order
-                  return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === viewingOrder.id));
-                })();
-                
-                if (!inv) {
-                  return null;
-                }
-                
-                // Get the package to access accountColumns configuration
-                const packageInfo = packages.find(p => p.id === inv.packageId);
-                const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                
-                // Filter columns to only those marked for display in orders
-                const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
-                
-                if (displayColumns.length === 0) {
-                  return null;
-                }
-                
-                return (
-                  <div className="card mt-2">
-                    <div className="card-header">
-                      <strong>📋 Thông tin đơn hàng</strong>
-                    </div>
-                    <div className="card-body">
-                      {displayColumns.map((col: any) => {
-                        const value = (inv.accountData || {})[col.id] || '';
-                        if (!value.trim()) return null;
-                        return (
-                          <div key={col.id} className="mb-3">
-                            <div><strong>{col.title}:</strong></div>
-                            <div className="mt-1 p-2 bg-light rounded">
-                              <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{value}</pre>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-              
-              {viewingOrder.notes && <div><strong>Ghi chú:</strong> {viewingOrder.notes}</div>}
-              {(() => {
-                const list = Database.getWarrantiesByOrder(viewingOrder.id);
-                return (
-                  <div style={{ marginTop: '12px' }}>
-                    <strong>Lịch sử bảo hành:</strong>
-                    {list.length === 0 ? (
-                      <div>Chưa có</div>
-                    ) : (
-                      <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                        {list.map(w => (
-                          <li key={w.id}>
-                            {new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.reason} ({w.status === 'DONE' ? 'đã xong' : 'chưa xong'})
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              })()}
-              {(() => {
-                const renewals = ((viewingOrder as any).renewals || []) as Array<{
-                  id: string;
-                  months: number;
-                  packageId?: string;
-                  price?: number;
-                  useCustomPrice?: boolean;
-                  previousExpiryDate: Date;
-                  newExpiryDate: Date;
-                  note?: string;
-                  paymentStatus: PaymentStatus;
-                  createdAt: Date;
-                  createdBy: string;
-                }>;
-                return (
-                  <div style={{ marginTop: '12px' }}>
-                    <strong>Lịch sử gia hạn:</strong>
-                    {renewals.length === 0 ? (
-                      <div>Chưa có</div>
-                    ) : (
-                      <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                        {renewals.map(r => (
-                          <li key={r.id}>
-                            {new Date(r.createdAt).toLocaleDateString('vi-VN')} · +{r.months} tháng · HSD: {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → {new Date(r.newExpiryDate).toLocaleDateString('vi-VN')} · Gói: {getPackageInfo(r.packageId || viewingOrder.packageId)?.package?.name || 'Không xác định'} · Giá: {typeof r.price === 'number' ? formatPrice(r.price) : '-'} · TT: {getPaymentLabel(r.paymentStatus)}{r.note ? ` · Ghi chú: ${r.note}` : ''}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              {new Date(viewingOrder.expiryDate) >= new Date() && (
-                <button
-                  className="btn btn-success"
-                  onClick={() => {
-                    setRenewState({
-                      order: viewingOrder,
-                      packageId: viewingOrder.packageId,
-                      useCustomPrice: false,
-                      customPrice: 0,
-                      note: '',
-                      paymentStatus: viewingOrder.paymentStatus || 'UNPAID'
-                    });
-                  }}
-                >
-                  Gia hạn
-                </button>
-              )}
-              <button
-                className="btn btn-light"
-                onClick={async () => {
-                  const o = viewingOrder;
-                  const customerName = getCustomerName(o.customerId);
-                  const pkgInfo = getPackageInfo(o.packageId);
-                  const productName = pkgInfo?.product?.name || 'Không xác định';
-                  const packageName = pkgInfo?.package?.name || 'Không xác định';
-                  const statusLabel = getStatusLabel(o.status);
-                  const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
-                  const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
-                  const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
-                  const out: string[] = [];
-                  out.push(`Mã đơn hàng: ${o.code || '-'}`);
-                  out.push(`Khách hàng: ${customerName}`);
-                  out.push(`Sản phẩm: ${productName}`);
-                  out.push(`Gói: ${packageName}`);
-                  out.push(`Ngày mua: ${purchaseDate}`);
-                  out.push(`Ngày hết hạn: ${expiryDate}`);
-                  out.push(`Trạng thái: ${statusLabel}`);
-                  out.push(`Thanh toán: ${paymentLabel}`);
-                  
-                  // Add custom fields if they exist
-                  const customFieldValues = (o as any).customFieldValues || {};
-                  if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
-                    pkgInfo.package.customFields.forEach((cf: any) => {
-                      const value = customFieldValues[cf.id];
-                      if (value && String(value).trim()) {
-                        out.push(`${cf.title}:`);
-                        out.push(String(value).trim());
-                        out.push(''); // Add empty line between fields
-                      }
-                    });
-                  }
-                  
-                  // Get filtered warehouse fields for copy
-                  const inv = (() => {
-                    if (o.inventoryItemId) {
-                      const found = inventory.find((i: any) => i.id === o.inventoryItemId);
-                      if (found) return found;
-                    }
-                    const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
-                    if (byLinked) return byLinked;
-                    return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
-                  })();
-                  
-                  if (inv) {
-                    const packageInfo = packages.find(p => p.id === inv.packageId);
-                    const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                    const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
-                    
-                    if (displayColumns.length > 0) {
-                      out.push('Thông tin đơn hàng:');
-                      displayColumns.forEach((col: any) => {
-                        const value = (inv.accountData || {})[col.id] || '';
-                        if (value.trim()) {
-                          out.push(`${col.title}:`);
-                          out.push(value);
-                          out.push(''); // Add empty line between fields
-                        }
-                      });
-                    }
-                  }
-                  const text = out.join('\n');
-                  try {
-                    await navigator.clipboard.writeText(text);
-                    notify('Đã copy thông tin đơn hàng', 'success');
-                  } catch (e) {
-                    notify('Không thể copy vào clipboard', 'error');
-                  }
-                }}
-              >
-                Copy thông tin
-              </button>
-              <button className="btn btn-secondary" onClick={() => setViewingOrder(null)}>Đóng</button>
-            </div>
-          </div>
-        </div>
+              }
+            }
+            const text = out.join('\n');
+            try {
+              await navigator.clipboard.writeText(text);
+              notify('Đã copy thông tin đơn hàng', 'success');
+            } catch (e) {
+              notify('Không thể copy vào clipboard', 'error');
+            }
+          }}
+        />
       )}
 
       {renewState && (

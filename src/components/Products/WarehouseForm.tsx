@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../contexts/ToastContext';
 import { getSupabase } from '../../utils/supabaseClient';
 
 interface WarehouseFormProps {
@@ -12,6 +13,7 @@ interface WarehouseFormProps {
 
 const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess }) => {
   const { state } = useAuth();
+  const { notify } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [packages, setPackages] = useState<ProductPackage[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>('');
@@ -36,6 +38,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -404,11 +407,12 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi nhập kho';
-      alert(errorMessage);
+      notify(errorMessage, 'error');
     }
   };
 
   return (
+    <>
     <div className="modal">
       <div className="modal-content" style={{ maxWidth: '560px' }}>
         <div className="modal-header">
@@ -640,13 +644,65 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             </div>
           )}
 
-          <div className="d-flex justify-content-end gap-2">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-            <button type="submit" className="btn btn-primary">{item ? 'Cập nhật' : 'Lưu'}</button>
+          <div className="d-flex justify-content-between align-items-center gap-2">
+            {item && item.status === 'AVAILABLE' && (
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => setConfirmDeleteVisible(true)}
+              >
+                Xóa
+              </button>
+            )}
+            <div className="d-flex gap-2">
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
+              <button type="submit" className="btn btn-primary">{item ? 'Cập nhật' : 'Lưu'}</button>
+            </div>
           </div>
         </form>
       </div>
     </div>
+    {confirmDeleteVisible && item && (
+      <div className="modal" role="dialog" aria-modal>
+        <div className="modal-content" style={{ maxWidth: 420 }}>
+          <div className="modal-header">
+            <h3 className="modal-title">Xác nhận</h3>
+            <button className="close" onClick={() => setConfirmDeleteVisible(false)}>×</button>
+          </div>
+          <div className="mb-4" style={{ color: 'var(--text-primary)' }}>Xóa mục này khỏi kho?</div>
+          <div className="d-flex justify-content-end gap-2">
+            <button className="btn btn-secondary" onClick={() => setConfirmDeleteVisible(false)}>Hủy</button>
+            <button
+              className="btn btn-danger"
+              onClick={async () => {
+                try {
+                  const sb = getSupabase();
+                  if (!sb) { notify('Không thể xóa kho', 'error'); return; }
+                  const snapshot = Database.getInventory().find((i: any) => i.id === item.id) || null;
+                  const { error } = await sb.from('inventory').delete().eq('id', item.id);
+                  if (error) { notify('Không thể xóa kho', 'error'); return; }
+                  const currentInventory = Database.getInventory();
+                  Database.setInventory(currentInventory.filter((i: any) => i.id !== item.id));
+                  try {
+                    const sb2 = getSupabase();
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${item.id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
+                  } catch {}
+                  notify('Đã xóa khỏi kho', 'success');
+                  setConfirmDeleteVisible(false);
+                  onClose();
+                  onSuccess();
+                } catch {
+                  notify('Không thể xóa mục này khỏi kho', 'error');
+                }
+              }}
+            >
+              Xác nhận
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
