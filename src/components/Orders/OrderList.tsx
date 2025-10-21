@@ -10,6 +10,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
+// Debug logging helper: disabled in production builds
+const debugLog = (...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') console.log(...args);
+};
+
 const OrderList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
@@ -195,8 +200,8 @@ const OrderList: React.FC = () => {
       console.error('Auto-expire orders sweep failed', e);
     }
     const allOrders = (ordersRes.data || []).map((r: any) => {
-      console.log('Raw order from Supabase:', r);
-      console.log('Order inventory_profile_id:', r.inventory_profile_id);
+      debugLog('Raw order from Supabase:', r);
+      debugLog('Order inventory_profile_id:', r.inventory_profile_id);
       return {
         id: r.id,
         code: r.code,
@@ -224,7 +229,7 @@ const OrderList: React.FC = () => {
     setOrders(allOrders);
     
     const allCustomers = (customersRes.data || []).map((r: any) => {
-      console.log('Raw customer from Supabase:', r);
+      debugLog('Raw customer from Supabase:', r);
       return {
         ...r,
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
@@ -233,7 +238,7 @@ const OrderList: React.FC = () => {
     }) as Customer[];
     
     const allPackages = (packagesRes.data || []).map((r: any) => {
-      console.log('Raw package from Supabase:', r);
+      debugLog('Raw package from Supabase:', r);
       return {
         ...r,
         productId: r.product_id || r.productId,
@@ -251,7 +256,7 @@ const OrderList: React.FC = () => {
     }) as ProductPackage[];
     
     const allProducts = (productsRes.data || []).map((r: any) => {
-      console.log('Raw product from Supabase:', r);
+      debugLog('Raw product from Supabase:', r);
       return {
         ...r,
         sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
@@ -622,20 +627,20 @@ const OrderList: React.FC = () => {
     return m;
   }, [packages]);
 
-  const getCustomerName = (customerId: string) => {
-    console.log('Looking up customer:', customerId, 'in map with keys:', Array.from(customerMap.keys()));
+    const getCustomerName = (customerId: string) => {
+    debugLog('Looking up customer:', customerId, 'in map with keys:', Array.from(customerMap.keys()));
     const customer = customerMap.get(customerId);
-    console.log('Found customer:', customer);
+    debugLog('Found customer:', customer);
     return customer ? customer.name : 'Không xác định';
   };
 
   const getPackageInfo = (packageId: string) => {
-    console.log('Looking up package:', packageId, 'in map with keys:', Array.from(packageMap.keys()));
+    debugLog('Looking up package:', packageId, 'in map with keys:', Array.from(packageMap.keys()));
     const pkg = packageMap.get(packageId);
-    console.log('Found package:', pkg);
+    debugLog('Found package:', pkg);
     if (!pkg) return null;
     const product = productMap.get(pkg.productId);
-    console.log('Found product for package:', product);
+    debugLog('Found product for package:', product);
     return { package: pkg, product };
   };
 

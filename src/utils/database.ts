@@ -18,6 +18,11 @@ import { InventoryRenewal } from '../types';
 import { Warranty, WarrantyFormData } from '../types';
 import { mirrorDelete, mirrorInsert, mirrorUpdate, mirrorActivityLog } from './supabaseSync';
 
+// Debug logging helper: disabled in production builds
+const debugLog = (...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') console.log(...args);
+};
+
 // In-memory backing store (clears on refresh; authoritative source is Supabase)
 const MEM: Record<string, any[]> = {
   bongmin_products: [],
@@ -1189,7 +1194,7 @@ export class Database {
   // Expense methods
   static async getExpenses(): Promise<Expense[]> {
     const expenses = getFromStorage(STORAGE_KEYS.EXPENSES, []);
-    console.log('Loading expenses from storage:', expenses.length, 'items');
+    debugLog('Loading expenses from storage:', expenses.length, 'items');
     return expenses;
   }
 
@@ -1208,14 +1213,14 @@ export class Database {
       updatedAt: new Date(),
     };
     
-    console.log('Creating expense:', newExpense);
+    debugLog('Creating expense:', newExpense);
     expenses.push(newExpense);
     saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
-    console.log('Saved to storage, expenses count:', expenses.length);
+    debugLog('Saved to storage, expenses count:', expenses.length);
     
     try {
       await mirrorInsert('expenses', newExpense);
-      console.log('Synced to Supabase successfully');
+      debugLog('Synced to Supabase successfully');
     } catch (error) {
       console.error('Failed to sync to Supabase:', error);
       // Don't throw - data is saved locally and will sync later

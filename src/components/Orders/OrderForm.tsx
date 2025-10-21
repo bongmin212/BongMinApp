@@ -5,6 +5,11 @@ import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
+// Debug logging helper: disabled in production builds
+const debugLog = (...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') console.log(...args);
+};
+
 interface OrderFormProps {
   order?: Order | null;
   onClose: () => void;
@@ -670,10 +675,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             custom_price: orderData.customPrice || null,
             custom_field_values: orderData.customFieldValues || null
           };
-          console.log('=== ORDER UPDATE DEBUG ===');
-          console.log('Order ID:', order.id);
-          console.log('Update data:', updateData);
-          console.log('inventory_profile_id being sent:', orderData.inventoryProfileId);
+          debugLog('=== ORDER UPDATE DEBUG ===');
+          debugLog('Order ID:', order.id);
+          debugLog('Update data:', updateData);
+          debugLog('inventory_profile_id being sent:', orderData.inventoryProfileId);
           
           const { data: updateResult, error } = await sb
             .from('orders')
@@ -682,9 +687,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             .select('*')
             .single();
           
-          console.log('Update result:', updateResult);
-          console.log('Update result inventory_profile_id:', updateResult?.inventory_profile_id);
-          console.log('Update error:', error);
+          debugLog('Update result:', updateResult);
+          debugLog('Update result inventory_profile_id:', updateResult?.inventory_profile_id);
+          debugLog('Update error:', error);
           
           if (error) {
             console.error('Supabase update error:', error);
@@ -752,23 +757,23 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             } catch {}
 
             if (nextInventoryId) {
-              console.log('=== INVENTORY UPDATE DEBUG ===');
-              console.log('nextInventoryId:', nextInventoryId);
-              console.log('selectedProfileIds:', selectedProfileIds);
+              debugLog('=== INVENTORY UPDATE DEBUG ===');
+              debugLog('nextInventoryId:', nextInventoryId);
+              debugLog('selectedProfileIds:', selectedProfileIds);
               
               const { data: inv } = await sb.from('inventory').select('*').eq('id', nextInventoryId).single();
-              console.log('Found inventory item:', inv);
+              debugLog('Found inventory item:', inv);
               
               if (inv && inv.is_account_based) {
                 if (selectedProfileIds.length === 0) {
                   notify('Vui lòng chọn slot để cấp', 'warning');
                 } else {
                   let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
-                  console.log('Current profiles:', profiles);
+                  debugLog('Current profiles:', profiles);
                   
                   // If profiles array is empty, generate default profiles
                   if (profiles.length === 0 && inv.total_slots && inv.total_slots > 0) {
-                    console.log('Generating default profiles for inventory item');
+                    debugLog('Generating default profiles for inventory item');
                     profiles = Array.from({ length: inv.total_slots }, (_, idx) => ({
                       id: `slot-${idx + 1}`,
                       label: `Slot ${idx + 1}`,
@@ -780,22 +785,22 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     selectedProfileIds.includes(p.id)
                       ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
                       : p);
-                  console.log('Updated profiles:', nextProfiles);
+                  debugLog('Updated profiles:', nextProfiles);
                   
                   const { error: updateError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', nextInventoryId);
                   if (updateError) {
                     console.error('Error updating inventory profiles:', updateError);
                   } else {
-                    console.log('Successfully updated inventory profiles');
+                    debugLog('Successfully updated inventory profiles');
                   }
                 }
               } else {
-                console.log('Updating classic inventory link');
+                debugLog('Updating classic inventory link');
                 const { error: updateError } = await sb.from('inventory').update({ status: 'SOLD', linked_order_id: order.id }).eq('id', nextInventoryId);
                 if (updateError) {
                   console.error('Error updating inventory link:', updateError);
                 } else {
-                  console.log('Successfully updated inventory link');
+                  debugLog('Successfully updated inventory link');
                 }
               }
             }
@@ -817,14 +822,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
         // Debug logging
-        console.log('=== ORDER CREATION DEBUG ===');
-        console.log('packageId:', orderData.packageId, 'Type:', typeof orderData.packageId);
-        console.log('customerId:', orderData.customerId, 'Type:', typeof orderData.customerId);
-        console.log('inventoryItemId:', orderData.inventoryItemId, 'Type:', typeof orderData.inventoryItemId);
-        console.log('inventoryProfileId:', orderData.inventoryProfileId, 'Type:', typeof orderData.inventoryProfileId);
-        console.log('selectedInventoryId:', selectedInventoryId, 'Type:', typeof selectedInventoryId);
-        console.log('selectedProfileIds:', selectedProfileIds, 'Type:', typeof selectedProfileIds);
-        console.log('inventory_profile_id being sent:', orderData.inventoryProfileId);
+        debugLog('=== ORDER CREATION DEBUG ===');
+        debugLog('packageId:', orderData.packageId, 'Type:', typeof orderData.packageId);
+        debugLog('customerId:', orderData.customerId, 'Type:', typeof orderData.customerId);
+        debugLog('inventoryItemId:', orderData.inventoryItemId, 'Type:', typeof orderData.inventoryItemId);
+        debugLog('inventoryProfileId:', orderData.inventoryProfileId, 'Type:', typeof orderData.inventoryProfileId);
+        debugLog('selectedInventoryId:', selectedInventoryId, 'Type:', typeof selectedInventoryId);
+        debugLog('selectedProfileIds:', selectedProfileIds, 'Type:', typeof selectedProfileIds);
+        debugLog('inventory_profile_id being sent:', orderData.inventoryProfileId);
         
         const insertData = {
           code: orderData.code,
@@ -843,7 +848,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           custom_field_values: orderData.customFieldValues || null,
           created_by: state.user?.id || 'system'
         };
-        console.log('Insert data:', insertData);
+        debugLog('Insert data:', insertData);
         
         const { data: createData, error: createErr } = await sb
           .from('orders')
@@ -887,24 +892,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           try {
             const sb2 = getSupabase();
             if (sb2) {
-              console.log('=== CREATE ORDER INVENTORY UPDATE DEBUG ===');
-              console.log('selectedInventoryId:', selectedInventoryId);
-              console.log('selectedProfileIds:', selectedProfileIds);
-              console.log('created order id:', created.id);
+              debugLog('=== CREATE ORDER INVENTORY UPDATE DEBUG ===');
+              debugLog('selectedInventoryId:', selectedInventoryId);
+              debugLog('selectedProfileIds:', selectedProfileIds);
+              debugLog('created order id:', created.id);
               
               const { data: inv } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
-              console.log('Found inventory item:', inv);
+              debugLog('Found inventory item:', inv);
               
               if (inv && inv.is_account_based) {
                 if (selectedProfileIds.length === 0) {
                   notify('Vui lòng chọn profile để cấp', 'warning');
                 } else {
                   let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
-                  console.log('Current profiles:', profiles);
+                  debugLog('Current profiles:', profiles);
                   
                   // If profiles array is empty, generate default profiles
                   if (profiles.length === 0 && inv.total_slots && inv.total_slots > 0) {
-                    console.log('Generating default profiles for inventory item');
+                    debugLog('Generating default profiles for inventory item');
                     profiles = Array.from({ length: inv.total_slots }, (_, idx) => ({
                       id: `slot-${idx + 1}`,
                       label: `Slot ${idx + 1}`,
@@ -916,22 +921,22 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     selectedProfileIds.includes(p.id)
                       ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
                       : p);
-                  console.log('Updated profiles:', nextProfiles);
+                  debugLog('Updated profiles:', nextProfiles);
                   
                   const { error: updateError } = await sb2.from('inventory').update({ profiles: nextProfiles }).eq('id', selectedInventoryId);
                   if (updateError) {
                     console.error('Error updating inventory profiles:', updateError);
                   } else {
-                    console.log('Successfully updated inventory profiles');
+                    debugLog('Successfully updated inventory profiles');
                   }
                 }
               } else {
-                console.log('Updating classic inventory link');
+                debugLog('Updating classic inventory link');
                 const { error: updateError } = await sb2.from('inventory').update({ status: 'SOLD', linked_order_id: created.id }).eq('id', selectedInventoryId);
                 if (updateError) {
                   console.error('Error updating inventory link:', updateError);
                 } else {
-                  console.log('Successfully updated inventory link');
+                  debugLog('Successfully updated inventory link');
                 }
               }
             }
@@ -1359,7 +1364,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     className={`form-control ${errors["inventory"] ? 'is-invalid' : ''}`}
                     value={selectedInventoryId}
                     onChange={(e) => {
-                      console.log('Inventory selection changed to:', e.target.value);
+                      debugLog('Inventory selection changed to:', e.target.value);
                       setSelectedInventoryId(e.target.value);
                     }}
                   >
@@ -1414,17 +1419,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     const isSharedPool = product?.sharedInventoryPool;
                     
                     // Debug logging
-                    console.log('=== INVENTORY CARD DEBUG ===');
-                    console.log('Item:', item);
-                    console.log('Product ID:', item.productId);
-                    console.log('Package ID:', item.packageId);
-                    console.log('Found product:', product);
-                    console.log('Found package:', packageInfo);
-                    console.log('Product name:', productName);
-                    console.log('Package name:', packageName);
-                    console.log('Is shared pool:', isSharedPool);
-                    console.log('Purchase price:', item.purchasePrice, 'Type:', typeof item.purchasePrice);
-                    console.log('Source note:', item.sourceNote);
+                    debugLog('=== INVENTORY CARD DEBUG ===');
+                    debugLog('Item:', item);
+                    debugLog('Product ID:', item.productId);
+                    debugLog('Package ID:', item.packageId);
+                    debugLog('Found product:', product);
+                    debugLog('Found package:', packageInfo);
+                    debugLog('Product name:', productName);
+                    debugLog('Package name:', packageName);
+                    debugLog('Is shared pool:', isSharedPool);
+                    debugLog('Purchase price:', item.purchasePrice, 'Type:', typeof item.purchasePrice);
+                    debugLog('Source note:', item.sourceNote);
                     
                     return (
                       <div className="mt-3">

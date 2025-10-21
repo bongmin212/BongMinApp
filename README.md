@@ -213,7 +213,6 @@ src/
 │   ├── Products/       # Product management
 │   ├── Customers/      # Customer management
 │   ├── Orders/         # Order management
-│   ├── Employees/      # Employee management
 │   ├── Expenses/       # Expense management
 │   ├── ActivityLogs/   # Activity history
 │   ├── Notifications/  # Notification system
@@ -253,7 +252,6 @@ src/
 - ✅ Login/logout functionality
 - ✅ Role-based permissions
 - ✅ Activity logging
-- ✅ Employee management (Manager only)
 
 ### Data Export
 - ✅ Excel export for all lists

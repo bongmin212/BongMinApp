@@ -4,6 +4,11 @@ import { reviveDates, toCamel } from './supabaseSync';
 
 type Unsubscribe = () => void;
 
+// Debug logging helper: disabled in production builds
+const debugLog = (...args: any[]) => {
+  if (process.env.NODE_ENV !== 'production') console.log(...args);
+};
+
 const TABLES = [
   'products',
   'packages',
@@ -28,7 +33,7 @@ export function subscribeRealtime(): Unsubscribe {
   type PostgresChange = { eventType: 'INSERT' | 'UPDATE' | 'DELETE'; new?: any; old?: any };
   const handleRow = (table: string, payload: PostgresChange) => {
     try {
-      console.log(`[Realtime] ${table} ${payload.eventType}:`, payload);
+      debugLog(`[Realtime] ${table} ${payload.eventType}:`, payload);
       const newRow = payload.new ? reviveDates(toCamel(payload.new)) : undefined;
       const oldRow = payload.old ? reviveDates(toCamel(payload.old)) : undefined;
     switch (table) {
@@ -165,7 +170,7 @@ export function subscribeRealtime(): Unsubscribe {
       .channel(`realtime:${table}`)
       .on('postgres_changes', { event: '*', schema: 'public', table }, (payload: any) => handleRow(table, payload as PostgresChange))
       .on('system', {}, (status) => {
-        console.log(`[Realtime] ${table} channel status:`, status);
+        debugLog(`[Realtime] ${table} channel status:`, status);
         if (status === 'CHANNEL_ERROR') {
           console.error(`[Realtime] Channel error for ${table}, attempting to reconnect...`);
           if (!isReconnecting) {
@@ -173,10 +178,10 @@ export function subscribeRealtime(): Unsubscribe {
             if (reconnectTimeout) clearTimeout(reconnectTimeout);
             reconnectTimeout = setTimeout(async () => {
               try {
-                console.log(`[Realtime] Refreshing all data after channel error...`);
+                debugLog(`[Realtime] Refreshing all data after channel error...`);
                 const { hydrateAllFromSupabase } = await import('./supabaseSync');
                 await hydrateAllFromSupabase();
-                console.log(`[Realtime] Data refresh completed`);
+                debugLog(`[Realtime] Data refresh completed`);
               } catch (e) {
                 console.error(`[Realtime] Failed to refresh data:`, e);
               } finally {
@@ -187,7 +192,7 @@ export function subscribeRealtime(): Unsubscribe {
         }
       })
       .subscribe((status) => {
-        console.log(`[Realtime] ${table} subscription status:`, status);
+        debugLog(`[Realtime] ${table} subscription status:`, status);
       });
     channels.push(ch);
   });
@@ -201,7 +206,7 @@ export function subscribeRealtime(): Unsubscribe {
         console.warn('[Realtime] Health check failed, connection may be unstable');
         // Don't auto-reconnect here, let the error handlers do it
       } else {
-        console.log('[Realtime] Health check passed');
+        debugLog('[Realtime] Health check passed');
       }
     } catch (e) {
       console.warn('[Realtime] Health check error:', e);
