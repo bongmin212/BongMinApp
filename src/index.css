@@ -1582,6 +1582,42 @@ body:has(.modal) .main-content * {
   .container {
     padding: var(--space-4);
   }
+
+  /* Header mobile optimizations */
+  .navbar .container {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .navbar .text-muted {
+    display: none !important;
+  }
+
+  .navbar .customer-type {
+    display: none !important;
+  }
+
+  .navbar-brand {
+    font-size: 1.25rem !important;
+  }
+
+  .navbar .d-flex.gap-3 {
+    gap: var(--space-2) !important;
+  }
+
+  .navbar .theme-toggle span:not(.theme-toggle-icon),
+  .navbar .btn span:not([style*="display: inline-flex"]) {
+    display: none !important;
+  }
+
+  .navbar .theme-toggle,
+  .navbar .btn {
+    padding: var(--space-2) !important;
+    min-width: auto !important;
+  }
+
+  .notification-toggle span:last-child {
+    display: none !important;
+  }
   
   .layout {
     flex-direction: column;
