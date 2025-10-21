@@ -44,6 +44,143 @@ A comprehensive order, product, and customer management application designed for
 - Payment status monitoring
 - Warranty management
 
+## Security Setup & Configuration
+
+### 🔒 Database Security (CRITICAL)
+
+This application uses Supabase with Row Level Security (RLS) policies. **IMPORTANT:** The default policies are secure and role-based. Do not modify them without understanding the security implications.
+
+#### Required Environment Variables
+Create a `.env` file in the project root:
+```bash
+REACT_APP_SUPABASE_URL=your_supabase_project_url
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+#### Database Migration Order
+Run these migrations in Supabase SQL editor in this exact order:
+
+1. **Base Setup:** `supabase/reset.sql` (for fresh installations)
+2. **Role Helper:** `supabase/migration_add_role_check_function.sql`
+3. **RLS Policies:** `supabase/migration_fix_rls_policies.sql`
+4. **Function Security:** `supabase/migration_fix_cleanup_function_permissions.sql`
+5. **Password Security:** `supabase/migration_fix_password_hash_nullable.sql`
+6. **Audit Logging:** `supabase/migration_add_security_audit_logs.sql`
+
+#### Security Features Implemented
+
+**Row Level Security (RLS) Policies:**
+- ✅ Anonymous users have **NO ACCESS** to any data
+- ✅ Only authenticated users can access data
+- ✅ MANAGER role can delete sensitive records (customers, orders, products)
+- ✅ EMPLOYEE role can read/write but cannot delete critical data
+- ✅ Users can only update their own employee record (unless MANAGER)
+
+**Function Security:**
+- ✅ `cleanup_orphaned_employees()` requires MANAGER role
+- ✅ Anonymous users cannot execute sensitive functions
+- ✅ All functions use `SECURITY DEFINER` with proper role checks
+
+**Password Security:**
+- ✅ Password hash field is NOT NULL
+- ✅ Placeholder passwords must be changed
+- ✅ Password validation constraints
+
+**Audit Logging:**
+- ✅ Security events are logged to `security_audit_logs` table
+- ✅ Failed login attempts tracking
+- ✅ Suspicious activity detection
+- ✅ Only MANAGER can view security logs
+
+#### Rate Limiting Recommendations
+
+**Supabase Project Settings:**
+1. Go to Supabase Dashboard → Settings → API
+2. Set **API Rate Limit** to:
+   - Anonymous: 10 requests/minute
+   - Authenticated: 100 requests/minute
+3. Enable **Database Rate Limiting**:
+   - Max connections: 100
+   - Statement timeout: 30 seconds
+
+**Additional Security Measures:**
+- Enable **Supabase Auth** email confirmations
+- Set up **Supabase Auth** password policies (minimum 8 characters)
+- Enable **Supabase Auth** brute force protection
+- Consider using **Supabase Edge Functions** for sensitive operations
+
+#### Testing Security
+
+After setup, verify security by testing:
+
+1. **Anonymous Access Test:**
+   ```bash
+   # This should fail with 401/403 errors
+   curl -H "Authorization: Bearer YOUR_ANON_KEY" \
+        https://your-project.supabase.co/rest/v1/employees
+   ```
+
+2. **Role Permission Test:**
+   - Login as EMPLOYEE → Try to delete a customer (should fail)
+   - Login as MANAGER → Try to delete a customer (should succeed)
+
+3. **Function Security Test:**
+   ```sql
+   -- This should fail for non-MANAGER users
+   SELECT * FROM public.cleanup_orphaned_employees();
+   ```
+
+#### Security Monitoring
+
+Monitor these tables for security events:
+- `security_audit_logs` - Failed logins, suspicious activities
+- `activity_logs` - User actions and system events
+
+**Alert Thresholds:**
+- More than 5 failed logins in 1 hour → Suspicious activity
+- Multiple RLS policy violations → Potential attack
+- Unusual access patterns → Review immediately
+
+### ⚠️ Security Warnings
+
+1. **Never disable RLS policies** - This would expose all data
+2. **Never grant anon access** to sensitive functions
+3. **Always use MANAGER role** for administrative tasks
+4. **Monitor security_audit_logs** regularly
+5. **Keep Supabase keys secure** - Never commit to public repos
+
+### 🔧 Troubleshooting Security Issues
+
+**Common Issues:**
+
+1. **"Access denied" errors:**
+   - Check if user is authenticated
+   - Verify user has correct role in employees table
+   - Ensure RLS policies are properly applied
+
+2. **Function execution fails:**
+   - Verify user has MANAGER role
+   - Check function permissions
+   - Review security_audit_logs for details
+
+3. **Data not loading:**
+   - Check authentication status
+   - Verify RLS policies allow the operation
+   - Review browser console for errors
+
+**Debug Commands:**
+```sql
+-- Check current user role
+SELECT public.is_manager();
+
+-- Check RLS policies
+SELECT * FROM pg_policies WHERE schemaname = 'public';
+
+-- View security logs
+SELECT * FROM public.security_audit_logs 
+ORDER BY created_at DESC LIMIT 10;
+```
+
 ## Installation & Setup
 
 ### System Requirements

@@ -37,3 +37,26 @@ export function requireSupabase(): SupabaseClient {
 
 export const supabase: SupabaseClient | null = getSupabase();
 
+// Function to cleanup orphaned employees (employees without auth users)
+export async function cleanupOrphanedEmployees() {
+  const sb = getSupabase();
+  if (!sb) return { ok: false, message: 'Supabase not configured' };
+  
+  try {
+    const { data, error } = await sb.rpc('cleanup_orphaned_employees');
+    if (error) {
+      console.error('[Cleanup] Failed to cleanup orphaned employees:', error);
+      return { ok: false, message: error.message };
+    }
+    
+    return { 
+      ok: true, 
+      deletedCount: data?.[0]?.deleted_count || 0,
+      deletedEmployees: data?.[0]?.deleted_employees || []
+    };
+  } catch (e) {
+    console.error('[Cleanup] Error:', e);
+    return { ok: false, message: 'Cleanup failed' };
+  }
+}
+
