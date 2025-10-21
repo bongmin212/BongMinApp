@@ -3219,25 +3219,27 @@ body:has(.modal) .main-content * {
   border-radius: 12px;
   box-shadow: var(--shadow-xl);
   border: 1px solid var(--border-color);
-  z-index: 50;
+  z-index: 1000;
   max-height: 600px;
   overflow: hidden;
   animation: slideInDown 0.2s ease-out;
 }
 
 @media (max-width: 768px) {
-  .notification-dropdown {
+  .navbar .notification-panel .notification-dropdown {
     position: fixed !important;
     top: 80px !important;
-    left: 16px !important;
-    right: 16px !important;
-    width: calc(100vw - 32px) !important;
-    min-width: 300px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
     max-height: calc(100vh - 100px) !important;
     transform: none !important;
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;
+    overflow: auto !important;
+    z-index: 10001 !important;
   }
 }
 
