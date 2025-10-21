@@ -228,7 +228,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
   return (
     <>
     <div className="modal">
-      <div className="modal-content" style={{ maxWidth: '1000px', width: '95%' }}>
+      <div className="modal-content" style={{ maxWidth: '1400px', width: '95%' }}>
         <div className="modal-header">
           <h3 className="modal-title">
             Lịch sử đơn hàng - {customer.name}
@@ -279,20 +279,20 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <p>Khách hàng chưa có đơn hàng nào</p>
           </div>
         ) : (
-          <div className="table-responsive" style={{ overflowX: 'visible' }}>
-            <table className="table" style={{ tableLayout: 'auto' }}>
+          <div className="table-responsive" style={{ overflowX: 'auto' }}>
+            <table className="table" style={{ tableLayout: 'fixed', minWidth: '1200px' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã đơn hàng</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày mua</th>
-                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
-                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Gói</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày hết hạn</th>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá</th>
-                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Ghi chú</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thao tác</th>
+                  <th style={{ width: '120px' }}>Mã đơn hàng</th>
+                  <th style={{ width: '100px' }}>Ngày mua</th>
+                  <th style={{ width: '180px' }}>Sản phẩm</th>
+                  <th style={{ width: '120px' }}>Gói</th>
+                  <th style={{ width: '100px' }}>Ngày hết hạn</th>
+                  <th style={{ width: '120px' }}>Trạng thái</th>
+                  <th style={{ width: '100px' }}>Thanh toán</th>
+                  <th style={{ width: '120px' }}>Giá</th>
+                  <th style={{ width: '180px' }}>Ghi chú</th>
+                  <th style={{ width: '100px' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>

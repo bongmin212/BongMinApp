@@ -608,10 +608,16 @@ const OrderList: React.FC = () => {
     return map;
   }, [products]);
 
-  // Lowercased name maps for cheaper substring search
+  // Lowercased name and code maps for cheaper substring search
   const customerNameLower = useMemo(() => {
     const m = new Map<string, string>();
     customers.forEach(c => m.set(c.id, (c.name || '').toLowerCase()));
+    return m;
+  }, [customers]);
+
+  const customerCodeLower = useMemo(() => {
+    const m = new Map<string, string>();
+    customers.forEach(c => m.set(c.id, (c.code || '').toLowerCase()));
     return m;
   }, [customers]);
 
@@ -788,6 +794,7 @@ const OrderList: React.FC = () => {
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
+        (customerCodeLower.get(order.customerId) || '').includes(normalizedSearch) ||
         (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
         ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch) ||
@@ -832,7 +839,7 @@ const OrderList: React.FC = () => {
 
       return true;
     });
-  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, productNameLower, packageNameLower]);
+  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
