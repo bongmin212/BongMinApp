@@ -3228,8 +3228,9 @@ body:has(.modal) .main-content * {
 @media (max-width: 768px) {
   .notification-dropdown {
     width: calc(100vw - 32px);
-    right: -16px;
-    left: 16px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
     max-height: 70vh;
   }
 }
