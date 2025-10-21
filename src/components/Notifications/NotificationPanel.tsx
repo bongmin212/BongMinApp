@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { 
   IconBell, 
@@ -28,6 +29,23 @@ const NotificationPanel: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 768px)').matches;
+  }, []);
+
+  // Lock body scroll when the notification panel is open on mobile
+  useEffect(() => {
+    if (!isMobile) return;
+    if (isOpen) {
+      const original = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = original;
+      };
+    }
+  }, [isOpen, isMobile]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -133,6 +151,168 @@ const NotificationPanel: React.FC = () => {
     setExpandedGroups(newExpanded);
   };
 
+  const dropdown = isOpen ? (
+    <>
+      {/* click-away overlay on mobile to ensure proper stacking and outside-click */}
+      {isMobile && (
+        <div
+          className="notification-overlay"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      <div className={`notification-dropdown${isMobile ? ' mobile' : ''}`}>
+        <div className="notification-header">
+          <h3 className="notification-title">
+            Thông báo
+          </h3>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="notification-mark-all"
+              >
+                Đánh dấu tất cả đã đọc
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Controls */}
+        <div className="notification-filters">
+          <div className="filter-group">
+            <label className="filter-label">Loại:</label>
+            <select 
+              value={filterType} 
+              onChange={(e) => setFilterType(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Tất cả</option>
+              <option value="EXPIRY_WARNING">Sắp hết hạn</option>
+              <option value="NEW_ORDER">Đơn hàng mới</option>
+              <option value="PAYMENT_REMINDER">Thanh toán</option>
+              <option value="PROCESSING_DELAY">Xử lý chậm</option>
+              <option value="PROFILE_NEEDS_UPDATE">Profile cần cập nhật</option>
+              <option value="NEW_WARRANTY">Bảo hành</option>
+            </select>
+          </div>
+          <div className="filter-group">
+            <label className="filter-label">Ưu tiên:</label>
+            <select 
+              value={filterPriority} 
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="filter-select"
+            >
+              <option value="all">Tất cả</option>
+              <option value="high">Cao</option>
+              <option value="medium">Trung bình</option>
+              <option value="low">Thấp</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="notification-list">
+          {groupedNotifications.length === 0 ? (
+            <div className="notification-empty">
+              <IconBell size={48} className="notification-empty-icon" />
+              <p>Không có thông báo nào</p>
+            </div>
+          ) : (
+            <div>
+              {groupedNotifications.map(([type, groupNotifications]) => {
+                const isExpanded = expandedGroups.has(type);
+                const unreadCount = groupNotifications.filter(n => !n.isRead).length;
+                const totalCount = groupNotifications.length;
+                
+                return (
+                  <div key={type} className="notification-group">
+                    <div 
+                      className="notification-group-header"
+                      onClick={() => toggleGroup(type)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {getNotificationIcon(type)}
+                        <span className="notification-group-title">
+                          {type === 'EXPIRY_WARNING' && 'Sắp hết hạn'}
+                          {type === 'NEW_ORDER' && 'Đơn hàng mới'}
+                          {type === 'PAYMENT_REMINDER' && 'Thanh toán'}
+                          {type === 'PROCESSING_DELAY' && 'Xử lý chậm'}
+                          {type === 'PROFILE_NEEDS_UPDATE' && 'Profile cần cập nhật'}
+                          {type === 'NEW_WARRANTY' && 'Bảo hành'}
+                        </span>
+                        <span className="notification-group-count">
+                          {unreadCount > 0 && `${unreadCount}/`}{totalCount}
+                        </span>
+                      </div>
+                      <div className="notification-group-toggle">
+                        {isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                      </div>
+                    </div>
+                    
+                    {isExpanded && (
+                      <div className="notification-group-content">
+                        {groupNotifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`notification-item ${getPriorityColor(notification.priority)} ${
+                              !notification.isRead ? 'unread' : ''
+                            }`}
+                          >
+                            <div className="notification-content">
+                              <div className="notification-icon">
+                                {getNotificationIcon(notification.type)}
+                              </div>
+                              <div className="notification-details">
+                                <div className="notification-item-header">
+                                  <p className="notification-item-title">
+                                    {notification.title}
+                                  </p>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="notification-item-time">
+                                      {formatTime(notification.createdAt)}
+                                    </span>
+                                    <button
+                                      onClick={() => removeNotification(notification.id)}
+                                      className="notification-remove"
+                                    >
+                                      <IconX size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                                <p className="notification-item-message">
+                                  {notification.message}
+                                </p>
+                                <div className="notification-actions">
+                                  {!notification.isRead && (
+                                    <button
+                                      onClick={() => markAsRead(notification.id)}
+                                      className="notification-mark-read"
+                                    >
+                                      Đánh dấu đã đọc
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => navigateToNotification(notification)}
+                                    className="notification-action-button"
+                                  >
+                                    {getActionButtonText(notification.type)}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  ) : null;
+
   return (
     <div className="notification-panel">
       <button
@@ -151,164 +331,7 @@ const NotificationPanel: React.FC = () => {
         )}
       </button>
 
-      {isOpen && (
-        <>
-          <div 
-            className="fixed inset-0 z-10" 
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="notification-dropdown">
-            <div className="notification-header">
-              <h3 className="notification-title">
-                Thông báo
-              </h3>
-              <div className="flex items-center gap-2">
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsRead}
-                    className="notification-mark-all"
-                  >
-                    Đánh dấu tất cả đã đọc
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Filter Controls */}
-            <div className="notification-filters">
-              <div className="filter-group">
-                <label className="filter-label">Loại:</label>
-                <select 
-                  value={filterType} 
-                  onChange={(e) => setFilterType(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">Tất cả</option>
-                  <option value="EXPIRY_WARNING">Sắp hết hạn</option>
-                  <option value="NEW_ORDER">Đơn hàng mới</option>
-                  <option value="PAYMENT_REMINDER">Thanh toán</option>
-                  <option value="PROCESSING_DELAY">Xử lý chậm</option>
-                  <option value="PROFILE_NEEDS_UPDATE">Profile cần cập nhật</option>
-                  <option value="NEW_WARRANTY">Bảo hành</option>
-                </select>
-              </div>
-              <div className="filter-group">
-                <label className="filter-label">Ưu tiên:</label>
-                <select 
-                  value={filterPriority} 
-                  onChange={(e) => setFilterPriority(e.target.value)}
-                  className="filter-select"
-                >
-                  <option value="all">Tất cả</option>
-                  <option value="high">Cao</option>
-                  <option value="medium">Trung bình</option>
-                  <option value="low">Thấp</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="notification-list">
-              {groupedNotifications.length === 0 ? (
-                <div className="notification-empty">
-                  <IconBell size={48} className="notification-empty-icon" />
-                  <p>Không có thông báo nào</p>
-                </div>
-              ) : (
-                <div>
-                  {groupedNotifications.map(([type, groupNotifications]) => {
-                    const isExpanded = expandedGroups.has(type);
-                    const unreadCount = groupNotifications.filter(n => !n.isRead).length;
-                    const totalCount = groupNotifications.length;
-                    
-                    return (
-                      <div key={type} className="notification-group">
-                        <div 
-                          className="notification-group-header"
-                          onClick={() => toggleGroup(type)}
-                        >
-                          <div className="flex items-center gap-2">
-                            {getNotificationIcon(type)}
-                            <span className="notification-group-title">
-                              {type === 'EXPIRY_WARNING' && 'Sắp hết hạn'}
-                              {type === 'NEW_ORDER' && 'Đơn hàng mới'}
-                              {type === 'PAYMENT_REMINDER' && 'Thanh toán'}
-                              {type === 'PROCESSING_DELAY' && 'Xử lý chậm'}
-                              {type === 'PROFILE_NEEDS_UPDATE' && 'Profile cần cập nhật'}
-                              {type === 'NEW_WARRANTY' && 'Bảo hành'}
-                            </span>
-                            <span className="notification-group-count">
-                              {unreadCount > 0 && `${unreadCount}/`}{totalCount}
-                            </span>
-                          </div>
-                          <div className="notification-group-toggle">
-                            {isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
-                          </div>
-                        </div>
-                        
-                        {isExpanded && (
-                          <div className="notification-group-content">
-                            {groupNotifications.map((notification) => (
-                              <div
-                                key={notification.id}
-                                className={`notification-item ${getPriorityColor(notification.priority)} ${
-                                  !notification.isRead ? 'unread' : ''
-                                }`}
-                              >
-                                <div className="notification-content">
-                                  <div className="notification-icon">
-                                    {getNotificationIcon(notification.type)}
-                                  </div>
-                                  <div className="notification-details">
-                                    <div className="notification-item-header">
-                                      <p className="notification-item-title">
-                                        {notification.title}
-                                      </p>
-                                      <div className="flex items-center space-x-2">
-                                        <span className="notification-item-time">
-                                          {formatTime(notification.createdAt)}
-                                        </span>
-                                        <button
-                                          onClick={() => removeNotification(notification.id)}
-                                          className="notification-remove"
-                                        >
-                                          <IconX size={14} />
-                                        </button>
-                                      </div>
-                                    </div>
-                                    <p className="notification-item-message">
-                                      {notification.message}
-                                    </p>
-                                    <div className="notification-actions">
-                                      {!notification.isRead && (
-                                        <button
-                                          onClick={() => markAsRead(notification.id)}
-                                          className="notification-mark-read"
-                                        >
-                                          Đánh dấu đã đọc
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={() => navigateToNotification(notification)}
-                                        className="notification-action-button"
-                                      >
-                                        {getActionButtonText(notification.type)}
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+      {isMobile ? createPortal(dropdown, document.body) : dropdown}
     </div>
   );
 };

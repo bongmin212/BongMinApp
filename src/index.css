@@ -3225,22 +3225,33 @@ body:has(.modal) .main-content * {
   animation: slideInDown 0.2s ease-out;
 }
 
+/* Mobile variant rendered via portal */
+.notification-dropdown.mobile {
+  position: fixed !important;
+  top: 80px !important; /* below sticky navbar */
+  left: 12px !important;
+  right: 12px !important;
+  width: auto !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100vh - 100px) !important;
+  transform: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  overflow: auto !important;
+  z-index: 10001 !important;
+}
+
+/* Fullscreen click-away overlay on mobile */
+.notification-overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  z-index: 10000; /* below dropdown.mobile but above page */
+}
+
 @media (max-width: 768px) {
-  .navbar .notification-panel .notification-dropdown {
-    position: fixed !important;
-    top: 80px !important;
-    left: 12px !important;
-    right: 12px !important;
-    width: auto !important;
-    max-width: calc(100vw - 24px) !important;
-    max-height: calc(100vh - 100px) !important;
-    transform: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-    overflow: auto !important;
-    z-index: 10001 !important;
-  }
+  /* legacy rule no longer needed; handled by .notification-dropdown.mobile */
 }
 
 .notification-header {
