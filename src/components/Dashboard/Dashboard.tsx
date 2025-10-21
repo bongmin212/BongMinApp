@@ -24,6 +24,8 @@ interface DashboardStats {
   reservedInventory: number;
   soldInventory: number;
   expiredInventory: number;
+  monthlyImportCost: number;
+  totalImportCost: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -48,6 +50,8 @@ const Dashboard: React.FC = () => {
     reservedInventory: 0,
     soldInventory: 0,
     expiredInventory: 0,
+    monthlyImportCost: 0,
+    totalImportCost: 0,
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,15 +73,17 @@ const Dashboard: React.FC = () => {
       let orders: Order[] = [];
       let inventoryItems: InventoryItem[] = [];
       let expenses: Expense[] = [];
+      let inventoryRenewals: any[] = [];
 
       if (sb) {
-        const [pr, pk, cu, or, inv, ex] = await Promise.all([
+        const [pr, pk, cu, or, inv, ex, renewals] = await Promise.all([
           sb.from('products').select('*'),
           sb.from('packages').select('*'),
           sb.from('customers').select('*'),
           sb.from('orders').select('*'),
           sb.from('inventory').select('*'),
-          sb.from('expenses').select('*')
+          sb.from('expenses').select('*'),
+          sb.from('inventory_renewals').select('*')
         ]);
         products = (pr.data || []).map((r: any) => ({
           id: r.id,
@@ -167,6 +173,17 @@ const Dashboard: React.FC = () => {
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
         }));
+        inventoryRenewals = (renewals.data || []).map((r: any) => ({
+          id: r.id,
+          inventoryId: r.inventory_id,
+          months: r.months,
+          amount: r.amount || 0,
+          previousExpiryDate: r.previous_expiry_date ? new Date(r.previous_expiry_date) : new Date(),
+          newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(),
+          note: r.note,
+          createdBy: r.created_by || 'system',
+          createdAt: r.created_at ? new Date(r.created_at) : new Date()
+        }));
       } else {
         [products, packages, customers, orders, inventoryItems, expenses] = await Promise.all([
           Database.getProducts(),
@@ -176,6 +193,8 @@ const Dashboard: React.FC = () => {
           Database.getInventory(),
           Database.getExpenses()
         ]);
+        // Fallback to local renewals
+        inventoryRenewals = Database.getInventoryRenewals();
       }
 
       // Calculate stats
@@ -319,15 +338,14 @@ const Dashboard: React.FC = () => {
       const importCostByMonth = (inventoryItems as InventoryItem[])
         .filter(i => new Date(i.purchaseDate).getMonth() === targetMonth && new Date(i.purchaseDate).getFullYear() === targetYear)
         .reduce((s, i) => s + (i.purchasePrice || 0), 0);
-      const renewals = Database.getInventoryRenewals();
-      const renewalCostByMonth = renewals
+      const renewalCostByMonth = inventoryRenewals
         .filter(r => r.createdAt.getMonth() === targetMonth && r.createdAt.getFullYear() === targetYear)
         .reduce((s, r) => s + (r.amount || 0), 0);
       const monthlyImportCost = importCostByMonth + renewalCostByMonth;
 
       // All-time import cost (purchase + renewals)
       const totalImportCost = (inventoryItems as InventoryItem[]).reduce((s, i) => s + (i.purchasePrice || 0), 0)
-        + Database.getInventoryRenewals().reduce((s: number, r: any) => s + (r.amount || 0), 0);
+        + inventoryRenewals.reduce((s, r) => s + (r.amount || 0), 0);
 
       // Calculate net profit (gross profit - external expenses only)
       // Do NOT subtract import cost again since COGS already accounts for it
@@ -359,6 +377,8 @@ const Dashboard: React.FC = () => {
         reservedInventory,
         soldInventory,
         expiredInventory,
+        monthlyImportCost,
+        totalImportCost,
       });
 
       // Get recent orders
@@ -542,22 +562,7 @@ const Dashboard: React.FC = () => {
 
               <div className="sales-card">
                 <h3>Chi phí nhập hàng</h3>
-                <div className="sales-amount">{formatCurrency((() => {
-                  const now = new Date();
-                  const base = new Date(now.getFullYear(), now.getMonth(), 1);
-                  base.setMonth(base.getMonth() + selectedMonthOffset);
-                  const targetMonth = base.getMonth();
-                  const targetYear = base.getFullYear();
-                  const inventoryItems = Database.getInventory();
-                  const importCost = inventoryItems
-                    .filter((i: any) => new Date(i.purchaseDate).getMonth() === targetMonth && new Date(i.purchaseDate).getFullYear() === targetYear)
-                    .reduce((s: number, i: any) => s + (i.purchasePrice || 0), 0);
-                  const renewals = Database.getInventoryRenewals();
-                  const renewalCost = renewals
-                    .filter((r: any) => r.createdAt.getMonth() === targetMonth && r.createdAt.getFullYear() === targetYear)
-                    .reduce((s: number, r: any) => s + (r.amount || 0), 0);
-                  return importCost + renewalCost;
-                })())}</div>
+                <div className="sales-amount">{formatCurrency(stats.monthlyImportCost)}</div>
                 <div className="sales-subtitle">Giá mua + gia hạn kho</div>
               </div>
 
@@ -585,15 +590,7 @@ const Dashboard: React.FC = () => {
 
               <div className="sales-card">
                 <h3>Tổng chi phí nhập hàng</h3>
-                <div className="sales-amount">{formatCurrency((() => {
-                  const inventoryItems = Database.getInventory();
-                  const importCost = inventoryItems
-                    .reduce((s: number, i: any) => s + (i.purchasePrice || 0), 0);
-                  const renewals = Database.getInventoryRenewals();
-                  const renewalCost = renewals
-                    .reduce((s: number, r: any) => s + (r.amount || 0), 0);
-                  return importCost + renewalCost;
-                })())}</div>
+                <div className="sales-amount">{formatCurrency(stats.totalImportCost)}</div>
                 <div className="sales-subtitle">Tất cả thời gian</div>
               </div>
 

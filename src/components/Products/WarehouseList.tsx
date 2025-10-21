@@ -1546,11 +1546,37 @@ const WarehouseList: React.FC = () => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Giá gia hạn (VND)</label>
-                  <input type="number" className="form-control" value={renewalDialog.amount} min={0} onChange={e => setRenewalDialog({ ...renewalDialog, amount: Math.max(0, parseInt(e.target.value || '0', 10)) })} />
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={
+                      renewalDialog.amount === 0 
+                        ? '' 
+                        : new Intl.NumberFormat('vi-VN').format(renewalDialog.amount) + ' đ'
+                    }
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      const num = raw ? Number(raw) : 0;
+                      setRenewalDialog({ ...renewalDialog, amount: num });
+                    }}
+                    placeholder="0 đ"
+                    inputMode="numeric"
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Ghi chú</label>
                   <input type="text" className="form-control" value={renewalDialog.note} onChange={e => setRenewalDialog({ ...renewalDialog, note: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Hạn mới (dự kiến)</label>
+                  <div className="form-control" style={{ backgroundColor: '#f8f9fa', color: '#495057' }}>
+                    {(() => {
+                      const currentExpiry = new Date(inv.expiryDate);
+                      const newExpiry = new Date(currentExpiry);
+                      newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
+                      return newExpiry.toLocaleDateString('vi-VN');
+                    })()}
+                  </div>
                 </div>
               </div>
               <div className="d-flex justify-content-end gap-2">
@@ -1563,7 +1589,22 @@ const WarehouseList: React.FC = () => {
                   newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
                   const { error } = await sb.from('inventory').update({ expiry_date: newExpiry.toISOString() }).eq('id', inv.id);
                   if (!error) {
-                    Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, createdBy: state.user?.id || 'system' });
+                    // Store renewal in Supabase
+                    const { error: renewalError } = await sb.from('inventory_renewals').insert({
+                      inventory_id: inv.id,
+                      months: renewalDialog.months,
+                      amount: renewalDialog.amount,
+                      previous_expiry_date: currentExpiry.toISOString(),
+                      new_expiry_date: newExpiry.toISOString(),
+                      note: renewalDialog.note,
+                      created_by: state.user?.id || 'system'
+                    });
+                    
+                    if (!renewalError) {
+                      // Also store locally for backward compatibility
+                      Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, createdBy: state.user?.id || 'system' });
+                    }
+                    
                     try {
                       const sb2 = getSupabase();
                       if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}` });
