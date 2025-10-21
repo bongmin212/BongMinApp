@@ -388,7 +388,7 @@ export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [
 ];
 
 // Notification types
-export type NotificationType = 'EXPIRY_WARNING' | 'NEW_ORDER' | 'PAYMENT_REMINDER' | 'PROCESSING_DELAY';
+export type NotificationType = 'EXPIRY_WARNING' | 'NEW_ORDER' | 'PAYMENT_REMINDER' | 'PROCESSING_DELAY' | 'PROFILE_NEEDS_UPDATE' | 'NEW_WARRANTY';
 
 export interface Notification {
   id: string;
@@ -400,6 +400,7 @@ export interface Notification {
   createdAt: Date;
   relatedId?: string; // ID of related order, product, etc.
   actionUrl?: string; // URL to navigate when clicked
+  employeeId?: string; // ID of employee who should receive this notification
 }
 
 export interface NotificationSettings {

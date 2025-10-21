@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { Notification, NotificationSettings, Order, InventoryItem, ProductPackage, Product } from '../types';
+import { Notification, NotificationSettings, Order, InventoryItem, ProductPackage, Product, Warranty } from '../types';
 import { Database } from '../utils/database';
+import { getSupabase } from '../utils/supabaseClient';
+import { NotificationSound } from '../utils/notificationSound';
+import { DesktopNotification } from '../utils/desktopNotification';
 
 interface NotificationContextValue {
   notifications: Notification[];
@@ -11,6 +14,7 @@ interface NotificationContextValue {
   removeNotification: (id: string) => void;
   updateSettings: (settings: Partial<NotificationSettings>) => void;
   refreshNotifications: () => void;
+  navigateToNotification: (notification: Notification) => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
@@ -142,19 +146,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const checkProcessingOrders = useCallback((orders: Order[]): Notification[] => {
     const warnings: Notification[] = [];
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const oneHourAgo = new Date();
+    oneHourAgo.setHours(oneHourAgo.getHours() - 1);
 
     orders.forEach(order => {
-      if (order.status === 'PROCESSING' && new Date(order.createdAt) <= threeDaysAgo) {
-        const daysProcessing = Math.ceil((new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+      if (order.status === 'PROCESSING' && new Date(order.createdAt) <= oneHourAgo) {
+        const hoursProcessing = Math.ceil((new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60));
         
         warnings.push({
           id: `processing-delay-${order.id}`,
           type: 'PROCESSING_DELAY',
           title: 'Đơn hàng xử lý quá lâu',
-          message: `Đơn hàng ${order.code} đang xử lý ${daysProcessing} ngày`,
-          priority: daysProcessing >= 7 ? 'high' : 'medium',
+          message: `Đơn hàng ${order.code} đang xử lý ${hoursProcessing} giờ`,
+          priority: hoursProcessing >= 24 ? 'high' : hoursProcessing >= 4 ? 'medium' : 'low',
           isRead: false,
           createdAt: new Date(),
           relatedId: order.id,
@@ -166,19 +170,118 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return warnings;
   }, []);
 
+  const checkProfileNeedsUpdate = useCallback((inventoryItems: InventoryItem[]): Notification[] => {
+    const notifications: Notification[] = [];
+
+    inventoryItems.forEach(item => {
+      if (item.isAccountBased && item.profiles) {
+        const needsUpdateProfiles = item.profiles.filter(profile => profile.needsUpdate);
+        
+        if (needsUpdateProfiles.length > 0) {
+          notifications.push({
+            id: `profile-update-${item.id}`,
+            type: 'PROFILE_NEEDS_UPDATE',
+            title: 'Profile cần cập nhật',
+            message: `${item.code} có ${needsUpdateProfiles.length} profile cần cập nhật`,
+            priority: needsUpdateProfiles.length >= 3 ? 'high' : 'medium',
+            isRead: false,
+            createdAt: new Date(),
+            relatedId: item.id,
+            actionUrl: '/warehouse'
+          });
+        }
+      }
+    });
+
+    return notifications;
+  }, []);
+
+  const checkNewWarranties = useCallback((warranties: Warranty[]): Notification[] => {
+    const notifications: Notification[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    warranties.forEach(warranty => {
+      const warrantyDate = new Date(warranty.createdAt);
+      warrantyDate.setHours(0, 0, 0, 0);
+      
+      if (warrantyDate.getTime() === today.getTime() && warranty.status === 'PENDING') {
+        notifications.push({
+          id: `new-warranty-${warranty.id}`,
+          type: 'NEW_WARRANTY',
+          title: 'Bảo hành mới',
+          message: `Có yêu cầu bảo hành mới: ${warranty.code}`,
+          priority: 'medium',
+          isRead: false,
+          createdAt: new Date(),
+          relatedId: warranty.id,
+          actionUrl: '/warranties'
+        });
+      }
+    });
+
+    return notifications;
+  }, []);
+
   const generateNotifications = useCallback(async () => {
     try {
-      const [orders, packages] = await Promise.all([
+      const [orders, packages, inventoryItems, warranties] = await Promise.all([
         Database.getOrders(),
-        Database.getPackages()
+        Database.getPackages(),
+        Database.getInventory(),
+        Database.getWarranties()
       ]);
 
       const allNotifications = [
         ...checkExpiryWarnings(orders, packages),
         ...checkNewOrders(orders),
         ...checkPaymentReminders(orders),
-        ...checkProcessingOrders(orders)
+        ...checkProcessingOrders(orders),
+        ...checkProfileNeedsUpdate(inventoryItems),
+        ...checkNewWarranties(warranties)
       ];
+
+      // Save to Supabase if available
+      const sb = getSupabase();
+      if (sb) {
+        try {
+          const currentUser = await sb.auth.getUser();
+          if (currentUser.data.user?.id) {
+            const userId = currentUser.data.user.id;
+            const notificationsToSave = allNotifications.map(notification => ({
+              type: notification.type,
+              title: notification.title,
+              message: notification.message,
+              priority: notification.priority,
+              is_read: notification.isRead,
+              created_at: notification.createdAt.toISOString(),
+              related_id: notification.relatedId,
+              action_url: notification.actionUrl,
+              employee_id: userId
+            }));
+
+            // Check for existing notifications to avoid duplicates
+            const { data: existingNotifications } = await sb
+              .from('notifications')
+              .select('id, type, related_id')
+              .eq('employee_id', userId);
+
+            const existingIds = new Set(
+              existingNotifications?.map(n => `${n.type}-${n.related_id}`) || []
+            );
+
+            const newNotifications = notificationsToSave.filter(n => 
+              !existingIds.has(`${n.type}-${n.related_id}`)
+            );
+
+            if (newNotifications.length > 0) {
+              await sb.from('notifications').insert(newNotifications);
+            }
+          }
+        } catch (error) {
+          console.error('Error saving notifications to Supabase:', error);
+        }
+      }
 
       // Remove duplicates and update existing notifications
       setNotifications(prev => {
@@ -189,11 +292,93 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('Error generating notifications:', error);
     }
-  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders]);
+  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties]);
 
   const refreshNotifications = useCallback(() => {
     generateNotifications();
   }, [generateNotifications]);
+
+  const navigateToNotification = useCallback((notification: Notification) => {
+    if (notification.actionUrl) {
+      // Mark as read when navigating
+      markAsRead(notification.id);
+      
+      // Navigate to the action URL
+      const url = new URL(notification.actionUrl, window.location.origin);
+      window.location.href = url.pathname + url.search;
+    }
+  }, [markAsRead]);
+
+  const loadNotificationsFromSupabase = useCallback(async () => {
+    const sb = getSupabase();
+    if (!sb) return;
+
+    try {
+      const currentUser = await sb.auth.getUser();
+      if (!currentUser.data.user?.id) return;
+
+      const userId = currentUser.data.user.id;
+      const { data: notificationsData, error } = await sb
+        .from('notifications')
+        .select('*')
+        .eq('employee_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading notifications:', error);
+        return;
+      }
+
+      if (notificationsData) {
+        const loadedNotifications: Notification[] = notificationsData.map((n: any) => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          priority: n.priority,
+          isRead: n.is_read,
+          createdAt: new Date(n.created_at),
+          relatedId: n.related_id,
+          actionUrl: n.action_url,
+          employeeId: n.employee_id
+        }));
+
+        setNotifications(loadedNotifications);
+      }
+    } catch (error) {
+      console.error('Error loading notifications from Supabase:', error);
+    }
+  }, []);
+
+  // Initialize sound and desktop notifications
+  useEffect(() => {
+    NotificationSound.init();
+    DesktopNotification.requestPermission();
+  }, []);
+
+  // Show desktop notification and play sound for new high priority notifications
+  useEffect(() => {
+    const newHighPriorityNotifications = notifications.filter(n => 
+      n.priority === 'high' && !n.isRead
+    );
+
+    newHighPriorityNotifications.forEach(async (notification) => {
+      // Play sound
+      await NotificationSound.playNotificationSound('high');
+      
+      // Show desktop notification
+      await DesktopNotification.show(notification.title, {
+        body: notification.message,
+        priority: 'high',
+        actionUrl: notification.actionUrl
+      });
+    });
+  }, [notifications]);
+
+  // Load notifications from Supabase on mount
+  useEffect(() => {
+    loadNotificationsFromSupabase();
+  }, [loadNotificationsFromSupabase]);
 
   // Generate notifications on mount and every 5 minutes
   useEffect(() => {
@@ -210,8 +395,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     markAllAsRead,
     removeNotification,
     updateSettings,
-    refreshNotifications
-  }), [notifications, unreadCount, settings, markAsRead, markAllAsRead, removeNotification, updateSettings, refreshNotifications]);
+    refreshNotifications,
+    navigateToNotification
+  }), [notifications, unreadCount, settings, markAsRead, markAllAsRead, removeNotification, updateSettings, refreshNotifications, navigateToNotification]);
 
   return (
     <NotificationContext.Provider value={value}>

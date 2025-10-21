@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications } from '../../contexts/NotificationContext';
 import { getSupabase } from '../../utils/supabaseClient';
 import { IconBox, IconClipboard, IconUsers, IconCart, IconChart, IconTrendingUp, IconReceipt, IconPackage, IconShield } from '../Icons';
 
@@ -10,16 +11,40 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { isManager } = useAuth();
+  const { notifications } = useNotifications();
 
   const sb = getSupabase();
+
+  // Calculate notification counts for each section
+  const getNotificationCount = (sectionId: string) => {
+    const unreadNotifications = notifications.filter(n => !n.isRead);
+    
+    switch (sectionId) {
+      case 'orders':
+        return unreadNotifications.filter(n => 
+          ['EXPIRY_WARNING', 'NEW_ORDER', 'PAYMENT_REMINDER', 'PROCESSING_DELAY'].includes(n.type)
+        ).length;
+      case 'warehouse':
+        return unreadNotifications.filter(n => 
+          ['PROFILE_NEEDS_UPDATE'].includes(n.type)
+        ).length;
+      case 'warranties':
+        return unreadNotifications.filter(n => 
+          ['NEW_WARRANTY'].includes(n.type)
+        ).length;
+      default:
+        return 0;
+    }
+  };
+
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <IconTrendingUp /> },
-    { id: 'orders', label: 'Đơn hàng', icon: <IconCart /> },
+    { id: 'orders', label: 'Đơn hàng', icon: <IconCart />, notificationCount: getNotificationCount('orders') },
     { id: 'customers', label: 'Khách hàng', icon: <IconUsers /> },
     { id: 'products', label: 'Sản phẩm', icon: <IconBox /> },
     { id: 'packages', label: 'Gói sản phẩm', icon: <IconPackage /> },
-    { id: 'warehouse', label: 'Kho hàng', icon: <IconClipboard /> },
-    { id: 'warranties', label: 'Bảo hành', icon: <IconShield /> },
+    { id: 'warehouse', label: 'Kho hàng', icon: <IconClipboard />, notificationCount: getNotificationCount('warehouse') },
+    { id: 'warranties', label: 'Bảo hành', icon: <IconShield />, notificationCount: getNotificationCount('warranties') },
     { id: 'expenses', label: 'Chi phí', icon: <IconReceipt /> },
     // Chỉ còn Lịch sử hoạt động cho quản lý
     ...(isManager() ? [ { id: 'activity-logs', label: 'Lịch sử hoạt động', icon: <IconChart /> } ] : [])
@@ -56,6 +81,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
                 >
                   {item.label}
                 </span>
+                {item.notificationCount && item.notificationCount > 0 && (
+                  <span className="sidebar-notification-badge">
+                    {item.notificationCount > 99 ? '99+' : item.notificationCount}
+                  </span>
+                )}
               </button>
             </li>
           ))}

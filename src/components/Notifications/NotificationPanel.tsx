@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { 
   IconBell, 
@@ -6,7 +6,12 @@ import {
   IconClock, 
   IconPackage, 
   IconCreditCard, 
-  IconX
+  IconX,
+  IconShield,
+  IconSettings,
+  IconChevronDown,
+  IconChevronUp,
+  IconFilter
 } from '../Icons';
 
 const NotificationPanel: React.FC = () => {
@@ -15,10 +20,14 @@ const NotificationPanel: React.FC = () => {
     unreadCount, 
     markAsRead, 
     markAllAsRead, 
-    removeNotification 
+    removeNotification,
+    navigateToNotification
   } = useNotifications();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -30,8 +39,41 @@ const NotificationPanel: React.FC = () => {
         return <IconCreditCard className="text-red-500" />;
       case 'PROCESSING_DELAY':
         return <IconAlertTriangle className="text-red-600" />;
+      case 'PROFILE_NEEDS_UPDATE':
+        return <IconSettings className="text-purple-500" />;
+      case 'NEW_WARRANTY':
+        return <IconShield className="text-green-500" />;
       default:
         return <IconBell className="text-gray-500" />;
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return 'border-l-red-500 bg-red-50 dark:bg-red-900/20';
+      case 'medium':
+        return 'border-l-orange-500 bg-orange-50 dark:bg-orange-900/20';
+      case 'low':
+        return 'border-l-blue-500 bg-blue-50 dark:bg-blue-900/20';
+      default:
+        return 'border-l-gray-500 bg-gray-50 dark:bg-gray-900/20';
+    }
+  };
+
+  const getActionButtonText = (type: string) => {
+    switch (type) {
+      case 'EXPIRY_WARNING':
+      case 'NEW_ORDER':
+      case 'PAYMENT_REMINDER':
+      case 'PROCESSING_DELAY':
+        return 'Xem đơn';
+      case 'PROFILE_NEEDS_UPDATE':
+        return 'Xem kho';
+      case 'NEW_WARRANTY':
+        return 'Xem bảo hành';
+      default:
+        return 'Xem chi tiết';
     }
   };
 
@@ -52,18 +94,44 @@ const NotificationPanel: React.FC = () => {
     }
   };
 
-  const sortedNotifications = [...notifications].sort((a, b) => {
-    // Sort by priority first, then by date
-    const priorityOrder = { high: 3, medium: 2, low: 1 };
-    const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
-    const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
+  // Filter notifications
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(notification => {
+      if (filterType !== 'all' && notification.type !== filterType) return false;
+      if (filterPriority !== 'all' && notification.priority !== filterPriority) return false;
+      return true;
+    });
+  }, [notifications, filterType, filterPriority]);
+
+  // Group notifications by type
+  const groupedNotifications = useMemo(() => {
+    const groups: { [key: string]: typeof notifications } = {};
     
-    if (aPriority !== bPriority) {
-      return bPriority - aPriority;
+    filteredNotifications.forEach(notification => {
+      if (!groups[notification.type]) {
+        groups[notification.type] = [];
+      }
+      groups[notification.type].push(notification);
+    });
+
+    // Sort groups by priority and count
+    return Object.entries(groups).sort(([, a], [, b]) => {
+      const aHigh = a.filter(n => n.priority === 'high').length;
+      const bHigh = b.filter(n => n.priority === 'high').length;
+      if (aHigh !== bHigh) return bHigh - aHigh;
+      return b.length - a.length;
+    });
+  }, [filteredNotifications]);
+
+  const toggleGroup = (type: string) => {
+    const newExpanded = new Set(expandedGroups);
+    if (newExpanded.has(type)) {
+      newExpanded.delete(type);
+    } else {
+      newExpanded.add(type);
     }
-    
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-  });
+    setExpandedGroups(newExpanded);
+  };
 
   return (
     <div className="notification-panel">
@@ -93,69 +161,147 @@ const NotificationPanel: React.FC = () => {
               <h3 className="notification-title">
                 Thông báo
               </h3>
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllAsRead}
-                  className="notification-mark-all"
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllAsRead}
+                    className="notification-mark-all"
+                  >
+                    Đánh dấu tất cả đã đọc
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="notification-filters">
+              <div className="filter-group">
+                <label className="filter-label">Loại:</label>
+                <select 
+                  value={filterType} 
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="filter-select"
                 >
-                  Đánh dấu tất cả đã đọc
-                </button>
-              )}
+                  <option value="all">Tất cả</option>
+                  <option value="EXPIRY_WARNING">Sắp hết hạn</option>
+                  <option value="NEW_ORDER">Đơn hàng mới</option>
+                  <option value="PAYMENT_REMINDER">Thanh toán</option>
+                  <option value="PROCESSING_DELAY">Xử lý chậm</option>
+                  <option value="PROFILE_NEEDS_UPDATE">Profile cần cập nhật</option>
+                  <option value="NEW_WARRANTY">Bảo hành</option>
+                </select>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label">Ưu tiên:</label>
+                <select 
+                  value={filterPriority} 
+                  onChange={(e) => setFilterPriority(e.target.value)}
+                  className="filter-select"
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="high">Cao</option>
+                  <option value="medium">Trung bình</option>
+                  <option value="low">Thấp</option>
+                </select>
+              </div>
             </div>
 
             <div className="notification-list">
-              {sortedNotifications.length === 0 ? (
+              {groupedNotifications.length === 0 ? (
                 <div className="notification-empty">
                   <IconBell size={48} className="notification-empty-icon" />
                   <p>Không có thông báo nào</p>
                 </div>
               ) : (
                 <div>
-                  {sortedNotifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      className={`notification-item ${notification.priority}-priority ${
-                        !notification.isRead ? 'unread' : ''
-                      }`}
-                    >
-                      <div className="notification-content">
-                        <div className="notification-icon">
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        <div className="notification-details">
-                          <div className="notification-item-header">
-                            <p className="notification-item-title">
-                              {notification.title}
-                            </p>
-                            <div className="flex items-center space-x-2">
-                              <span className="notification-item-time">
-                                {formatTime(notification.createdAt)}
-                              </span>
-                              <button
-                                onClick={() => removeNotification(notification.id)}
-                                className="notification-remove"
-                              >
-                                <IconX size={14} />
-                              </button>
-                            </div>
+                  {groupedNotifications.map(([type, groupNotifications]) => {
+                    const isExpanded = expandedGroups.has(type);
+                    const unreadCount = groupNotifications.filter(n => !n.isRead).length;
+                    const totalCount = groupNotifications.length;
+                    
+                    return (
+                      <div key={type} className="notification-group">
+                        <div 
+                          className="notification-group-header"
+                          onClick={() => toggleGroup(type)}
+                        >
+                          <div className="flex items-center gap-2">
+                            {getNotificationIcon(type)}
+                            <span className="notification-group-title">
+                              {type === 'EXPIRY_WARNING' && 'Sắp hết hạn'}
+                              {type === 'NEW_ORDER' && 'Đơn hàng mới'}
+                              {type === 'PAYMENT_REMINDER' && 'Thanh toán'}
+                              {type === 'PROCESSING_DELAY' && 'Xử lý chậm'}
+                              {type === 'PROFILE_NEEDS_UPDATE' && 'Profile cần cập nhật'}
+                              {type === 'NEW_WARRANTY' && 'Bảo hành'}
+                            </span>
+                            <span className="notification-group-count">
+                              {unreadCount > 0 && `${unreadCount}/`}{totalCount}
+                            </span>
                           </div>
-                          <p className="notification-item-message">
-                            {notification.message}
-                          </p>
-                          {!notification.isRead && (
-                            <div className="notification-actions">
-                              <button
-                                onClick={() => markAsRead(notification.id)}
-                                className="notification-mark-read"
-                              >
-                                Đánh dấu đã đọc
-                              </button>
-                            </div>
-                          )}
+                          <div className="notification-group-toggle">
+                            {isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                          </div>
                         </div>
+                        
+                        {isExpanded && (
+                          <div className="notification-group-content">
+                            {groupNotifications.map((notification) => (
+                              <div
+                                key={notification.id}
+                                className={`notification-item ${getPriorityColor(notification.priority)} ${
+                                  !notification.isRead ? 'unread' : ''
+                                }`}
+                              >
+                                <div className="notification-content">
+                                  <div className="notification-icon">
+                                    {getNotificationIcon(notification.type)}
+                                  </div>
+                                  <div className="notification-details">
+                                    <div className="notification-item-header">
+                                      <p className="notification-item-title">
+                                        {notification.title}
+                                      </p>
+                                      <div className="flex items-center space-x-2">
+                                        <span className="notification-item-time">
+                                          {formatTime(notification.createdAt)}
+                                        </span>
+                                        <button
+                                          onClick={() => removeNotification(notification.id)}
+                                          className="notification-remove"
+                                        >
+                                          <IconX size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <p className="notification-item-message">
+                                      {notification.message}
+                                    </p>
+                                    <div className="notification-actions">
+                                      {!notification.isRead && (
+                                        <button
+                                          onClick={() => markAsRead(notification.id)}
+                                          className="notification-mark-read"
+                                        >
+                                          Đánh dấu đã đọc
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => navigateToNotification(notification)}
+                                        className="notification-action-button"
+                                      >
+                                        {getActionButtonText(notification.type)}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
