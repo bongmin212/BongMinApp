@@ -66,7 +66,7 @@ const Header: React.FC = () => {
               onClick={logout}
               className="btn btn-secondary interactive"
               style={{ 
-                animation: 'fadeInUp 0.6s ease-out 0.8s both'
+                animation: 'fadeInUp 0.6s ease-out 0.7s both'
               }}
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

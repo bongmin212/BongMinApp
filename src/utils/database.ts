@@ -61,7 +61,13 @@ const getFromStorage = <T>(key: string, defaultValue: T[]): T[] => {
 };
 
 const saveToStorage = <T>(key: string, data: T[]): void => {
-  MEM[key] = Array.isArray(data) ? [...data] : [];
+  try {
+    MEM[key] = Array.isArray(data) ? [...data] : [];
+  } catch (error) {
+    console.error(`[Database] Failed to save ${key}:`, error);
+    // Fallback: try to save at least empty array
+    MEM[key] = [];
+  }
 };
 
 // Database operations
