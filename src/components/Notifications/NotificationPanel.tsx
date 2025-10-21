@@ -143,6 +143,7 @@ const NotificationPanel: React.FC = () => {
         <span className="notification-toggle-icon" style={{ display: 'inline-flex' }}>
           <IconBell size={18} />
         </span>
+        <span>Thông báo</span>
         {unreadCount > 0 && (
           <span className="notification-badge">
             {unreadCount > 99 ? '99+' : unreadCount}

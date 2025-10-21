@@ -1615,7 +1615,7 @@ body:has(.modal) .main-content * {
     min-width: auto !important;
   }
 
-  .notification-toggle span:last-child {
+  .notification-toggle span:not(.notification-toggle-icon):not(.notification-badge) {
     display: none !important;
   }
   
@@ -3223,6 +3223,15 @@ body:has(.modal) .main-content * {
   max-height: 600px;
   overflow: hidden;
   animation: slideInDown 0.2s ease-out;
+}
+
+@media (max-width: 768px) {
+  .notification-dropdown {
+    width: calc(100vw - 32px);
+    right: -16px;
+    left: 16px;
+    max-height: 70vh;
+  }
 }
 
 .notification-header {
