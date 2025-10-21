@@ -351,7 +351,65 @@ const ProductList: React.FC = () => {
           <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Không có sản phẩm nào</p>
         </div>
       ) : (
-        <div className="table-responsive">
+        <>
+        {/* Mobile cards */}
+        <div className="product-mobile">
+          {paginatedProducts.map((product, index) => (
+            <div key={product.id} className="product-card">
+              <div className="product-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(product.id)}
+                    onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
+                  />
+                  <div className="product-card-title">{product.name}</div>
+                </div>
+                <div className="product-card-subtitle">{product.code || `SP${index + 1}`}</div>
+              </div>
+
+              <div className="product-card-row">
+                <div className="product-card-label">Mã SP</div>
+                <div className="product-card-value">{product.code || `SP${index + 1}`}</div>
+              </div>
+              <div className="product-card-row">
+                <div className="product-card-label">Ngày tạo</div>
+                <div className="product-card-value">{new Date(product.createdAt).toLocaleDateString('vi-VN')}</div>
+              </div>
+              
+              {product.description && (
+                <div className="product-card-description">
+                  {product.description}
+                </div>
+              )}
+
+              <div className="product-card-actions">
+                <button
+                  onClick={() => handleCopyDescription(product)}
+                  className="btn btn-light"
+                  title="Copy mô tả"
+                >
+                  Copy
+                </button>
+                <button
+                  onClick={() => handleEdit(product)}
+                  className="btn btn-secondary"
+                >
+                  Sửa
+                </button>
+                <button
+                  onClick={() => handleDelete(product.id)}
+                  className="btn btn-danger"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive product-table">
           <table className="table">
             <thead>
               <tr>
@@ -435,6 +493,7 @@ const ProductList: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">

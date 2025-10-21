@@ -376,7 +376,68 @@ const PackageList: React.FC = () => {
           <p>Không có gói sản phẩm nào</p>
         </div>
       ) : (
-        <div className="table-responsive">
+        <>
+        {/* Mobile cards */}
+        <div className="package-mobile">
+          {pageItems.map((pkg, index) => (
+            <div key={pkg.id} className="package-card">
+              <div className="package-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(pkg.id)}
+                    onChange={(e) => toggleSelect(pkg.id, e.target.checked)}
+                  />
+                  <div className="package-card-title">{pkg.name}</div>
+                </div>
+                <div className="package-card-subtitle">{pkg.code || `PK${index + 1}`}</div>
+              </div>
+
+              <div className="package-card-row">
+                <div className="package-card-label">Mã gói</div>
+                <div className="package-card-value">{pkg.code || `PK${index + 1}`}</div>
+              </div>
+              <div className="package-card-row">
+                <div className="package-card-label">Sản phẩm</div>
+                <div className="package-card-value">{getProductName(pkg.productId)}</div>
+              </div>
+              <div className="package-card-row">
+                <div className="package-card-label">Bảo hành</div>
+                <div className="package-card-value">{formatWarrantyPeriod(pkg.warrantyPeriod)}</div>
+              </div>
+              <div className="package-card-row">
+                <div className="package-card-label">Giá gốc</div>
+                <div className="package-card-value">{formatPrice(pkg.costPrice)}</div>
+              </div>
+              <div className="package-card-row">
+                <div className="package-card-label">Giá CTV</div>
+                <div className="package-card-value">{formatPrice(pkg.ctvPrice)}</div>
+              </div>
+              <div className="package-card-row">
+                <div className="package-card-label">Giá lẻ</div>
+                <div className="package-card-value">{formatPrice(pkg.retailPrice)}</div>
+              </div>
+
+              <div className="package-card-actions">
+                <button
+                  onClick={() => handleEdit(pkg)}
+                  className="btn btn-secondary"
+                >
+                  Sửa
+                </button>
+                <button
+                  onClick={() => handleDelete(pkg.id)}
+                  className="btn btn-danger"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive package-table">
           <table className="table">
             <thead>
               <tr>
@@ -435,6 +496,7 @@ const PackageList: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">

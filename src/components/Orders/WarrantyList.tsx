@@ -1080,7 +1080,73 @@ const handleDelete = (id: string) => {
           </div>
         </div>
       </div>
-      <div className="table-responsive">
+      {/* Mobile cards */}
+      <div className="warranty-mobile">
+        {pageItems.length === 0 ? (
+          <div className="text-center py-4">
+            <p>{warranties.length === 0 ? 'Chưa có đơn bảo hành' : 'Không tìm thấy đơn bảo hành phù hợp'}</p>
+          </div>
+        ) : (
+          pageItems
+            .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
+            .map((w, index) => (
+            <div key={w.id} className="warranty-card">
+              <div className="warranty-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(w.id)}
+                    onChange={(e) => toggleSelect(w.id, e.target.checked)}
+                  />
+                  <div className="warranty-card-title">{w.code || `BH${index + 1}`}</div>
+                </div>
+                <div className="warranty-card-subtitle">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</div>
+              </div>
+
+              <div className="warranty-card-row">
+                <div className="warranty-card-label">Khách hàng</div>
+                <div className="warranty-card-value">{getCustomerName(w.orderId)}</div>
+              </div>
+              <div className="warranty-card-row">
+                <div className="warranty-card-label">Sản phẩm</div>
+                <div className="warranty-card-value">{getProductText(w.orderId)}</div>
+              </div>
+              <div className="warranty-card-row">
+                <div className="warranty-card-label">Trạng thái</div>
+                <div className="warranty-card-value">
+                  <span className={`status-badge ${w.status === 'DONE' ? 'status-completed' : 'status-processing'}`}>
+                    {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
+                  </span>
+                </div>
+              </div>
+              <div className="warranty-card-row">
+                <div className="warranty-card-label">Sản phẩm thay</div>
+                <div className="warranty-card-value">{getReplacementProductText(w.replacementInventoryId)}</div>
+              </div>
+              
+              {w.reason && (
+                <div className="warranty-card-description">
+                  <strong>Lý do:</strong> {w.reason}
+                </div>
+              )}
+              
+              {w.newOrderInfo && (
+                <div className="warranty-card-description">
+                  <strong>Thông tin đơn mới:</strong> {w.newOrderInfo}
+                </div>
+              )}
+
+              <div className="warranty-card-actions">
+                <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>Sửa</button>
+                <button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="table-responsive warranty-table">
         <table className="table">
           <thead>
             <tr>

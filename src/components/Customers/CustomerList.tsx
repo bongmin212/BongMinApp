@@ -374,7 +374,83 @@ const CustomerList: React.FC = () => {
           <p>Không có khách hàng nào</p>
         </div>
       ) : (
-        <div className="table-responsive">
+        <>
+        {/* Mobile cards */}
+        <div className="customer-mobile">
+          {paginatedCustomers.map((customer, index) => (
+            <div key={customer.id} className="customer-card">
+              <div className="customer-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(customer.id)}
+                    onChange={(e) => handleToggleSelect(customer.id, e.target.checked)}
+                  />
+                  <div className="customer-card-title">{customer.name}</div>
+                </div>
+                <div className="customer-card-subtitle">{customer.code || `KH${index + 1}`}</div>
+              </div>
+
+              <div className="customer-card-row">
+                <div className="customer-card-label">Loại</div>
+                <div className="customer-card-value">
+                  <span className={`customer-type ${customer.type === 'CTV' ? 'customer-ctv' : 'customer-retail'}`}>
+                    {getCustomerTypeLabel(customer.type)}
+                  </span>
+                </div>
+              </div>
+              <div className="customer-card-row">
+                <div className="customer-card-label">SĐT</div>
+                <div className="customer-card-value">{customer.phone || '-'}</div>
+              </div>
+              <div className="customer-card-row">
+                <div className="customer-card-label">Email</div>
+                <div className="customer-card-value">{customer.email || '-'}</div>
+              </div>
+              <div className="customer-card-row">
+                <div className="customer-card-label">Nguồn</div>
+                <div className="customer-card-value">
+                  {customer.source ? (
+                    <div>
+                      <div>{getCustomerSourceLabel(customer.source)}</div>
+                      {customer.sourceDetail && (
+                        <small className="text-muted">{customer.sourceDetail}</small>
+                      )}
+                    </div>
+                  ) : '-'}
+                </div>
+              </div>
+              <div className="customer-card-row">
+                <div className="customer-card-label">Ngày tạo</div>
+                <div className="customer-card-value">{new Date(customer.createdAt).toLocaleDateString('vi-VN')}</div>
+              </div>
+
+              <div className="customer-card-actions">
+                <button
+                  onClick={() => handleViewOrders(customer)}
+                  className="btn btn-info"
+                >
+                  Lịch sử
+                </button>
+                <button
+                  onClick={() => handleEdit(customer)}
+                  className="btn btn-secondary"
+                >
+                  Sửa
+                </button>
+                <button
+                  onClick={() => handleDelete(customer.id)}
+                  className="btn btn-danger"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive customer-table">
           <table className="table">
             <thead>
               <tr>
@@ -452,6 +528,7 @@ const CustomerList: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">

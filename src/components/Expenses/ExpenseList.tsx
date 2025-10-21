@@ -375,7 +375,61 @@ const ExpenseList: React.FC = () => {
           <p>Không có chi phí nào</p>
         </div>
       ) : (
-        <div className="table-responsive expenses-table">
+        <>
+        {/* Mobile cards */}
+        <div className="expense-mobile">
+          {pageItems.map(expense => (
+            <div key={expense.id} className="expense-card">
+              <div className="expense-card-header">
+                <div className="d-flex align-items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(expense.id)}
+                    onChange={(e) => toggleSelect(expense.id, e.target.checked)}
+                  />
+                  <div className="expense-card-title">{expense.code}</div>
+                </div>
+                <div className="expense-card-subtitle">{formatDate(expense.date)}</div>
+              </div>
+
+              <div className="expense-card-row">
+                <div className="expense-card-label">Loại</div>
+                <div className="expense-card-value">{getExpenseTypeLabel(expense.type)}</div>
+              </div>
+              <div className="expense-card-row">
+                <div className="expense-card-label">Số tiền</div>
+                <div className="expense-card-value amount">{formatCurrency(expense.amount)}</div>
+              </div>
+              
+              {expense.description && (
+                <div className="expense-card-description">
+                  {expense.description}
+                </div>
+              )}
+
+              <div className="expense-card-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setEditingExpense(expense);
+                    setShowForm(true);
+                  }}
+                >
+                  Sửa
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => handleDelete(expense.id)}
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive expense-table">
           <table className="table">
           <thead>
             <tr>
@@ -433,6 +487,7 @@ const ExpenseList: React.FC = () => {
           </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">

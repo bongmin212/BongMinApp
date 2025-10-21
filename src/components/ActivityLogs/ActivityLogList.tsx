@@ -469,7 +469,30 @@ const ActivityLogList: React.FC = () => {
           <p>Không có hoạt động nào</p>
         </div>
       ) : (
-        <div className="table-responsive">
+        <>
+        {/* Mobile cards */}
+        <div className="activity-mobile">
+          {pageItems.map(log => (
+            <div key={log.id} className="activity-card">
+              <div className="activity-card-header">
+                <div className="activity-card-title">{log.action}</div>
+                <div className="activity-card-subtitle">{formatDateTime(log.timestamp)}</div>
+              </div>
+
+              <div className="activity-card-row">
+                <div className="activity-card-label">Nhân viên</div>
+                <div className="activity-card-value">{getEmployeeName(log.employeeId)}</div>
+              </div>
+              
+              <div className="activity-card-details">
+                {renderFriendlyDetails(log)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="table-responsive activity-table">
           <table className="table">
             <thead>
               <tr>
@@ -491,6 +514,7 @@ const ActivityLogList: React.FC = () => {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <div className="d-flex justify-content-between align-items-center mt-3">

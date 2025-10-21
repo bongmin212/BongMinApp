@@ -1032,6 +1032,30 @@ body:has(.modal) .main-content * {
 .table-responsive.warehouse-table { display: block; }
 .warehouse-mobile { display: none; }
 
+/* Customer mobile card layout visibility (desktop default hidden) */
+.table-responsive.customer-table { display: block; }
+.customer-mobile { display: none; }
+
+/* Product mobile card layout visibility (desktop default hidden) */
+.table-responsive.product-table { display: block; }
+.product-mobile { display: none; }
+
+/* Package mobile card layout visibility (desktop default hidden) */
+.table-responsive.package-table { display: block; }
+.package-mobile { display: none; }
+
+/* Expense mobile card layout visibility (desktop default hidden) */
+.table-responsive.expense-table { display: block; }
+.expense-mobile { display: none; }
+
+/* ActivityLog mobile card layout visibility (desktop default hidden) */
+.table-responsive.activity-table { display: block; }
+.activity-mobile { display: none; }
+
+/* Warranty mobile card layout visibility (desktop default hidden) */
+.table-responsive.warranty-table { display: block; }
+.warranty-mobile { display: none; }
+
 /* Orders mobile card styles */
 .order-card {
   background: var(--bg-primary);
@@ -1145,6 +1169,391 @@ body:has(.modal) .main-content * {
   justify-content: flex-end;
 }
 
+/* Customer mobile card styles */
+.customer-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.customer-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.customer-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.customer-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.customer-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.customer-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.customer-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+/* Product mobile card styles */
+.product-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.product-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.product-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.product-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.product-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.product-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.product-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.product-card-description {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 6px 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--border-color);
+}
+
+.product-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+/* Package mobile card styles */
+.package-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.package-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.package-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.package-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.package-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.package-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.package-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.package-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+/* Expense mobile card styles */
+.expense-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.expense-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.expense-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.expense-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.expense-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.expense-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.expense-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.expense-card-description {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 6px 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--border-color);
+}
+
+.expense-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+/* ActivityLog mobile card styles */
+.activity-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.activity-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.activity-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.activity-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.activity-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.activity-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.activity-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.activity-card-details {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 6px 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--border-color);
+}
+
+/* Warranty mobile card styles */
+.warranty-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.warranty-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.warranty-card-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.warranty-card-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.warranty-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 6px 0;
+}
+
+.warranty-card-label {
+  color: var(--text-muted);
+  min-width: 90px;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.warranty-card-value {
+  color: var(--text-primary);
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+.warranty-card-description {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 6px 0;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border-left: 3px solid var(--border-color);
+}
+
+.warranty-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
 /* Column-specific widths for warehouse table */
 .table th:has(input[type="checkbox"]),
 .table td:has(input[type="checkbox"]) {
@@ -1195,6 +1604,30 @@ body:has(.modal) .main-content * {
   /* Switch to card layout for Warehouse on mobile */
   .table-responsive.warehouse-table { display: none; }
   .warehouse-mobile { display: block; }
+
+  /* Switch to card layout for Customer on mobile */
+  .table-responsive.customer-table { display: none; }
+  .customer-mobile { display: block; }
+
+  /* Switch to card layout for Product on mobile */
+  .table-responsive.product-table { display: none; }
+  .product-mobile { display: block; }
+
+  /* Switch to card layout for Package on mobile */
+  .table-responsive.package-table { display: none; }
+  .package-mobile { display: block; }
+
+  /* Switch to card layout for Expense on mobile */
+  .table-responsive.expense-table { display: none; }
+  .expense-mobile { display: block; }
+
+  /* Switch to card layout for ActivityLog on mobile */
+  .table-responsive.activity-table { display: none; }
+  .activity-mobile { display: block; }
+
+  /* Switch to card layout for Warranty on mobile */
+  .table-responsive.warranty-table { display: none; }
+  .warranty-mobile { display: block; }
 
   /* Orders header actions: enable horizontal scroll for action buttons on mobile */
   .card-header .d-flex.justify-content-between { align-items: center; }
