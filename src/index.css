@@ -2673,7 +2673,7 @@ body:has(.modal) .main-content * {
   bottom: -17px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
+  width: 80%;
   height: 2px;
   background: var(--primary-600);
   border-radius: 1px;
@@ -3132,6 +3132,10 @@ body:has(.modal) .main-content * {
   .dashboard-tab {
     padding: var(--space-2) var(--space-3);
     font-size: var(--text-sm);
+  }
+
+  .dashboard-tab.active::after {
+    width: 60%;
   }
 
   .dashboard .stats-grid {
