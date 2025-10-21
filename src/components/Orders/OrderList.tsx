@@ -751,6 +751,40 @@ const OrderList: React.FC = () => {
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
       const detailsTextLower = buildFullOrderInfo(order).text.toLowerCase();
+      
+      // Find linked inventory for this order
+      const linkedInventory = (() => {
+        if (order.inventoryItemId) {
+          const found = inventory.find((i: any) => i.id === order.inventoryItemId);
+          if (found) return found;
+        }
+        const byLinked = inventory.find((i: any) => i.linked_order_id === order.id);
+        if (byLinked) return byLinked;
+        return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === order.id));
+      })();
+      
+      // Build inventory search text
+      let inventorySearchText = '';
+      if (linkedInventory) {
+        inventorySearchText = [
+          linkedInventory.code || '',
+          linkedInventory.productInfo || '',
+          linkedInventory.sourceNote || '',
+          linkedInventory.notes || '',
+          linkedInventory.supplierName || '',
+          linkedInventory.supplierId || ''
+        ].join(' ').toLowerCase();
+        
+        // Add account data if available
+        if (linkedInventory.accountData) {
+          Object.values(linkedInventory.accountData).forEach(value => {
+            if (value && typeof value === 'string') {
+              inventorySearchText += ' ' + value.toLowerCase();
+            }
+          });
+        }
+      }
+      
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
@@ -758,7 +792,8 @@ const OrderList: React.FC = () => {
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
         ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch) ||
         (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
-        detailsTextLower.includes(normalizedSearch);
+        detailsTextLower.includes(normalizedSearch) ||
+        inventorySearchText.includes(normalizedSearch);
 
       if (!matchesSearch) return false;
 
