@@ -279,7 +279,67 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             <p>Khách hàng chưa có đơn hàng nào</p>
           </div>
         ) : (
-          <div className="table-responsive" style={{ overflowX: 'auto' }}>
+          <>
+          {/* Mobile cards */}
+          <div className="customer-mobile">
+            {orders.map((order, index) => {
+              const packageInfo = getPackageInfo(order.packageId);
+              if (!packageInfo) return null;
+              return (
+                <div key={order.id} className="customer-card">
+                  <div className="customer-card-header">
+                    <div className="customer-card-title">{order.code || `#${index + 1}`}</div>
+                    <div className="customer-card-subtitle">{formatDate(order.purchaseDate)}</div>
+                  </div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Sản phẩm</div>
+                    <div className="customer-card-value">{packageInfo.product?.name || 'Không xác định'}</div>
+                  </div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Gói</div>
+                    <div className="customer-card-value">{packageInfo.package.name}</div>
+                  </div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Hết hạn</div>
+                    <div className="customer-card-value">{formatDate(order.expiryDate)}</div>
+                  </div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Trạng thái</div>
+                    <div className="customer-card-value"><span className={`status-badge ${getStatusClass(order.status)}`}>{getStatusLabel(order.status)}</span></div>
+                  </div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Thanh toán</div>
+                    <div className="customer-card-value"><span className="status-badge">{(() => {
+                      const paymentStatus = (order as any).paymentStatus;
+                      if (!paymentStatus) return 'Chưa TT';
+                      switch (paymentStatus) {
+                        case 'PAID': return 'Đã TT';
+                        case 'REFUNDED': return 'Hoàn';
+                        case 'UNPAID':
+                        default: return 'Chưa TT';
+                      }
+                    })()}</span></div>
+                  </div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Giá</div>
+                    <div className="customer-card-value">{formatPrice(getOrderPrice(order))}</div>
+                  </div>
+                  {(order.notes && String(order.notes).trim()) ? (
+                    <div className="customer-card-row">
+                      <div className="customer-card-label">Ghi chú</div>
+                      <div className="customer-card-value">{String(order.notes)}</div>
+                    </div>
+                  ) : null}
+                  <div className="customer-card-actions">
+                    <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table */}
+          <div className="table-responsive customer-table" style={{ overflowX: 'auto' }}>
             <table className="table" style={{ tableLayout: 'fixed', minWidth: '1200px' }}>
               <thead>
                 <tr>
@@ -354,6 +414,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
               </tbody>
             </table>
           </div>
+          </>
         )}
 
         <div className="d-flex justify-content-end mt-3">
