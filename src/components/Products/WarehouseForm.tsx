@@ -237,6 +237,11 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     return item?.accountColumns || [];
   }, [selectedPkg, item]);
 
+  // All columns from package (for warehouse form)
+  const allColumns = useMemo<InventoryAccountColumn[]>(() => {
+    return pkgColumns;
+  }, [pkgColumns]);
+
   // Filter columns that should be displayed in orders (includeInOrderInfo: true)
   const displayColumns = useMemo<InventoryAccountColumn[]>(() => {
     return pkgColumns.filter(col => col.includeInOrderInfo);
@@ -683,33 +688,40 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             />
           </div>
 
-          {/* Account columns that should be displayed in orders */}
-          {displayColumns.length > 0 && (
+          {/* All account columns from package */}
+          {allColumns.length > 0 && (
             <div className="card mt-3">
               <div className="card-header">
-                <h5 className="mb-0">Thông tin hiển thị trong đơn hàng</h5>
+                <h5 className="mb-0">Thông tin tài khoản</h5>
               </div>
               <div className="card-body">
-                {displayColumns.map((col: InventoryAccountColumn) => (
-                  <div key={col.id} className="form-group">
-                    <label className="form-label">{col.title} <span className="text-danger">*</span></label>
-                    <textarea
-                      className={`form-control ${errors[`account_${col.id}`] ? 'is-invalid' : ''}`}
-                      value={(formData.accountData || {})[col.id] || ''}
-                      onChange={(e) =>
-                        setFormData(prev => ({
-                          ...prev,
-                          accountData: { ...(prev.accountData || {}), [col.id]: e.target.value }
-                        }))
-                      }
-                      placeholder={col.title}
-                      rows={col.title.toLowerCase().includes('hướng dẫn') ? 4 : 2}
-                    />
-                    {errors[`account_${col.id}`] && (
-                      <div className="text-danger small mt-1">{errors[`account_${col.id}`]}</div>
-                    )}
-                  </div>
-                ))}
+                {allColumns.map((col: InventoryAccountColumn) => {
+                  const isRequired = col.includeInOrderInfo;
+                  return (
+                    <div key={col.id} className="form-group">
+                      <label className="form-label">
+                        {col.title} 
+                        {isRequired && <span className="text-danger"> *</span>}
+                        {!isRequired && <span className="text-muted small"> (không hiển thị trong đơn hàng)</span>}
+                      </label>
+                      <textarea
+                        className={`form-control ${errors[`account_${col.id}`] ? 'is-invalid' : ''}`}
+                        value={(formData.accountData || {})[col.id] || ''}
+                        onChange={(e) =>
+                          setFormData(prev => ({
+                            ...prev,
+                            accountData: { ...(prev.accountData || {}), [col.id]: e.target.value }
+                          }))
+                        }
+                        placeholder={col.title}
+                        rows={col.title.toLowerCase().includes('hướng dẫn') ? 4 : 2}
+                      />
+                      {errors[`account_${col.id}`] && (
+                        <div className="text-danger small mt-1">{errors[`account_${col.id}`]}</div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
