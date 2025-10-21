@@ -2578,7 +2578,7 @@ body:has(.modal) .main-content * {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: var(--space-3);
   padding: var(--space-4);
   flex: 1;
@@ -2695,7 +2695,7 @@ body:has(.modal) .main-content * {
 /* Stats Grid */
 .dashboard .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: var(--space-6);
   margin-bottom: var(--space-8);
 }
