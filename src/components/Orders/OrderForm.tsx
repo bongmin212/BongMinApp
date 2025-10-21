@@ -1596,7 +1596,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   <option value="">Chọn khách hàng</option>
                   {getFilteredCustomers().map(customer => (
                     <option key={customer.id} value={customer.id}>
-                      {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
+                      {customer.code} - {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
                     </option>
                   ))}
                 </select>
