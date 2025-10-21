@@ -126,6 +126,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
           const beforeVal = String(prevSnapshot[key] ?? '');
           const afterVal = String(nextSnapshot[key] ?? '');
           if (beforeVal !== afterVal) {
+            // Use friendly field names
+            const fieldLabels: Record<string, string> = {
+              code: 'Mã sản phẩm',
+              name: 'Tên sản phẩm', 
+              description: 'Mô tả',
+              sharedInventoryPool: 'Kho chung'
+            };
+            const label = fieldLabels[key] || key;
             changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
           }
         });

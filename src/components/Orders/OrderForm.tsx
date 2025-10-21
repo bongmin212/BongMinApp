@@ -630,6 +630,23 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           const beforeVal = String(prevSnapshot[key] ?? '');
           const afterVal = String(nextSnapshot[key] ?? '');
           if (beforeVal !== afterVal) {
+            // Use friendly field names
+            const fieldLabels: Record<string, string> = {
+              code: 'Mã đơn hàng',
+              purchaseDate: 'Ngày mua',
+              packageId: 'Gói sản phẩm',
+              customerId: 'Khách hàng',
+              status: 'Trạng thái',
+              paymentStatus: 'Thanh toán',
+              orderInfo: 'Thông tin đơn',
+              notes: 'Ghi chú',
+              expiryDate: 'Ngày hết hạn',
+              inventoryItemId: 'Liên kết kho',
+              useCustomPrice: 'Sử dụng giá tùy chỉnh',
+              customPrice: 'Giá tùy chỉnh',
+              customFieldValues: 'Giá trị trường tùy chỉnh'
+            };
+            const label = fieldLabels[key] || key;
             changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
           }
         });

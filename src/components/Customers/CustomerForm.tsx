@@ -158,6 +158,18 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
           const beforeVal = String(prevSnapshot[key] ?? '');
           const afterVal = String(nextSnapshot[key] ?? '');
           if (beforeVal !== afterVal) {
+            // Use friendly field names
+            const fieldLabels: Record<string, string> = {
+              code: 'Mã khách hàng',
+              name: 'Tên khách hàng',
+              type: 'Loại khách hàng',
+              phone: 'Số điện thoại',
+              email: 'Email',
+              source: 'Nguồn',
+              sourceDetail: 'Chi tiết nguồn',
+              notes: 'Ghi chú'
+            };
+            const label = fieldLabels[key] || key;
             changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
           }
         });

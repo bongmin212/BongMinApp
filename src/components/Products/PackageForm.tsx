@@ -345,6 +345,18 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
           const beforeVal = String(prevSnapshot[key] as any);
           const afterVal = String(nextSnapshot[key] as any);
           if (beforeVal !== afterVal) {
+            // Use friendly field names
+            const fieldLabels: Record<string, string> = {
+              code: 'Mã gói',
+              productId: 'Sản phẩm',
+              name: 'Tên gói',
+              warrantyPeriod: 'Thời hạn bảo hành',
+              costPrice: 'Giá vốn',
+              ctvPrice: 'Giá CTV',
+              retailPrice: 'Giá bán lẻ',
+              customFields: 'Trường tùy chỉnh'
+            };
+            const label = fieldLabels[key] || key;
             changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
           }
         });

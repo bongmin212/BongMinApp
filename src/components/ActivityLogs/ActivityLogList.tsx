@@ -275,7 +275,7 @@ const ActivityLogList: React.FC = () => {
     // Render field diffs if present in details like key=old->new
     const diffs: string[] = [];
     Object.entries(kv).forEach(([key, value]) => {
-      if (key === 'orderId' || key === 'packageId' || key === 'customerId' || key === 'status' || key === 'paymentStatus') return;
+      if (key === 'orderId' || key === 'packageId' || key === 'customerId' || key === 'status' || key === 'paymentStatus' || key === 'inventoryId') return;
       const arrowIndex = value.indexOf('->');
       if (arrowIndex > -1) {
         const beforeVal = value.slice(0, arrowIndex);
@@ -294,7 +294,32 @@ const ActivityLogList: React.FC = () => {
           packageId: 'Gói',
           productId: 'Sản phẩm',
           status: 'Trạng thái',
-          paymentStatus: 'Thanh toán'
+          paymentStatus: 'Thanh toán',
+          code: 'Mã kho',
+          sourceNote: 'Ghi chú nguồn',
+          purchasePrice: 'Giá mua',
+          productInfo: 'Thông tin sản phẩm',
+          poolWarrantyMonths: 'Tháng bảo hành',
+          // Product fields
+          name: 'Tên sản phẩm',
+          description: 'Mô tả',
+          sharedInventoryPool: 'Kho chung',
+          // Package fields
+          warrantyPeriod: 'Thời hạn bảo hành',
+          costPrice: 'Giá vốn',
+          ctvPrice: 'Giá CTV',
+          retailPrice: 'Giá bán lẻ',
+          customFields: 'Trường tùy chỉnh',
+          // Customer fields
+          type: 'Loại khách hàng',
+          phone: 'Số điện thoại',
+          email: 'Email',
+          source: 'Nguồn',
+          sourceDetail: 'Chi tiết nguồn',
+          // Order fields
+          useCustomPrice: 'Sử dụng giá tùy chỉnh',
+          customPrice: 'Giá tùy chỉnh',
+          customFieldValues: 'Giá trị trường tùy chỉnh'
         };
 
         let beforeText = beforeVal;

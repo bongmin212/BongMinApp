@@ -351,7 +351,62 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         } catch {}
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Sửa kho', details: `inventoryId=${item.id}; code=${formData.code}` });
+          if (sb2) {
+            // Capture detailed changes for warehouse edit
+            const changes: string[] = [];
+            
+            // Track field changes with before/after values
+            if (item.code !== formData.code) {
+              changes.push(`code=${item.code}->${formData.code}`);
+            }
+            if (item.productId !== selectedProduct) {
+              const oldProduct = products.find(p => p.id === item.productId);
+              const newProduct = products.find(p => p.id === selectedProduct);
+              changes.push(`productId=${oldProduct?.name || item.productId}->${newProduct?.name || selectedProduct}`);
+            }
+            if (item.packageId !== formData.packageId) {
+              const oldPackage = packages.find(p => p.id === item.packageId);
+              const newPackage = packages.find(p => p.id === formData.packageId);
+              changes.push(`packageId=${oldPackage?.name || item.packageId || '-'}->${newPackage?.name || formData.packageId || '-'}`);
+            }
+            if (item.purchaseDate && new Date(item.purchaseDate).toISOString().split('T')[0] !== formData.purchaseDate.toISOString().split('T')[0]) {
+              changes.push(`purchaseDate=${new Date(item.purchaseDate).toLocaleDateString('vi-VN')}->${formData.purchaseDate.toLocaleDateString('vi-VN')}`);
+            }
+            if (item.sourceNote !== formData.sourceNote) {
+              changes.push(`sourceNote=${item.sourceNote || '-'}->${formData.sourceNote || '-'}`);
+            }
+            if (item.purchasePrice !== formData.purchasePrice) {
+              changes.push(`purchasePrice=${item.purchasePrice || '-'}->${formData.purchasePrice || '-'}`);
+            }
+            if (item.productInfo !== formData.productInfo) {
+              changes.push(`productInfo=${item.productInfo || '-'}->${formData.productInfo || '-'}`);
+            }
+            if (item.notes !== formData.notes) {
+              changes.push(`notes=${item.notes || '-'}->${formData.notes || '-'}`);
+            }
+            if (item.paymentStatus !== formData.paymentStatus) {
+              changes.push(`paymentStatus=${item.paymentStatus || '-'}->${formData.paymentStatus || '-'}`);
+            }
+            
+            // Track pool warranty months changes for shared inventory
+            if (currentProduct?.sharedInventoryPool) {
+              const oldMonths = (item as any).poolWarrantyMonths || (item as any).pool_warranty_months;
+              const newMonths = Math.max(1, Number(poolMonths || 1));
+              if (oldMonths !== newMonths) {
+                changes.push(`poolWarrantyMonths=${oldMonths || '-'}->${newMonths}`);
+              }
+            }
+            
+            const details = changes.length > 0 
+              ? `inventoryId=${item.id}; code=${formData.code}; ${changes.join('; ')}`
+              : `inventoryId=${item.id}; code=${formData.code}`;
+              
+            await sb2.from('activity_logs').insert({ 
+              employee_id: state.user?.id || 'system', 
+              action: 'Sửa kho', 
+              details 
+            });
+          }
         } catch {}
         onSuccess();
       } else {
