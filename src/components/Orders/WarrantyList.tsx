@@ -372,7 +372,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 
             // Only unlink previous inventory if we're actually replacing it with a different item
             const hasReplacementChanged = warranty.replacementInventoryId !== form.replacementInventoryId;
-            if (resolvedReplacementInventoryId && hasReplacementChanged) {
+            const hasNewReplacement = form.replacementInventoryId && form.replacementInventoryId !== warranty.replacementInventoryId;
+            if (resolvedReplacementInventoryId && hasNewReplacement) {
               // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
               try {
                 // Classic linked item(s)
@@ -451,7 +452,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             }
 
             // Update order to point to the replacement inventory + profile and refresh order_info
-            if (resolvedReplacementInventoryId && hasReplacementChanged) {
+            if (resolvedReplacementInventoryId && hasNewReplacement) {
               try {
                 await sb
                   .from('orders')
