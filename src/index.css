@@ -2777,6 +2777,7 @@ body:has(.modal) .main-content * {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+  align-items: flex-start;
 }
 
 .order-code {
@@ -2826,7 +2827,7 @@ body:has(.modal) .main-content * {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
-  text-align: center;
+  text-align: left;
   box-shadow: var(--shadow-sm);
 }
 
@@ -2889,7 +2890,7 @@ body:has(.modal) .main-content * {
 }
 
 .order-stat {
-  text-align: center;
+  text-align: left;
   padding: var(--space-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
@@ -2922,7 +2923,7 @@ body:has(.modal) .main-content * {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
-  text-align: center;
+  text-align: left;
   box-shadow: var(--shadow-sm);
 }
 

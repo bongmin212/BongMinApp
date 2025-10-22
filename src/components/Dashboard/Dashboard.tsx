@@ -37,6 +37,7 @@ interface DashboardStats {
   ctvCount: number;
   retailCount: number;
   expiringSoonCount: number;
+  expiringOrders7Count: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -70,6 +71,7 @@ const Dashboard: React.FC = () => {
     ctvCount: 0,
     retailCount: 0,
     expiringSoonCount: 0,
+    expiringOrders7Count: 0,
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,6 +355,14 @@ const Dashboard: React.FC = () => {
       const ctvCount = customers.filter(c => c.type === 'CTV').length;
       const retailCount = customers.filter(c => c.type !== 'CTV').length;
 
+      // Orders expiring within 7 days (COMPLETED or ACTIVE states)
+      const nowOrder = Date.now();
+      const in7 = nowOrder + 7 * 24 * 3600 * 1000;
+      const expiringOrders7Count = orders.filter(o => {
+        const t = new Date(o.expiryDate).getTime();
+        return t >= nowOrder && t <= in7 && o.status !== 'CANCELLED';
+      }).length;
+
       // Expiring soon (30 days)
       const nowTs = Date.now();
       const in30dTs = nowTs + 30 * 24 * 3600 * 1000;
@@ -441,6 +451,7 @@ const Dashboard: React.FC = () => {
         ctvCount,
         retailCount,
         expiringSoonCount: expiringSoon7Count,
+        expiringOrders7Count,
       });
 
       setTrends(initial);
@@ -716,6 +727,9 @@ const Dashboard: React.FC = () => {
                 </button>
                 <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', status: '', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
                   <span className="stat-number">{formatCurrencyVND(stats.expectedRevenue)}</span><span className="stat-label">Doanh thu kỳ vọng</span>
+                </button>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { expiry: 'EXPIRING', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                  <span className="stat-number">{stats.expiringOrders7Count}</span><span className="stat-label">Sắp hết hạn (≤7 ngày)</span>
                 </button>
               </div>
             </div>

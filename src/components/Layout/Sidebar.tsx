@@ -64,7 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
             >
               <button
                 className={`sidebar-link ${activeTab === item.id ? 'active' : ''}`}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => { try { window.history.replaceState(null, '', window.location.pathname); } catch {}; onTabChange(item.id); }}
                 style={{ 
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   position: 'relative',

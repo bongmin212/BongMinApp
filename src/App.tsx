@@ -23,7 +23,11 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
-    const onNav = (e: any) => setActiveTab(e.detail);
+    const onNav = (e: any) => {
+      // Clear all query params when navigating between tabs to avoid sticky filters
+      try { window.history.replaceState(null, '', window.location.pathname); } catch {}
+      setActiveTab(e.detail);
+    };
     const onSearch = (e: any) => {
       const params = new URLSearchParams(window.location.search);
       Object.entries(e.detail||{}).forEach(([k, v]) => v ? params.set(k, String(v)) : params.delete(k));
