@@ -34,7 +34,15 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<NotificationSettings>(() => {
+    // Load settings from localStorage on initialization
+    try {
+      const stored = localStorage.getItem('notification-settings');
+      return stored ? { ...DEFAULT_SETTINGS, ...JSON.parse(stored) } : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
+  });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -45,6 +53,35 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch {
       return new Set();
+    }
+  }, []);
+
+  // Save notifications to localStorage as backup
+  const saveNotificationsToLocalStorage = useCallback((notifications: Notification[]) => {
+    try {
+      const notificationsToSave = notifications.map(n => ({
+        ...n,
+        createdAt: n.createdAt.toISOString()
+      }));
+      localStorage.setItem('notifications-backup', JSON.stringify(notificationsToSave));
+    } catch (error) {
+      console.error('Error saving notifications to localStorage:', error);
+    }
+  }, []);
+
+  // Load notifications from localStorage backup
+  const loadNotificationsFromLocalStorage = useCallback((): Notification[] => {
+    try {
+      const stored = localStorage.getItem('notifications-backup');
+      if (!stored) return [];
+      
+      const parsed = JSON.parse(stored);
+      return parsed.map((n: any) => ({
+        ...n,
+        createdAt: new Date(n.createdAt)
+      }));
+    } catch {
+      return [];
     }
   }, []);
 
@@ -84,7 +121,16 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const updateSettings = useCallback((newSettings: Partial<NotificationSettings>) => {
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    setSettings(prev => {
+      const updatedSettings = { ...prev, ...newSettings };
+      // Persist to localStorage
+      try {
+        localStorage.setItem('notification-settings', JSON.stringify(updatedSettings));
+      } catch (error) {
+        console.error('Error saving notification settings:', error);
+      }
+      return updatedSettings;
+    });
   }, []);
 
   const checkExpiryWarnings = useCallback((orders: Order[], packages: ProductPackage[]): Notification[] => {
@@ -315,21 +361,48 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Remove duplicates and update existing notifications
       const readIds = getReadNotificationIds();
       setNotifications(prev => {
-        const existingIds = new Set(prev.map(n => n.id));
-        const newNotifications = allNotifications.filter(n => !existingIds.has(n.id));
+        // Create a map of existing notifications by their unique key (type + relatedId)
+        const existingMap = new Map<string, Notification>();
+        prev.forEach(n => {
+          const key = `${n.type}-${n.relatedId}`;
+          existingMap.set(key, n);
+        });
+
+        // Merge new notifications with existing ones
+        const mergedNotifications: Notification[] = [];
+        const processedKeys = new Set<string>();
+
+        // First, add all existing notifications
+        prev.forEach(n => {
+          const key = `${n.type}-${n.relatedId}`;
+          processedKeys.add(key);
+          mergedNotifications.push({
+            ...n,
+            isRead: readIds.has(n.id) || n.isRead
+          });
+        });
+
+        // Then add new notifications that don't already exist
+        allNotifications.forEach(newNotification => {
+          const key = `${newNotification.type}-${newNotification.relatedId}`;
+          if (!processedKeys.has(key)) {
+            mergedNotifications.push({
+              ...newNotification,
+              isRead: readIds.has(newNotification.id) || newNotification.isRead
+            });
+            processedKeys.add(key);
+          }
+        });
         
-        // Mark notifications as read if they're in localStorage
-        const allNotificationsWithReadStatus = [...prev, ...newNotifications].map(n => ({
-          ...n,
-          isRead: readIds.has(n.id) || n.isRead
-        }));
+        // Save to localStorage as backup
+        saveNotificationsToLocalStorage(mergedNotifications);
         
-        return allNotificationsWithReadStatus;
+        return mergedNotifications;
       });
     } catch (error) {
       console.error('Error generating notifications:', error);
     }
-  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties, getReadNotificationIds]);
+  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties, getReadNotificationIds, saveNotificationsToLocalStorage]);
 
   const refreshNotifications = useCallback(() => {
     generateNotifications();
@@ -434,7 +507,28 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           employeeId: n.employee_id
         }));
 
-        setNotifications(loadedNotifications);
+        // Only set notifications if we don't have any yet (to avoid overwriting)
+        setNotifications(prev => {
+          if (prev.length === 0) {
+            return loadedNotifications;
+          }
+          // If we already have notifications, merge them
+          const existingMap = new Map<string, Notification>();
+          prev.forEach(n => {
+            const key = `${n.type}-${n.relatedId}`;
+            existingMap.set(key, n);
+          });
+
+          const mergedNotifications: Notification[] = [...prev];
+          loadedNotifications.forEach(loadedNotification => {
+            const key = `${loadedNotification.type}-${loadedNotification.relatedId}`;
+            if (!existingMap.has(key)) {
+              mergedNotifications.push(loadedNotification);
+            }
+          });
+
+          return mergedNotifications;
+        });
       }
     } catch (error) {
       console.error('Error loading notifications from Supabase:', error);
@@ -466,17 +560,38 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   }, [notifications]);
 
-  // Load notifications from Supabase on mount
+  // Load notifications from Supabase on mount, then generate new ones
   useEffect(() => {
-    loadNotificationsFromSupabase();
-  }, [loadNotificationsFromSupabase]);
-
-  // Generate notifications on mount and every 5 minutes
-  useEffect(() => {
-    generateNotifications();
+    const initializeNotifications = async () => {
+      // First try to load existing notifications from Supabase
+      await loadNotificationsFromSupabase();
+      
+      // If no notifications loaded from Supabase, try localStorage backup
+      setNotifications(prev => {
+        if (prev.length === 0) {
+          const backupNotifications = loadNotificationsFromLocalStorage();
+          if (backupNotifications.length > 0) {
+            const readIds = getReadNotificationIds();
+            const notificationsWithReadStatus = backupNotifications.map(n => ({
+              ...n,
+              isRead: readIds.has(n.id) || n.isRead
+            }));
+            return notificationsWithReadStatus;
+          }
+        }
+        return prev;
+      });
+      
+      // Then generate new notifications (this will merge with existing ones)
+      await generateNotifications();
+    };
+    
+    initializeNotifications();
+    
+    // Set up interval for generating new notifications every 5 minutes
     const interval = setInterval(generateNotifications, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [generateNotifications]);
+  }, [loadNotificationsFromSupabase, generateNotifications, loadNotificationsFromLocalStorage, getReadNotificationIds]);
 
   const value = useMemo(() => ({
     notifications,

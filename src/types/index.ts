@@ -143,6 +143,7 @@ export interface InventoryItem {
   status: InventoryStatus;
   paymentStatus?: InventoryPaymentStatus; // Trạng thái thanh toán với nhà cung cấp
   linkedOrderId?: string; // Nếu đã bán, liên kết đơn hàng
+  previousLinkedOrderId?: string; // Đơn hàng liên kết trước khi chuyển NEEDS_UPDATE
   // Account-based inventory (optional)
   isAccountBased?: boolean; // true if this item represents a multi-profile account
   accountColumns?: InventoryAccountColumn[]; // dynamic columns for account

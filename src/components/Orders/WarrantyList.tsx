@@ -231,7 +231,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       // Status: allow ONLY AVAILABLE for classic items; for account-based, allow items with at least one free slot
       if (it.isAccountBased) {
         const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-        const hasFreeSlot = profiles.some((p: any) => !p.isAssigned);
+        const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
         return hasFreeSlot;
       }
       const statusEligible = it.status === 'AVAILABLE';
@@ -375,14 +375,21 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
               // Classic linked item(s)
               const { data: classicLinked } = await sb
                 .from('inventory')
-                .select('id')
+                .select('id, linked_order_id')
                 .eq('linked_order_id', resolvedOrderId);
               const classicIds = (classicLinked || []).map((r: any) => r.id);
               if (classicIds.length) {
-                await sb
-                  .from('inventory')
-                  .update({ status: 'NEEDS_UPDATE', linked_order_id: null })
-                  .in('id', classicIds);
+                // Store previous linked order before clearing
+                for (const item of (classicLinked || [])) {
+                  await sb
+                    .from('inventory')
+                    .update({ 
+                      status: 'NEEDS_UPDATE', 
+                      previous_linked_order_id: item.linked_order_id,
+                      linked_order_id: null
+                    })
+                    .eq('id', item.id);
+                }
               }
               // Account-based: any profile pointing to this order gets unassigned; also set item status to NEEDS_UPDATE if all profiles freed
               const { data: accountItems } = await sb
@@ -394,7 +401,15 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
                 const nextProfiles = profiles.map((p: any) => (
                   p.assignedOrderId === resolvedOrderId
-                    ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null, needsUpdate: true }
+                    ? { 
+                        ...p, 
+                        isAssigned: false, 
+                        assignedOrderId: null, 
+                        assignedAt: null, 
+                        expiryAt: null, 
+                        needsUpdate: true,
+                        previousOrderId: p.assignedOrderId // Store previous order
+                      }
                     : p
                 ));
                 await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
@@ -452,16 +467,17 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
                 const { data: classicLinked } = await sb
                   .from('inventory')
-                  .select('id, status')
+                  .select('id, status, previous_linked_order_id')
                   .eq('status', 'NEEDS_UPDATE')
+                  .eq('previous_linked_order_id', resolvedOrderId)
                   .is('linked_order_id', null);
                 
-                // For classic items: set status back to SOLD and relink
+                // For classic items: set status back to SOLD and relink, clear previous_linked_order_id
                 const classicIds = (classicLinked || []).map((r: any) => r.id);
                 if (classicIds.length) {
                   await sb
                     .from('inventory')
-                    .update({ status: 'SOLD', linked_order_id: resolvedOrderId })
+                    .update({ status: 'SOLD', linked_order_id: resolvedOrderId, previous_linked_order_id: null })
                     .in('id', classicIds);
                 }
                 
@@ -520,14 +536,21 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         try {
           const { data: classicLinked } = await sb
             .from('inventory')
-            .select('id')
+            .select('id, linked_order_id')
             .eq('linked_order_id', resolvedOrderId);
           const classicIds = (classicLinked || []).map((r: any) => r.id);
           if (classicIds.length) {
-            await sb
-              .from('inventory')
-              .update({ status: 'NEEDS_UPDATE', linked_order_id: null })
-              .in('id', classicIds);
+            // Store previous linked order before clearing
+            for (const item of (classicLinked || [])) {
+              await sb
+                .from('inventory')
+                .update({ 
+                  status: 'NEEDS_UPDATE', 
+                  previous_linked_order_id: item.linked_order_id,
+                  linked_order_id: null
+                })
+                .eq('id', item.id);
+            }
           }
           const { data: accountItems } = await sb
             .from('inventory')
@@ -538,7 +561,15 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
             const nextProfiles = profiles.map((p: any) => (
               p.assignedOrderId === resolvedOrderId
-                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null, needsUpdate: true }
+                ? { 
+                    ...p, 
+                    isAssigned: false, 
+                    assignedOrderId: null, 
+                    assignedAt: null, 
+                    expiryAt: null, 
+                    needsUpdate: true,
+                    previousOrderId: p.assignedOrderId // Store previous order
+                  }
                 : p
             ));
             await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
@@ -589,16 +620,17 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
             const { data: classicLinked } = await sb
               .from('inventory')
-              .select('id, status')
+              .select('id, status, previous_linked_order_id')
               .eq('status', 'NEEDS_UPDATE')
+              .eq('previous_linked_order_id', resolvedOrderId)
               .is('linked_order_id', null);
             
-            // For classic items: set status back to SOLD and relink
+            // For classic items: set status back to SOLD and relink, clear previous_linked_order_id
             const classicIds = (classicLinked || []).map((r: any) => r.id);
             if (classicIds.length) {
               await sb
                 .from('inventory')
-                .update({ status: 'SOLD', linked_order_id: resolvedOrderId })
+                .update({ status: 'SOLD', linked_order_id: resolvedOrderId, previous_linked_order_id: null })
                 .in('id', classicIds);
             }
             

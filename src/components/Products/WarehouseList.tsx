@@ -222,7 +222,7 @@ const WarehouseList: React.FC = () => {
       if (!inv || !inv.is_account_based) return;
       const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
       const nextProfiles = profiles.map((p: any) => (
-        p.id === profileId ? { ...p, needsUpdate: false } : p
+        p.id === profileId ? { ...p, needsUpdate: false, previousOrderId: undefined } : p
       ));
       const anyNeedsUpdate = nextProfiles.some((p: any) => !!p.needsUpdate);
       const anyAssigned = nextProfiles.some((p: any) => !!p.isAssigned);
@@ -405,6 +405,7 @@ const WarehouseList: React.FC = () => {
         return profiles;
       })(),
       linkedOrderId: r.linked_order_id || undefined,
+      previousLinkedOrderId: r.previous_linked_order_id || undefined,
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     };
@@ -1304,7 +1305,7 @@ const WarehouseList: React.FC = () => {
                           onConfirm: async () => {
                             const sb = getSupabase();
                             if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                            const { error } = await sb.from('inventory').update({ status: 'AVAILABLE' }).eq('id', item.id);
+                            const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', item.id);
                             if (error) return notify('Không thể cập nhật trạng thái', 'error');
                             try {
                               const sb2 = getSupabase();
@@ -1425,7 +1426,7 @@ const WarehouseList: React.FC = () => {
                             onConfirm: async () => {
                               const sb = getSupabase();
                               if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                              const { error } = await sb.from('inventory').update({ status: 'AVAILABLE' }).eq('id', i.id);
+                              const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', i.id);
                               if (error) return notify('Không thể cập nhật trạng thái', 'error');
                               try {
                                 const sb2 = getSupabase();
@@ -1517,14 +1518,18 @@ const WarehouseList: React.FC = () => {
                         {profiles.map(p => {
                           const orderId = p.assignedOrderId;
                           const order = orderId ? Database.getOrders().find(o => o.id === orderId) : null;
+                          const prevOrderId = (p as any).previousOrderId;
+                          const prevOrder = prevOrderId ? Database.getOrders().find(o => o.id === prevOrderId) : null;
+                          
                           return (
                             <tr key={p.id}>
                               <td>{p.label}</td>
                               <td>{(() => {
                                 if (p.isAssigned) return 'Đang dùng';
+                                if ((p as any).needsUpdate && prevOrder) return `Trống (Cần update - trước: ${prevOrder.code})`;
                                 return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
                               })()}</td>
-                              <td>{order ? `${order.code}` : '-'}</td>
+                              <td>{order ? `${order.code}` : prevOrder ? `(Trước: ${prevOrder.code})` : '-'}</td>
                               <td>{p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-'}</td>
                               <td>
                                 <div className="d-flex gap-2">
@@ -1673,6 +1678,14 @@ const WarehouseList: React.FC = () => {
                 <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
                 <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
                 <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES.find(s => s.value === inv.paymentStatus)?.label || 'Chưa TT'}</div>
+                {inv.status === 'NEEDS_UPDATE' && inv.previousLinkedOrderId && (() => {
+                  const prevOrder = Database.getOrders().find(o => o.id === inv.previousLinkedOrderId);
+                  return prevOrder ? (
+                    <div style={{ marginTop: 6, padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+                      <strong>Đơn hàng trước khi cần update:</strong> {prevOrder.code}
+                    </div>
+                  ) : null;
+                })()}
                 {inv.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin sản phẩm:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre></div>}
                 {inv.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {inv.notes}</div>}
                 <div style={{ marginTop: 12 }}>
