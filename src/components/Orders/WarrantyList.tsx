@@ -454,7 +454,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 .from('orders')
                 .update({
                   inventory_item_id: resolvedReplacementInventoryId || null,
-                  inventory_profile_id: (replacementProfileId || null),
+                  inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
                   order_info: (autoInfo ?? null)
                 })
                 .eq('id', resolvedOrderId);
@@ -607,7 +607,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             .from('orders')
             .update({
               inventory_item_id: resolvedReplacementInventoryId || null,
-              inventory_profile_id: (replacementProfileId || null),
+              inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
               order_info: (autoInfo ?? null)
             })
             .eq('id', resolvedOrderId);
