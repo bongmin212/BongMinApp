@@ -969,12 +969,14 @@ const WarehouseList: React.FC = () => {
   };
 
   const getActualStatus = (item: InventoryItem) => {
-    // Check if item is expired
+    // Prefer computed expiry over persisted status to avoid sticky "EXPIRED"
     const now = new Date();
     const expiryDate = new Date(item.expiryDate);
-    if (expiryDate < now) {
-      return 'EXPIRED';
-    }
+    // If truly past due, always show EXPIRED
+    if (expiryDate < now) return 'EXPIRED';
+    // If not expired anymore but status is still EXPIRED from earlier, coerce to AVAILABLE for display
+    if (item.status === 'EXPIRED') return 'AVAILABLE';
+    // Preserve other states (SOLD, AVAILABLE, NEEDS_UPDATE)
     return item.status;
   };
 
