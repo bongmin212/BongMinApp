@@ -1194,8 +1194,6 @@ const WarehouseList: React.FC = () => {
                 setShowForm(true); // Then open with fresh state
               }, 50); // Small delay to ensure fresh state
             }}>Nhập kho</button>
-            {hasStuckSlots && (
-            )}
           </div>
         </div>
       </div>
