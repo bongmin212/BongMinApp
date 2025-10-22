@@ -24,8 +24,8 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     const onNav = (e: any) => {
-      // Clear all query params when navigating between tabs to avoid sticky filters
-      try { window.history.replaceState(null, '', window.location.pathname); } catch {}
+      // Preserve existing query params when navigating between tabs so dashboard filters work
+      // If needed, individual pages sanitize irrelevant params on mount
       setActiveTab(e.detail);
     };
     const onSearch = (e: any) => {

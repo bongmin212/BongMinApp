@@ -614,8 +614,9 @@ const Dashboard: React.FC = () => {
                   <button
                     key={order.id}
                     onClick={() => {
-                      window.dispatchEvent(new CustomEvent('app:search', { detail: { q: order.code } }));
                       window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
+                      // Deep link exact order in OrderList via orderId param
+                      window.dispatchEvent(new CustomEvent('app:search', { detail: { orderId: order.id } }));
                     }}
                     className="order-item"
                   >
@@ -716,19 +717,19 @@ const Dashboard: React.FC = () => {
             <div className="orders-summary">
               <h3>Backlog đơn hàng</h3>
               <div className="orders-stats">
-                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', page: 1 } })); }}>
                   <span className="stat-number">{stats.unpaidCount}</span><span className="stat-label">Chưa thanh toán</span>
                 </button>
-                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'PROCESSING', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'PROCESSING', page: 1 } })); }}>
                   <span className="stat-number">{stats.processingCount}</span><span className="stat-label">Đang xử lý</span>
                 </button>
-                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'CANCELLED', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'CANCELLED', page: 1 } })); }}>
                   <span className="stat-number">{stats.cancelledCount}</span><span className="stat-label">Đã hủy</span>
                 </button>
-                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', status: '', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', status: '', page: 1 } })); }}>
                   <span className="stat-number">{formatCurrencyVND(stats.expectedRevenue)}</span><span className="stat-label">Doanh thu kỳ vọng</span>
                 </button>
-                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { expiry: 'EXPIRING', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { expiry: 'EXPIRING', page: 1 } })); }}>
                   <span className="stat-number">{stats.expiringOrders7Count}</span><span className="stat-label">Sắp hết hạn (≤7 ngày)</span>
                 </button>
               </div>
@@ -755,23 +756,23 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="inventory-breakdown">
-                <button className="breakdown-item available" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'AVAILABLE', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
+                <button className="breakdown-item available" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'AVAILABLE', page: 1 } })); }}>
                   <span className="breakdown-number">{stats.availableInventory}</span>
                   <span className="breakdown-label">Có sẵn</span>
                 </button>
-                <button className="breakdown-item reserved" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'RESERVED', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
+                <button className="breakdown-item reserved" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'RESERVED', page: 1 } })); }}>
                   <span className="breakdown-number">{stats.reservedInventory}</span>
                   <span className="breakdown-label">Đã đặt</span>
                 </button>
-                <button className="breakdown-item sold" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'SOLD', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
+                <button className="breakdown-item sold" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'SOLD', page: 1 } })); }}>
                   <span className="breakdown-number">{stats.soldInventory}</span>
                   <span className="breakdown-label">Đã bán</span>
                 </button>
-                <button className="breakdown-item expired" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRED', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
+                <button className="breakdown-item expired" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRED', page: 1 } })); }}>
                   <span className="breakdown-number">{stats.expiredInventory}</span>
                   <span className="breakdown-label">Hết hạn</span>
                 </button>
-                <button className="breakdown-item" style={{ color: 'var(--text-warning, #b26a00)' }} onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRING_SOON', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
+                <button className="breakdown-item" style={{ color: 'var(--text-warning, #b26a00)' }} onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRING_SOON', page: 1 } })); }}>
                   <span className="breakdown-number">{stats.expiringSoonCount}</span>
                   <span className="breakdown-label">Sắp hết hạn (7 ngày)</span>
                 </button>
