@@ -607,31 +607,35 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
 
-            <div className="recent-orders">
-              <h2>Đơn hàng gần đây</h2>
-              <div className="orders-list">
-                {recentOrders.map(order => (
-                  <button
-                    key={order.id}
-                    onClick={() => {
-                      window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
-                      // Deep link exact order in OrderList via orderId param
-                      window.dispatchEvent(new CustomEvent('app:search', { detail: { orderId: order.id } }));
-                    }}
-                    className="order-item"
-                  >
-                    <div className="order-info">
-                      <span className="order-code">{order.code}</span>
-                      <span className="order-date">{formatDate(order.createdAt)}</span>
-                    </div>
-                    <div className="order-status">
-                      <span className={`status-badge ${order.status.toLowerCase()}`}>
-                        {order.status === 'PROCESSING' ? 'Đang xử lý' :
-                         order.status === 'COMPLETED' ? 'Hoàn thành' : 'Đã hủy'}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-header">
+                <h3 className="card-title">Đơn hàng gần đây</h3>
+              </div>
+              <div className="card-body">
+                <div className="orders-list">
+                  {recentOrders.map(order => (
+                    <button
+                      key={order.id}
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
+                        // Deep link exact order in OrderList via orderId param
+                        window.dispatchEvent(new CustomEvent('app:search', { detail: { orderId: order.id } }));
+                      }}
+                      className="order-item"
+                    >
+                      <div className="order-info">
+                        <span className="order-code">{order.code}</span>
+                        <span className="order-date">{formatDate(order.createdAt)}</span>
+                      </div>
+                      <div className="order-status">
+                        <span className={`status-badge ${order.status.toLowerCase()}`}>
+                          {order.status === 'PROCESSING' ? 'Đang xử lý' :
+                           order.status === 'COMPLETED' ? 'Hoàn thành' : 'Đã hủy'}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

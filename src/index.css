@@ -2939,6 +2939,7 @@ body:has(.modal) .main-content * {
 /* Clean up - removed old conflicting alignment rules */
 
 /* Add consistent tab content styling for all dashboard tabs */
+.overview-tab,
 .sales-tab,
 .inventory-tab,
 .customers-tab {
@@ -2968,9 +2969,15 @@ body:has(.modal) .main-content * {
   transform: translateY(-1px) !important;
 }
 
-/* Hide icons in overview tab to match sales cards */
 .dashboard .overview-tab .stat-card .stat-icon {
-  display: none !important;
+  width: 48px !important;
+  height: 48px !important;
+  background: var(--primary-50) !important;
+  border-radius: var(--radius-lg) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--primary-600) !important;
 }
 
 .dashboard .overview-tab .stat-card .stat-content {
@@ -2983,8 +2990,8 @@ body:has(.modal) .main-content * {
 
 .dashboard .overview-tab .stat-card .stat-content h3 {
   font-size: var(--text-3xl) !important;
-  font-weight: 700 !important;
-  color: var(--primary-600) !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
   margin: 0 0 var(--space-2) 0 !important;
   text-align: center !important;
 }
@@ -3215,13 +3222,6 @@ body:has(.modal) .main-content * {
     grid-template-columns: 1fr;
     gap: var(--space-4);
     justify-items: center;
-  }
-
-  /* Mobile styles for overview tab cards */
-  .dashboard .overview-tab .stats-grid {
-    grid-template-columns: 1fr;
-    gap: var(--space-4);
-    padding: var(--space-3);
   }
 
   .sales-stats,
