@@ -739,15 +739,9 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             />
             <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
               <option value="">-- Chọn sản phẩm từ kho hàng --</option>
-              {(() => {
-                const selectedItem = form.replacementInventoryId ? inventoryItems.find(i => i.id === form.replacementInventoryId) : undefined;
-                const options = selectedItem && !filteredInventory.some(i => i.id === selectedItem.id)
-                  ? [selectedItem, ...filteredInventory]
-                  : filteredInventory;
-                return options.map(item => (
-                  <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
-                ));
-              })()}
+              {filteredInventory.map(item => (
+                <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
+              ))}
             </select>
             <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
             {!!form.replacementInventoryId && (() => {
