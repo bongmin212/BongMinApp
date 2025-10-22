@@ -299,9 +299,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [generateNotifications]);
 
   const navigateToNotification = useCallback((notification: Notification) => {
-    // Mark as read
-    markAsRead(notification.id);
-
     // Determine destination tab and optional deep-link params
     let targetTab: 'orders' | 'warehouse' | 'warranties' | 'dashboard' = 'dashboard';
     const params = new URLSearchParams(window.location.search);
@@ -350,7 +347,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       window.dispatchEvent(new CustomEvent('app:navigate', { detail: targetTab } as any));
     } catch {}
-  }, [markAsRead]);
+  }, []);
 
   const loadNotificationsFromSupabase = useCallback(async () => {
     const sb = getSupabase();
