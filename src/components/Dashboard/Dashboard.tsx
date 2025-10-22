@@ -555,42 +555,32 @@ const Dashboard: React.FC = () => {
       <div className="dashboard-content">
         {activeTab === 'overview' && (
           <div className="overview-tab">
-            <div className="stats-grid">
-              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'products' }))}>
-                <div className="stat-content">
-                  <h3>Tổng sản phẩm</h3>
-                  <div className="sales-amount">{stats.totalProducts}</div>
-                </div>
-              </button>
+            <div className="sales-stats">
+              <div className="sales-card">
+                <h3>Tổng sản phẩm</h3>
+                <div className="sales-amount">{stats.totalProducts}</div>
+              </div>
 
-              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' }))}>
-                <div className="stat-content">
-                  <h3>Tổng khách hàng</h3>
-                  <div className="sales-amount">{stats.totalCustomers}</div>
-                  <div className="sales-subtitle">CTV {stats.ctvCount} / Lẻ {stats.retailCount}</div>
-                </div>
-              </button>
+              <div className="sales-card">
+                <h3>Tổng khách hàng</h3>
+                <div className="sales-amount">{stats.totalCustomers}</div>
+                <div className="sales-subtitle">CTV {stats.ctvCount} / Lẻ {stats.retailCount}</div>
+              </div>
 
-              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }))}>
-                <div className="stat-content">
-                  <h3>Tổng đơn hàng</h3>
-                  <div className="sales-amount">{stats.totalOrders}</div>
-                </div>
-              </button>
+              <div className="sales-card">
+                <h3>Tổng đơn hàng</h3>
+                <div className="sales-amount">{stats.totalOrders}</div>
+              </div>
 
-              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'sales' }))}>
-                <div className="stat-content">
-                  <h3>Tổng doanh thu</h3>
-                  <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
-                </div>
-              </button>
+              <div className="sales-card">
+                <h3>Tổng doanh thu</h3>
+                <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
+              </div>
 
-              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'sales' }))}>
-                <div className="stat-content">
-                  <h3>Tổng lãi thực tế</h3>
-                  <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
-                </div>
-              </button>
+              <div className="sales-card">
+                <h3>Tổng lãi thực tế</h3>
+                <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
+              </div>
             </div>
 
             <div className="card" style={{ marginTop: 16 }}>

@@ -733,9 +733,15 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             />
             <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
               <option value="">-- Chọn sản phẩm từ kho hàng --</option>
-              {filteredInventory.map(item => (
-                <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
-              ))}
+              {(() => {
+                const selectedItem = form.replacementInventoryId ? inventoryItems.find(i => i.id === form.replacementInventoryId) : undefined;
+                const options = selectedItem && !filteredInventory.some(i => i.id === selectedItem.id)
+                  ? [selectedItem, ...filteredInventory]
+                  : filteredInventory;
+                return options.map(item => (
+                  <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
+                ));
+              })()}
             </select>
             <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
             {!!form.replacementInventoryId && (() => {
@@ -762,25 +768,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
               return null;
             })()}
           </div>
-          <div className="mb-3">
-            <label className="form-label">Thông tin đơn hàng mới (tùy chọn)</label>
-            <textarea 
-              className="form-control" 
-              value={(() => {
-                const item = form.replacementInventoryId ? inventoryItems.find(i => i.id === form.replacementInventoryId) : undefined;
-                if (!item) return form.newOrderInfo || '';
-                if (item.isAccountBased) {
-                  const itemForOrder = { ...item } as InventoryItem;
-                  return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId ? [replacementProfileId] : undefined);
-                }
-                return item.productInfo || '';
-              })()} 
-              onChange={e => setForm({ ...form, newOrderInfo: e.target.value || undefined })} 
-              placeholder="Nhập thông tin đơn hàng mới (serial/key/tài khoản...)"
-              rows={3}
-            />
-            <small className="form-text text-muted">Thông tin chi tiết về đơn hàng mới nếu có</small>
-          </div>
+          
           <div className="d-flex justify-content-end gap-2">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
 			<button type="submit" className="btn btn-primary">Lưu</button>
