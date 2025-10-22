@@ -3,6 +3,10 @@ import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Product, ProductPackage, Customer, Order, InventoryItem, Expense } from '../../types';
 import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit } from '../Icons';
+import TrendsChart, { TrendsPoint } from './TrendsChart';
+import TopPackagesTable, { PackageAggRow } from './TopPackagesTable';
+import { formatCurrencyVND } from '../../utils/money';
+import { addMonths, toMonthKey, rangeMonths } from '../../utils/date';
 
 interface DashboardStats {
   totalProducts: number;
@@ -26,6 +30,13 @@ interface DashboardStats {
   expiredInventory: number;
   monthlyImportCost: number;
   totalImportCost: number;
+  unpaidCount: number;
+  processingCount: number;
+  cancelledCount: number;
+  expectedRevenue: number;
+  ctvCount: number;
+  retailCount: number;
+  expiringSoonCount: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -52,18 +63,32 @@ const Dashboard: React.FC = () => {
     expiredInventory: 0,
     monthlyImportCost: 0,
     totalImportCost: 0,
+    unpaidCount: 0,
+    processingCount: 0,
+    cancelledCount: 0,
+    expectedRevenue: 0,
+    ctvCount: 0,
+    retailCount: 0,
+    expiringSoonCount: 0,
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonthOffset, setSelectedMonthOffset] = useState<number>(0); // 0 = current, -1..-11 = previous months
+  const [trends, setTrends] = useState<TrendsPoint[]>([]);
+  const [topPackages, setTopPackages] = useState<PackageAggRow[]>([]);
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const onDateRangeChange = (f: string, t: string) => { setDateFrom(f); setDateTo(t); };
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedMonthOffset]);
+  }, [selectedMonthOffset, dateFrom, dateTo]);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       // Load all data including expenses (prefer Supabase; fallback to local cache)
       const sb = getSupabase();
@@ -313,6 +338,71 @@ const Dashboard: React.FC = () => {
       const soldInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'SOLD').length;
       const expiredInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'EXPIRED').length;
 
+      // Backlog & customer split
+      const unpaidOrders = orders.filter(o => o.status !== 'CANCELLED' && o.paymentStatus === 'UNPAID');
+      const processingOrders = orders.filter(o => o.status === 'PROCESSING');
+      const cancelledOrders = orders.filter(o => o.status === 'CANCELLED');
+      const expectedRevenue = unpaidOrders.reduce((s, o) => s + getOrderSnapshotPrice(o), 0);
+      const ctvCount = customers.filter(c => c.type === 'CTV').length;
+      const retailCount = customers.filter(c => c.type !== 'CTV').length;
+
+      // Expiring soon (30 days)
+      const nowTs = Date.now();
+      const in30dTs = nowTs + 30 * 24 * 3600 * 1000;
+      const expiringSoonCount = inventoryItems.filter(i => {
+        const x = i.expiryDate ? new Date(i.expiryDate).getTime() : 0;
+        return x > nowTs && x <= in30dTs;
+      }).length;
+
+      // Trends 12 months
+      const months = rangeMonths(addMonths(new Date(new Date().getFullYear(), new Date().getMonth(), 1), -11), new Date());
+      const idx: Record<string, TrendsPoint> = {};
+      const initial: TrendsPoint[] = months.map(m => ({ key: toMonthKey(m), revenue: 0, profit: 0, expenses: 0 }));
+      initial.forEach(p => { idx[p.key] = p; });
+      const paidCompleted = orders.filter(o => o.status === 'COMPLETED' && o.paymentStatus === 'PAID');
+      for (const o of paidCompleted) {
+        const k = toMonthKey(new Date(o.purchaseDate.getFullYear(), o.purchaseDate.getMonth(), 1));
+        const b = idx[k];
+        if (b) {
+          const p = getOrderSnapshotPrice(o);
+          b.revenue += p;
+          b.profit += (p - (((o as any).cogs ?? o.cogs) || 0));
+        }
+      }
+      for (const e of expenses) {
+        const d = new Date(e.date);
+        const k = toMonthKey(new Date(d.getFullYear(), d.getMonth(), 1));
+        const b = idx[k];
+        if (b) b.expenses += e.amount || 0;
+      }
+
+      // Top packages for selected month
+      const monthFiltered = orders.filter(order => {
+        const orderDate = new Date(order.purchaseDate);
+        const isPaid = order.status === 'COMPLETED' && order.paymentStatus === 'PAID';
+        if (!isPaid) return false;
+        if (dateFrom || dateTo) {
+          const fromOk = !dateFrom || orderDate >= new Date(dateFrom);
+          const toOk = !dateTo || orderDate <= new Date(dateTo);
+          return fromOk && toOk;
+        }
+        return orderDate.getMonth() === targetMonth && orderDate.getFullYear() === targetYear;
+      });
+      const pkgAggMap: Record<string, PackageAggRow> = {};
+      for (const o of monthFiltered) {
+        const pid = o.packageId;
+        const price = getOrderSnapshotPrice(o);
+        const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+        if (!pkgAggMap[pid]) {
+          const pkg = packages.find(p => p.id === pid);
+          pkgAggMap[pid] = { packageId: pid, name: pkg?.name || 'Gói', revenue: 0, profit: 0, orders: 0 };
+        }
+        pkgAggMap[pid].revenue += price;
+        pkgAggMap[pid].profit += profit;
+        pkgAggMap[pid].orders += 1;
+      }
+      const pkgAggRows = Object.values(pkgAggMap);
+
       setStats({
         totalProducts: products.length,
         totalPackages: packages.length,
@@ -335,7 +425,17 @@ const Dashboard: React.FC = () => {
         expiredInventory,
         monthlyImportCost,
         totalImportCost,
+        unpaidCount: unpaidOrders.length,
+        processingCount: processingOrders.length,
+        cancelledCount: cancelledOrders.length,
+        expectedRevenue,
+        ctvCount,
+        retailCount,
+        expiringSoonCount,
       });
+
+      setTrends(initial);
+      setTopPackages(pkgAggRows);
 
       // Get recent orders
       const sortedOrders = orders
@@ -345,6 +445,7 @@ const Dashboard: React.FC = () => {
 
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+      setError('Không tải được dữ liệu dashboard. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -376,8 +477,31 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="dashboard">
-        <div className="loading">Đang tải dữ liệu...</div>
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Dashboard</h2>
+        </div>
+        <div className="card-body">
+          <div className="stats-grid">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="stat-card">
+                <div style={{ width: 36, height: 36, background: '#eee', borderRadius: 6 }} />
+                <div className="stat-content">
+                  <div style={{ width: 80, height: 20, background: '#eee', borderRadius: 4, marginBottom: 6 }} />
+                  <div style={{ width: 120, height: 12, background: '#f0f0f0', borderRadius: 4 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="card" style={{ marginTop: 16 }}>
+            <div className="card-header">
+              <h3 className="card-title">Xu hướng 12 tháng</h3>
+            </div>
+            <div className="card-body">
+              <div style={{ width: '100%', height: 320, background: '#f5f5f5', borderRadius: 8 }} />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -389,6 +513,11 @@ const Dashboard: React.FC = () => {
       <div className="card-header">
         <h2 className="card-title">{currentTitle}</h2>
       </div>
+      {error && (
+        <div className="alert alert-danger" role="alert" style={{ margin: '12px 16px 0' }}>
+          {error}
+        </div>
+      )}
 
       <div className="dashboard-tabs">
         {tabs.map(tab => (
@@ -423,7 +552,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="stat-content">
                   <h3>{stats.totalCustomers}</h3>
-                  <p>Tổng khách hàng</p>
+                  <p>Tổng khách hàng (CTV {stats.ctvCount} / Lẻ {stats.retailCount})</p>
                 </div>
               </div>
 
@@ -553,23 +682,28 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Tổng lãi thực tế</h3>
                 <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
-                <div className="sales-subtitle">Lãi sau chi phí + nhập hàng</div>
+                <div className="sales-subtitle">Lãi sau COGS + chi phí ngoài lề</div>
               </div>
             </div>
 
             <div className="orders-summary">
-              <h3>Tổng quan đơn hàng</h3>
+              <h3>Backlog đơn hàng</h3>
               <div className="orders-stats">
-                <div className="order-stat">
-                  <span className="stat-number">{stats.totalOrders}</span>
-                  <span className="stat-label">Tổng đơn hàng</span>
-                </div>
-                <div className="order-stat">
-                  <span className="stat-number">{stats.totalPackages}</span>
-                  <span className="stat-label">Gói sản phẩm</span>
-                </div>
+                <div className="order-stat"><span className="stat-number">{stats.unpaidCount}</span><span className="stat-label">Chưa thanh toán</span></div>
+                <div className="order-stat"><span className="stat-number">{stats.processingCount}</span><span className="stat-label">Đang xử lý</span></div>
+                <div className="order-stat"><span className="stat-number">{stats.cancelledCount}</span><span className="stat-label">Đã hủy</span></div>
+                <div className="order-stat"><span className="stat-number">{formatCurrencyVND(stats.expectedRevenue)}</span><span className="stat-label">Doanh thu kỳ vọng</span></div>
               </div>
             </div>
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-header">
+                <h3 className="card-title">Xu hướng 12 tháng</h3>
+              </div>
+              <div className="card-body">
+                <TrendsChart data={trends} />
+              </div>
+            </div>
+            <TopPackagesTable rows={topPackages} packagesById={{}} />
           </div>
         )}
 
@@ -599,6 +733,10 @@ const Dashboard: React.FC = () => {
                   <span className="breakdown-number">{stats.expiredInventory}</span>
                   <span className="breakdown-label">Hết hạn</span>
                 </div>
+                <div className="breakdown-item" style={{ color: 'var(--text-warning, #b26a00)' }}>
+                  <span className="breakdown-number">{stats.expiringSoonCount}</span>
+                  <span className="breakdown-label">Sắp hết hạn (30 ngày)</span>
+                </div>
               </div>
             </div>
           </div>
@@ -615,17 +753,11 @@ const Dashboard: React.FC = () => {
 
               <div className="customer-breakdown">
                 <div className="breakdown-item ctv">
-                  <span className="breakdown-number">
-                    {stats.totalCustomers > 0 ? 
-                      Math.round((stats.totalCustomers * 0.6)) : 0}
-                  </span>
+                  <span className="breakdown-number">{stats.ctvCount}</span>
                   <span className="breakdown-label">Cộng tác viên</span>
                 </div>
                 <div className="breakdown-item retail">
-                  <span className="breakdown-number">
-                    {stats.totalCustomers > 0 ? 
-                      Math.round((stats.totalCustomers * 0.4)) : 0}
-                  </span>
+                  <span className="breakdown-number">{stats.retailCount}</span>
                   <span className="breakdown-label">Khách lẻ</span>
                 </div>
               </div>
