@@ -453,13 +453,50 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}`);
     } catch {}
 
+    // Detect current active tab by checking the sidebar active state
+    const getCurrentActiveTab = (): string => {
+      const activeSidebarLink = document.querySelector('.sidebar-link.active');
+      if (activeSidebarLink) {
+        // Find the parent li element and get the key/id from the button
+        const parentLi = activeSidebarLink.closest('li');
+        if (parentLi) {
+          const button = parentLi.querySelector('button');
+          if (button) {
+            // The button's onClick handler calls onTabChange(item.id), so we need to infer from the label
+            const label = button.querySelector('.sidebar-label')?.textContent;
+            if (label) {
+              // Map labels to tab IDs
+              switch (label) {
+                case 'Dashboard': return 'dashboard';
+                case 'Đơn hàng': return 'orders';
+                case 'Khách hàng': return 'customers';
+                case 'Sản phẩm': return 'products';
+                case 'Gói sản phẩm': return 'packages';
+                case 'Kho hàng': return 'warehouse';
+                case 'Bảo hành': return 'warranties';
+                case 'Chi phí': return 'expenses';
+                case 'Lịch sử hoạt động': return 'activity-logs';
+                default: return 'dashboard';
+              }
+            }
+          }
+        }
+      }
+      return 'dashboard'; // fallback
+    };
+
+    const currentTab = getCurrentActiveTab();
+    const isSameTab = currentTab === targetTab;
+
     // Switch tab in the SPA
     try {
-      window.dispatchEvent(new CustomEvent('app:navigate', { detail: targetTab } as any));
+      if (!isSameTab) {
+        window.dispatchEvent(new CustomEvent('app:navigate', { detail: targetTab } as any));
+      }
       
-      // If we're already on the target tab and have a relatedId, dispatch a specific event
+      // Dispatch detail event with appropriate timing
       if (notification.relatedId) {
-        setTimeout(() => {
+        const dispatchDetailEvent = () => {
           if (targetTab === 'orders') {
             window.dispatchEvent(new CustomEvent('app:viewOrder', { detail: notification.relatedId } as any));
           } else if (targetTab === 'warehouse') {
@@ -467,7 +504,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           } else if (targetTab === 'warranties') {
             window.dispatchEvent(new CustomEvent('app:viewWarranty', { detail: notification.relatedId } as any));
           }
-        }, 100);
+        };
+
+        if (isSameTab) {
+          // If already on the target tab, dispatch immediately
+          dispatchDetailEvent();
+        } else {
+          // If switching tabs, wait longer for component to mount and register listeners
+          setTimeout(dispatchDetailEvent, 300);
+        }
       }
     } catch {}
   }, []);
