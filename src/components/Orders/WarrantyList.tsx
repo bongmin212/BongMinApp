@@ -371,7 +371,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
             // If replacement not changed or not provided, and status isn't DONE, skip inventory mutations entirely
-            if ((!form.replacementInventoryId || form.replacementInventoryId === warranty.replacementInventoryId) && form.status !== 'DONE') {
+            const replacementChanged = form.replacementInventoryId !== warranty.replacementInventoryId;
+            if (!replacementChanged && form.status !== 'DONE') {
               try {
                 const sb2 = getSupabase();
                 if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, 'no-replacement-change'].join('; ') });
