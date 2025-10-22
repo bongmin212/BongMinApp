@@ -3223,6 +3223,41 @@ body:has(.modal) .main-content * {
     justify-items: center;
   }
 
+  /* Ensure stat cards are centered on mobile */
+  .dashboard .overview-tab .stat-card {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    max-width: 300px !important;
+    margin: 0 auto !important;
+  }
+
+  .dashboard .overview-tab .stat-card .stat-icon {
+    margin: 0 auto !important;
+  }
+
+  .dashboard .overview-tab .stat-card .stat-content {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  .dashboard .overview-tab .stat-card .stat-content h3 {
+    text-align: center !important;
+    margin: 0 auto var(--space-2) auto !important;
+  }
+
+  .dashboard .overview-tab .stat-card .stat-content p {
+    text-align: center !important;
+    margin: 0 auto !important;
+  }
+
   .sales-stats,
   .inventory-stats,
   .customers-stats {
