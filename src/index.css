@@ -2938,6 +2938,7 @@ body:has(.modal) .main-content * {
   text-align: left !important;
   align-self: flex-start;
   margin-left: 0;
+  width: 100%;
 }
 
 .inventory-card h3 {
