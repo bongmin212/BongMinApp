@@ -39,11 +39,11 @@
   /* Text scale (used across dashboard tabs) */
   --text-xs: 0.75rem;      /* 12px */
   --text-sm: 0.875rem;     /* 14px */
-  --text-base: 1rem;       /* 16px */
-  --text-lg: 1.125rem;     /* 18px */
-  --text-xl: 1.25rem;      /* 20px */
-  --text-2xl: 1.5rem;      /* 24px */
-  --text-3xl: 1.875rem;    /* 30px */
+  --text-base: 0.875rem;   /* 14px - smaller base */
+  --text-lg: 1rem;         /* 16px - smaller */
+  --text-xl: 1.125rem;     /* 18px - smaller */
+  --text-2xl: 1.25rem;     /* 20px - smaller */
+  --text-3xl: 1.5rem;      /* 24px - smaller */
   
   /* Spacing */
   --space-1: 0.25rem;
@@ -2857,7 +2857,7 @@ body:has(.modal) .main-content * {
 }
 
 .sales-amount {
-  font-size: var(--text-3xl);
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--primary-600);
   margin: 0 0 var(--space-2) 0;
@@ -2917,7 +2917,7 @@ body:has(.modal) .main-content * {
 
 .stat-number {
   display: block;
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: 700;
   color: var(--primary-600);
   margin-bottom: var(--space-1);
@@ -2996,7 +2996,7 @@ body:has(.modal) .main-content * {
 }
 
 .dashboard .overview-tab .stat-card .stat-content h3 {
-  font-size: var(--text-3xl) !important;
+  font-size: var(--text-2xl) !important;
   font-weight: 700 !important;
   color: var(--primary-600) !important;
   margin: 0 0 var(--space-2) 0 !important;
@@ -3018,7 +3018,7 @@ body:has(.modal) .main-content * {
 }
 
 .inventory-amount {
-  font-size: var(--text-3xl);
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--primary-600);
   margin: 0 0 var(--space-2) 0;
@@ -3065,7 +3065,7 @@ body:has(.modal) .main-content * {
 
 .breakdown-number {
   display: block;
-  font-size: var(--text-2xl);
+  font-size: var(--text-xl);
   font-weight: 700;
   margin-bottom: var(--space-1);
 }
@@ -3116,7 +3116,7 @@ body:has(.modal) .main-content * {
 }
 
 .customer-amount {
-  font-size: var(--text-3xl);
+  font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--primary-600);
   margin: 0 0 var(--space-2) 0;

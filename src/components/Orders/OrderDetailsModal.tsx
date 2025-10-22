@@ -1,6 +1,8 @@
 import React from 'react';
+import { useEffect, useState } from 'react';
 import { Order, PaymentStatus, PAYMENT_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
+import { getSupabase } from '../../utils/supabaseClient';
 
 type Getters = {
 	getCustomerName: (customerId: string) => string;
@@ -39,6 +41,20 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	onCopyInfo,
 	onOpenRenew
 }) => {
+	// Force re-render when warranties for this order change (realtime)
+	const [warrantyTick, setWarrantyTick] = useState(0);
+	useEffect(() => {
+		const sb = getSupabase();
+		if (!sb) return;
+		const ch = sb
+			.channel(`realtime:order-warranties:${order.id}`)
+			.on('postgres_changes', { event: '*', schema: 'public', table: 'warranties', filter: `order_id=eq.${order.id}` }, () => {
+				setWarrantyTick((v) => v + 1);
+			})
+			.subscribe();
+		return () => { try { ch.unsubscribe(); } catch {} };
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [order.id]);
 	const pkgInfo = getPackageInfo(order.packageId);
 	const paymentLabel = (PAYMENT_STATUSES.find(p => p.value === (order as any).paymentStatus)?.label) || 'Chưa thanh toán';
 
@@ -242,6 +258,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					{renderAccountOrderInfo()}
 					{order.notes && <div><strong>Ghi chú:</strong> {order.notes}</div>}
 					{(() => {
+						// warrantyTick is used only to force recalculation on realtime events
+						void warrantyTick;
 						const list = Database.getWarrantiesByOrder(order.id);
 						return (
 							<div style={{ marginTop: '12px' }}>
