@@ -299,14 +299,57 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [generateNotifications]);
 
   const navigateToNotification = useCallback((notification: Notification) => {
-    if (notification.actionUrl) {
-      // Mark as read when navigating
-      markAsRead(notification.id);
-      
-      // Navigate to the action URL
-      const url = new URL(notification.actionUrl, window.location.origin);
-      window.location.href = url.pathname + url.search;
+    // Mark as read
+    markAsRead(notification.id);
+
+    // Determine destination tab and optional deep-link params
+    let targetTab: 'orders' | 'warehouse' | 'warranties' | 'dashboard' = 'dashboard';
+    const params = new URLSearchParams(window.location.search);
+
+    switch (notification.type) {
+      case 'EXPIRY_WARNING':
+      case 'NEW_ORDER':
+      case 'PAYMENT_REMINDER':
+      case 'PROCESSING_DELAY': {
+        targetTab = 'orders';
+        if (notification.relatedId) params.set('orderId', String(notification.relatedId));
+        break;
+      }
+      case 'PROFILE_NEEDS_UPDATE': {
+        targetTab = 'warehouse';
+        break;
+      }
+      case 'NEW_WARRANTY': {
+        targetTab = 'warranties';
+        break;
+      }
+      default: {
+        // Fallback to actionUrl if provided
+        if (notification.actionUrl) {
+          try {
+            const url = new URL(notification.actionUrl, window.location.origin);
+            window.history.replaceState(null, '', `${url.pathname}${url.search}`);
+          } catch {}
+        }
+        // Try to infer from actionUrl path
+        const path = (notification.actionUrl || '').replace(/^\/*/, '');
+        if (path.startsWith('orders')) targetTab = 'orders';
+        else if (path.startsWith('warehouse')) targetTab = 'warehouse';
+        else if (path.startsWith('warranties')) targetTab = 'warranties';
+        else targetTab = 'dashboard';
+      }
     }
+
+    // Persist updated search params (keeps existing ones)
+    try {
+      const s = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${s ? `?${s}` : ''}`);
+    } catch {}
+
+    // Switch tab in the SPA
+    try {
+      window.dispatchEvent(new CustomEvent('app:navigate', { detail: targetTab } as any));
+    } catch {}
   }, [markAsRead]);
 
   const loadNotificationsFromSupabase = useCallback(async () => {

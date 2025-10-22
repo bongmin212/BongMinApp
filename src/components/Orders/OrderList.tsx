@@ -117,6 +117,16 @@ const OrderList: React.FC = () => {
       setOnlyExpiringNotSent(!!notSent);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
+
+      // Deep-link: open specific order by id
+      const deepOrderId = params.get('orderId');
+      if (deepOrderId) {
+        // Delay opening until after data load
+        setTimeout(() => {
+          const found = Database.getOrders().find(o => o.id === deepOrderId);
+          if (found) setViewingOrder(found);
+        }, 300);
+      }
     } catch {}
   }, []);
 

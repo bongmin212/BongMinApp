@@ -2827,7 +2827,7 @@ body:has(.modal) .main-content * {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
-  text-align: left;
+  text-align: center;
   box-shadow: var(--shadow-sm);
 }
 
@@ -2890,7 +2890,7 @@ body:has(.modal) .main-content * {
 }
 
 .order-stat {
-  text-align: left;
+  text-align: center;
   padding: var(--space-4);
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
@@ -2923,8 +2923,15 @@ body:has(.modal) .main-content * {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   padding: var(--space-6);
-  text-align: left;
+  text-align: center;
   box-shadow: var(--shadow-sm);
+}
+/* Overview stat cards: align text left */
+.dashboard .stat-card .stat-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
 }
 
 .inventory-card h3 {
