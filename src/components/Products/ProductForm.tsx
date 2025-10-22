@@ -250,7 +250,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
             <input
               type="text"
               name="code"
-              className={`form-control ${errors.code ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.code}
               onChange={handleChange}
               placeholder="Tự tạo như SP001"
@@ -260,9 +260,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
               title={'Mã tự động tạo - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
-            {errors.code && (
-              <div className="text-danger small mt-1">{errors.code}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -272,14 +269,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
             <input
               type="text"
               name="name"
-              className={`form-control ${errors.name ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.name}
               onChange={handleChange}
               placeholder="Nhập tên sản phẩm"
             />
-            {errors.name && (
-              <div className="text-danger small mt-1">{errors.name}</div>
-            )}
           </div>
 
           <div className="form-group">

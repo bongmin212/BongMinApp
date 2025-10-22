@@ -609,7 +609,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             <input
               type="text"
               name="code"
-              className={`form-control ${errors.code ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.code}
               onChange={handleChange}
               placeholder="Tự tạo như PK001"
@@ -619,9 +619,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               title={'Mã tự động tạo - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
-            {errors.code && (
-              <div className="text-danger small mt-1">{errors.code}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -637,7 +634,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             />
             <select
               name="productId"
-              className={`form-control ${errors.productId ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.productId}
               onChange={handleChange}
             >
@@ -648,9 +645,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                 </option>
               ))}
             </select>
-            {errors.productId && (
-              <div className="text-danger small mt-1">{errors.productId}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -660,14 +654,11 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             <input
               type="text"
               name="name"
-              className={`form-control ${errors.name ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.name}
               onChange={handleChange}
               placeholder="Nhập tên gói sản phẩm"
             />
-            {errors.name && (
-              <div className="text-danger small mt-1">{errors.name}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -706,7 +697,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                       <input
                         type="number"
                         name="warrantyPeriod"
-                        className={`form-control ${errors.warrantyPeriod ? 'is-invalid' : ''}`}
+                        className="form-control"
                         value={formData.warrantyPeriod}
                         onChange={handleChange}
                         min="1"
@@ -717,9 +708,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     </div>
                   )}
                 </div>
-                {errors.warrantyPeriod && (
-                  <div className="text-danger small mt-1">{errors.warrantyPeriod}</div>
-                )}
               </div>
             </div>
           </div>
@@ -735,16 +723,13 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     type="text"
                     inputMode="numeric"
                     name="costPrice"
-                    className={`form-control ${errors.costPrice ? 'is-invalid' : ''}`}
+                    className="form-control"
                     value={priceDisplay.costPrice}
                     onChange={(e) => handlePriceChange('costPrice', e.target.value)}
                     placeholder="Nhập giá gốc"
                   />
                   <span className="currency-suffix" aria-hidden>đ</span>
                 </div>
-                {errors.costPrice && (
-                  <div className="text-danger small mt-1">{errors.costPrice}</div>
-                )}
               </div>
             </div>
             <div className="col-md-4">
@@ -757,16 +742,13 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     type="text"
                     inputMode="numeric"
                     name="ctvPrice"
-                    className={`form-control ${errors.ctvPrice ? 'is-invalid' : ''}`}
+                    className="form-control"
                     value={priceDisplay.ctvPrice}
                     onChange={(e) => handlePriceChange('ctvPrice', e.target.value)}
                     placeholder="Nhập giá cộng tác viên"
                   />
                   <span className="currency-suffix" aria-hidden>đ</span>
                 </div>
-                {errors.ctvPrice && (
-                  <div className="text-danger small mt-1">{errors.ctvPrice}</div>
-                )}
               </div>
             </div>
             <div className="col-md-4">
@@ -779,16 +761,13 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     type="text"
                     inputMode="numeric"
                     name="retailPrice"
-                    className={`form-control ${errors.retailPrice ? 'is-invalid' : ''}`}
+                    className="form-control"
                     value={priceDisplay.retailPrice}
                     onChange={(e) => handlePriceChange('retailPrice', e.target.value)}
                     placeholder="Nhập giá khách lẻ"
                   />
                   <span className="currency-suffix" aria-hidden>đ</span>
                 </div>
-                {errors.retailPrice && (
-                  <div className="text-danger small mt-1">{errors.retailPrice}</div>
-                )}
               </div>
             </div>
           </div>

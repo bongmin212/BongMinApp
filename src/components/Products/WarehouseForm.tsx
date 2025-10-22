@@ -507,7 +507,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             <label className="form-label">Mã kho hàng *</label>
             <input
               type="text"
-              className={`form-control ${errors.code ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.code}
               onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
               placeholder="Tự tạo như KHO001"
@@ -531,7 +531,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               disabled={isLockedProduct}
             />
             <select
-              className={`form-control ${errors.productId ? 'is-invalid' : ''}`}
+              className="form-control"
               value={selectedProduct}
               onChange={(e) => {
                 setSelectedProduct(e.target.value);
@@ -559,7 +559,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               <input className="form-control" value="Pool chung" disabled />
             ) : (
               <select
-                className={`form-control ${errors.packageId ? 'is-invalid' : ''}`}
+                className="form-control"
                 value={formData.packageId}
                 onChange={(e) => setFormData(prev => ({ ...prev, packageId: e.target.value }))}
                 disabled={!selectedProduct || isLockedProduct}
@@ -581,7 +581,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             <label className="form-label">Ngày nhập</label>
             <input
               type="date"
-              className={`form-control ${errors.purchaseDate ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.purchaseDate && !isNaN(formData.purchaseDate.getTime()) ? formData.purchaseDate.toISOString().split('T')[0] : ''}
               onChange={(e) => {
                 const dateValue = e.target.value;
@@ -602,21 +602,18 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             </label>
             <input
               type="text"
-              className={`form-control ${errors.sourceNote ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.sourceNote || ''}
               onChange={(e) => setFormData(prev => ({ ...prev, sourceNote: e.target.value }))}
               placeholder="vd: Bạn hàng, key khuyến mãi, ..."
             />
-            {errors.sourceNote && (
-              <div className="text-danger small mt-1">{errors.sourceNote}</div>
-            )}
           </div>
 
           <div className="form-group">
             <label className="form-label">Giá mua <span className="text-danger">*</span></label>
             <input
               type="text"
-              className={`form-control ${errors.purchasePrice ? 'is-invalid' : ''}`}
+              className="form-control"
               value={
                 (formData.purchasePrice ?? '') === ''
                   ? ''
@@ -626,14 +623,10 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 const raw = e.target.value.replace(/[^0-9]/g, '');
                 const num = raw ? Number(raw) : NaN;
                 setFormData(prev => ({ ...prev, purchasePrice: isNaN(num) ? undefined : num }));
-                if (errors.purchasePrice) setErrors(prev => ({ ...prev, purchasePrice: '' }));
               }}
               placeholder="0 đ"
               inputMode="numeric"
             />
-            {errors.purchasePrice && (
-              <div className="text-danger small mt-1">{errors.purchasePrice}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -666,15 +659,12 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           <div className="form-group">
             <label className="form-label">Thông tin sản phẩm <span className="text-danger">*</span></label>
             <textarea
-              className={`form-control ${errors.productInfo ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.productInfo || ''}
               onChange={(e) => setFormData(prev => ({ ...prev, productInfo: e.target.value }))}
               placeholder="Serial/Key/Tài khoản..."
               rows={3}
             />
-            {errors.productInfo && (
-              <div className="text-danger small mt-1">{errors.productInfo}</div>
-            )}
           </div>
 
           <div className="form-group">

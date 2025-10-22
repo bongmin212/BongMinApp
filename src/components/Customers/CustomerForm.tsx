@@ -305,7 +305,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             <input
               type="text"
               name="code"
-              className={`form-control ${errors.code ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.code}
               onChange={handleChange}
               placeholder="Tự tạo như KH001"
@@ -315,9 +315,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
               title={'Mã tự động tạo - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
-            {errors.code && (
-              <div className="text-danger small mt-1">{errors.code}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -327,14 +324,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             <input
               type="text"
               name="name"
-              className={`form-control ${errors.name ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.name}
               onChange={handleChange}
               placeholder="Nhập tên khách hàng"
             />
-            {errors.name && (
-              <div className="text-danger small mt-1">{errors.name}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -362,14 +356,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
                 <input
                   type="tel"
                   name="phone"
-                  className={`form-control ${errors.phone ? 'is-invalid' : ''}`}
+                  className="form-control"
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="Nhập số điện thoại"
                 />
-                {errors.phone && (
-                  <div className="text-danger small mt-1">{errors.phone}</div>
-                )}
               </div>
             </div>
             <div className="col-md-6">
@@ -378,14 +369,11 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
                 <input
                   type="email"
                   name="email"
-                  className={`form-control ${errors.email ? 'is-invalid' : ''}`}
+                  className="form-control"
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="Nhập email"
                 />
-                {errors.email && (
-                  <div className="text-danger small mt-1">{errors.email}</div>
-                )}
               </div>
             </div>
           </div>
