@@ -481,7 +481,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             }
 
             // Auto-relink original inventory if warranty completed without replacement
-            if (form.status === 'DONE' && !resolvedReplacementInventoryId) {
+            // Only relink if there's no current replacement AND we're not just changing status
+            if (form.status === 'DONE' && !resolvedReplacementInventoryId && !warranty.replacementInventoryId) {
               try {
                 // For classic inventory: find items that were marked NEEDS_UPDATE for this order
                 // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
@@ -639,6 +640,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         }
 
         // Auto-relink original inventory if warranty completed without replacement
+        // Only relink if there's no current replacement
         if (form.status === 'DONE' && !resolvedReplacementInventoryId) {
           try {
             // For classic inventory: find items that were marked NEEDS_UPDATE for this order
