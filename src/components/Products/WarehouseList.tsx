@@ -222,7 +222,7 @@ const WarehouseList: React.FC = () => {
       if (!inv || !inv.is_account_based) return;
       const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
       const nextProfiles = profiles.map((p: any) => (
-        p.id === profileId ? { ...p, needsUpdate: false } : p
+        p.id === profileId ? { ...p, needsUpdate: false, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
       ));
       const anyNeedsUpdate = nextProfiles.some((p: any) => !!p.needsUpdate);
       const anyAssigned = nextProfiles.some((p: any) => !!p.isAssigned);
@@ -232,7 +232,7 @@ const WarehouseList: React.FC = () => {
       } else {
         await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
       }
-      notify('Đã đánh dấu slot đã update', 'success');
+      notify('Đã đánh dấu slot đã update và giải phóng khỏi đơn hàng', 'success');
       refresh();
     } catch {
       notify('Không thể cập nhật slot', 'error');
@@ -1524,7 +1524,7 @@ const WarehouseList: React.FC = () => {
                                 if (p.isAssigned) return 'Đang dùng';
                                 return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
                               })()}</td>
-                              <td>{order ? `${order.code}` : '-'}</td>
+                              <td>{order ? `${order.code}` : (orderId ? `ID: ${orderId.slice(-8)}` : '-')}</td>
                               <td>{p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-'}</td>
                               <td>
                                 <div className="d-flex gap-2">
@@ -1533,12 +1533,46 @@ const WarehouseList: React.FC = () => {
                                       Xem đơn hàng
                                     </button>
                                   )}
+                                  {orderId && !order && (
+                                    <button className="btn btn-sm btn-secondary" onClick={async () => {
+                                      const sb = getSupabase();
+                                      if (!sb) return;
+                                      try {
+                                        const { data } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
+                                        if (data) {
+                                          const mappedOrder = {
+                                            id: data.id,
+                                            code: data.code,
+                                            customerId: data.customer_id,
+                                            packageId: data.package_id,
+                                            status: data.status,
+                                            paymentStatus: data.payment_status,
+                                            orderInfo: data.order_info,
+                                            notes: data.notes,
+                                            inventoryItemId: data.inventory_item_id,
+                                            inventoryProfileId: data.inventory_profile_id,
+                                            useCustomPrice: data.use_custom_price || false,
+                                            customPrice: data.custom_price,
+                                            customFieldValues: data.custom_field_values,
+                                            purchaseDate: data.purchase_date ? new Date(data.purchase_date) : new Date(),
+                                            expiryDate: data.expiry_date ? new Date(data.expiry_date) : new Date(),
+                                            createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+                                            updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+                                          };
+                                          setProfilesModal(null);
+                                          setViewingOrder(mappedOrder as any);
+                                        }
+                                      } catch {}
+                                    }}>
+                                      Tải đơn hàng
+                                    </button>
+                                  )}
                                   {!order && p.isAssigned && (
                                     <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
                                   )}
                                   {!p.isAssigned && (p as any).needsUpdate && (
                                     <button className="btn btn-sm btn-primary" onClick={() => setConfirmState({
-                                      message: `Đánh dấu slot "${p.label}" đã update?`,
+                                      message: `Đánh dấu slot "${p.label}" đã update và giải phóng khỏi đơn hàng?`,
                                       onConfirm: () => clearProfileNeedsUpdate(item.id, p.id)
                                     })}>Đã update</button>
                                   )}
