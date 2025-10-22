@@ -2933,6 +2933,12 @@ body:has(.modal) .main-content * {
   align-items: flex-start;
   text-align: left;
 }
+.dashboard .stat-card .stat-content h3,
+.dashboard .stat-card .stat-content p {
+  text-align: left !important;
+  align-self: flex-start;
+  margin-left: 0;
+}
 
 .inventory-card h3 {
   font-size: var(--text-lg);
