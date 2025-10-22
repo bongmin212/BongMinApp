@@ -3023,6 +3023,112 @@ body:has(.modal) .main-content * {
   display: block !important;
 }
 
+/* Force left alignment for all stat cards - most specific */
+.dashboard .overview-tab .stat-card {
+  align-items: flex-start !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  text-align: left !important;
+  width: 100% !important;
+  justify-content: flex-start !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content h3,
+.dashboard .overview-tab .stat-card .stat-content p {
+  text-align: left !important;
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  display: block !important;
+}
+
+/* Nuclear option - override everything */
+.dashboard .overview-tab .stat-card .stat-content h3 {
+  text-align: left !important;
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  display: block !important;
+  float: left !important;
+  clear: left !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content p {
+  text-align: left !important;
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  display: block !important;
+  float: left !important;
+  clear: left !important;
+}
+
+/* Final override - target the exact elements */
+.dashboard .overview-tab .stat-card .stat-content h3,
+.dashboard .overview-tab .stat-card .stat-content p {
+  text-align: left !important;
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  display: block !important;
+  float: left !important;
+  clear: left !important;
+  position: relative !important;
+  left: 0 !important;
+  right: auto !important;
+}
+
+/* Ultimate fix - override the stat-card itself */
+.dashboard .overview-tab .stat-card {
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content {
+  display: block !important;
+  text-align: left !important;
+  width: 100% !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content h3,
+.dashboard .overview-tab .stat-card .stat-content p {
+  text-align: left !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  display: block !important;
+  float: left !important;
+  clear: left !important;
+  position: relative !important;
+  left: 0 !important;
+  right: auto !important;
+}
+
+/* Last resort - use CSS Grid instead of Flexbox */
+.dashboard .overview-tab .stat-card {
+  display: grid !important;
+  grid-template-columns: auto 1fr !important;
+  align-items: start !important;
+  gap: var(--space-4) !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content {
+  display: block !important;
+  text-align: left !important;
+  width: 100% !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content h3,
+.dashboard .overview-tab .stat-card .stat-content p {
+  text-align: left !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+  display: block !important;
+}
+
 .inventory-card h3 {
   font-size: var(--text-lg);
   font-weight: 600;
