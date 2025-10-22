@@ -221,7 +221,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
     const product = pkg ? products.find(pr => pr.id === pkg.productId) : undefined;
     const sharedPoolProductId = product?.sharedInventoryPool ? product.id : undefined;
 
-    return inventoryItems.filter(it => {
+    const eligibleItems = inventoryItems.filter(it => {
       // Pool boundary: match by product if shared pool, else exact package
       if (sharedPoolProductId) {
         if (it.productId !== sharedPoolProductId) return false;
@@ -239,7 +239,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       // Classic stock: must not be linked to other orders
       return !it.linkedOrderId;
     });
-  }, [inventoryItems, orders, form.orderId, packages, products]);
+
+    // FIX: Include current replacement inventory when editing warranty
+    // This ensures the dropdown shows the currently selected replacement even if it's already SOLD
+    if (warranty && warranty.replacementInventoryId) {
+      const currentReplacement = inventoryItems.find(it => it.id === warranty.replacementInventoryId);
+      if (currentReplacement && !eligibleItems.find(it => it.id === currentReplacement.id)) {
+        eligibleItems.push(currentReplacement);
+      }
+    }
+
+    return eligibleItems;
+  }, [inventoryItems, orders, form.orderId, packages, products, warranty]);
 
   const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
 
@@ -371,11 +382,19 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
             // If replacement not changed, skip inventory mutations entirely
-            const replacementChanged = form.replacementInventoryId !== warranty.replacementInventoryId;
+            // FIX: Compare resolved IDs to handle local vs remote ID differences
+            const originalReplacementId = warranty.replacementInventoryId;
+            const currentReplacementId = resolvedReplacementInventoryId;
+            const replacementChanged = originalReplacementId !== currentReplacementId;
+            
             if (!replacementChanged) {
               try {
                 const sb2 = getSupabase();
-                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, 'no-replacement-change'].join('; ') });
+                if (sb2) await sb2.from('activity_logs').insert({ 
+                  employee_id: state.user?.id || 'system', 
+                  action: 'Cập nhật đơn bảo hành', 
+                  details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, 'no-replacement-change', `original=${originalReplacementId}, current=${currentReplacementId}`].join('; ') 
+                });
               } catch {}
               notify('Cập nhật đơn bảo hành thành công', 'success');
               onSuccess();
@@ -384,9 +403,20 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             }
 
             // Only unlink previous inventory if we're actually replacing it with a different item
-            const hasReplacementChanged = warranty.replacementInventoryId !== form.replacementInventoryId;
-            const hasNewReplacement = form.replacementInventoryId && form.replacementInventoryId !== warranty.replacementInventoryId;
+            // FIX: Use resolved IDs for consistent comparison
+            const hasReplacementChanged = originalReplacementId !== currentReplacementId;
+            const hasNewReplacement = currentReplacementId && currentReplacementId !== originalReplacementId;
             if (resolvedReplacementInventoryId && hasNewReplacement) {
+              // DEBUG: Log inventory unlink operation
+              try {
+                const sb2 = getSupabase();
+                if (sb2) await sb2.from('activity_logs').insert({ 
+                  employee_id: state.user?.id || 'system', 
+                  action: 'Warranty Inventory Unlink', 
+                  details: [`warrantyId=${warranty.id}`, `orderId=${resolvedOrderId}`, `oldReplacement=${originalReplacementId}`, `newReplacement=${currentReplacementId}`, 'unlinking-previous-inventory'].join('; ') 
+                });
+              } catch {}
+              
               // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
               try {
                 // Classic linked item(s)
@@ -469,6 +499,16 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             // Update order to point to the replacement inventory + profile and refresh order_info
             if (resolvedReplacementInventoryId && hasNewReplacement) {
               try {
+                // DEBUG: Log order update operation
+                const sb2 = getSupabase();
+                if (sb2) await sb2.from('activity_logs').insert({ 
+                  employee_id: state.user?.id || 'system', 
+                  action: 'Warranty Order Update', 
+                  details: [`warrantyId=${warranty.id}`, `orderId=${resolvedOrderId}`, `newInventoryId=${resolvedReplacementInventoryId}`, `profileId=${replacementProfileId || 'none'}`].join('; ') 
+                });
+              } catch {}
+              
+              try {
                 await sb
                   .from('orders')
                   .update({
@@ -483,6 +523,16 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             // Auto-relink original inventory if warranty completed without replacement
             // Only relink if there's no current replacement AND we're not just changing status
             if (form.status === 'DONE' && !resolvedReplacementInventoryId && !warranty.replacementInventoryId) {
+              // DEBUG: Log auto-relink operation
+              try {
+                const sb2 = getSupabase();
+                if (sb2) await sb2.from('activity_logs').insert({ 
+                  employee_id: state.user?.id || 'system', 
+                  action: 'Warranty Auto-Relink', 
+                  details: [`warrantyId=${warranty.id}`, `orderId=${resolvedOrderId}`, 'auto-relinking-original-inventory'].join('; ') 
+                });
+              } catch {}
+              
               try {
                 // For classic inventory: find items that were marked NEEDS_UPDATE for this order
                 // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
