@@ -25,7 +25,7 @@ interface DashboardStats {
   monthlyNetProfit: number;
   inventoryItems: number;
   availableInventory: number;
-  reservedInventory: number;
+  needsUpdateInventory: number;
   soldInventory: number;
   expiredInventory: number;
   monthlyImportCost: number;
@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
     monthlyNetProfit: 0,
     inventoryItems: 0,
     availableInventory: 0,
-    reservedInventory: 0,
+    needsUpdateInventory: 0,
     soldInventory: 0,
     expiredInventory: 0,
     monthlyImportCost: 0,
@@ -336,7 +336,7 @@ const Dashboard: React.FC = () => {
       const monthlyNetProfit = monthlyProfit - monthlyExpenses;
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
-      const reservedInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'RESERVED').length;
+      const needsUpdateInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'NEEDS_UPDATE').length;
       const soldInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'SOLD').length;
       const expiredInventory = inventoryItems.filter(i => {
         const t = new Date(i.expiryDate).getTime();
@@ -439,7 +439,7 @@ const Dashboard: React.FC = () => {
         monthlyNetProfit,
         inventoryItems: inventoryItems.length,
         availableInventory,
-        reservedInventory,
+        needsUpdateInventory,
         soldInventory,
         expiredInventory,
         monthlyImportCost,
@@ -740,9 +740,9 @@ const Dashboard: React.FC = () => {
                   <span className="breakdown-number">{stats.availableInventory}</span>
                   <span className="breakdown-label">Có sẵn</span>
                 </button>
-                <button className="breakdown-item reserved" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'RESERVED', page: 1 } })); }}>
-                  <span className="breakdown-number">{stats.reservedInventory}</span>
-                  <span className="breakdown-label">Đã đặt</span>
+                <button className="breakdown-item" style={{ color: 'var(--text-warning, #b26a00)' }} onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'NEEDS_UPDATE', page: 1 } })); }}>
+                  <span className="breakdown-number">{stats.needsUpdateInventory}</span>
+                  <span className="breakdown-label">Cần update</span>
                 </button>
                 <button className="breakdown-item sold" onClick={() => { window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'SOLD', page: 1 } })); }}>
                   <span className="breakdown-number">{stats.soldInventory}</span>

@@ -370,59 +370,60 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
-            // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
-            try {
-              // Classic linked item(s)
-              const { data: classicLinked } = await sb
-                .from('inventory')
-                .select('id, linked_order_id')
-                .eq('linked_order_id', resolvedOrderId);
-              const classicIds = (classicLinked || []).map((r: any) => r.id);
-              if (classicIds.length) {
-                // Store previous linked order before clearing
-                for (const item of (classicLinked || [])) {
-                  await sb
-                    .from('inventory')
-                    .update({ 
-                      status: 'NEEDS_UPDATE', 
-                      previous_linked_order_id: item.linked_order_id,
-                      linked_order_id: null
-                    })
-                    .eq('id', item.id);
-                }
-              }
-              // Account-based: any profile pointing to this order gets unassigned; also set item status to NEEDS_UPDATE if all profiles freed
-              const { data: accountItems } = await sb
-                .from('inventory')
-                .select('*')
-                .eq('is_account_based', true);
-              for (const it of (accountItems || [])) {
-                const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-                if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
-                const nextProfiles = profiles.map((p: any) => (
-                  p.assignedOrderId === resolvedOrderId
-                    ? { 
-                        ...p, 
-                        isAssigned: false, 
-                        assignedOrderId: null, 
-                        assignedAt: null, 
-                        expiryAt: null, 
-                        needsUpdate: true,
-                        previousOrderId: p.assignedOrderId // Store previous order
-                      }
-                    : p
-                ));
-                await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
-                // After unassigning, if no profiles are assigned, flip status to NEEDS_UPDATE
-                const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
-                if (!stillAssigned) {
-                  await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
-                }
-              }
-            } catch {}
-
-            // If replacement inventory is chosen, reflect availability in inventory
+            // Only unlink previous inventory if we're actually replacing it
             if (resolvedReplacementInventoryId) {
+              // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
+              try {
+                // Classic linked item(s)
+                const { data: classicLinked } = await sb
+                  .from('inventory')
+                  .select('id, linked_order_id')
+                  .eq('linked_order_id', resolvedOrderId);
+                const classicIds = (classicLinked || []).map((r: any) => r.id);
+                if (classicIds.length) {
+                  // Store previous linked order before clearing
+                  for (const item of (classicLinked || [])) {
+                    await sb
+                      .from('inventory')
+                      .update({ 
+                        status: 'NEEDS_UPDATE', 
+                        previous_linked_order_id: item.linked_order_id,
+                        linked_order_id: null
+                      })
+                      .eq('id', item.id);
+                  }
+                }
+                // Account-based: any profile pointing to this order gets unassigned; also set item status to NEEDS_UPDATE if all profiles freed
+                const { data: accountItems } = await sb
+                  .from('inventory')
+                  .select('*')
+                  .eq('is_account_based', true);
+                for (const it of (accountItems || [])) {
+                  const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+                  if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
+                  const nextProfiles = profiles.map((p: any) => (
+                    p.assignedOrderId === resolvedOrderId
+                      ? { 
+                          ...p, 
+                          isAssigned: false, 
+                          assignedOrderId: null, 
+                          assignedAt: null, 
+                          expiryAt: null, 
+                          needsUpdate: true,
+                          previousOrderId: p.assignedOrderId // Store previous order
+                        }
+                      : p
+                  ));
+                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+                  // After unassigning, if no profiles are assigned, flip status to NEEDS_UPDATE
+                  const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
+                  if (!stillAssigned) {
+                    await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
+                  }
+                }
+              } catch {}
+
+              // Reflect availability in inventory for replacement
               const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
               if (invRow) {
                 // For classic inventory: ensure it's not linked elsewhere
@@ -449,16 +450,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             }
 
             // Update order to point to the replacement inventory + profile and refresh order_info
-            try {
-              await sb
-                .from('orders')
-                .update({
-                  inventory_item_id: resolvedReplacementInventoryId || null,
-                  inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
-                  order_info: (autoInfo ?? null)
-                })
-                .eq('id', resolvedOrderId);
-            } catch {}
+            if (resolvedReplacementInventoryId) {
+              try {
+                await sb
+                  .from('orders')
+                  .update({
+                    inventory_item_id: resolvedReplacementInventoryId,
+                    inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
+                    order_info: (autoInfo ?? null)
+                  })
+                  .eq('id', resolvedOrderId);
+              } catch {}
+            }
 
             // Auto-relink original inventory if warranty completed without replacement
             if (form.status === 'DONE' && !resolvedReplacementInventoryId) {
@@ -532,86 +535,89 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					});
 				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 
-        // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
-        try {
-          const { data: classicLinked } = await sb
-            .from('inventory')
-            .select('id, linked_order_id')
-            .eq('linked_order_id', resolvedOrderId);
-          const classicIds = (classicLinked || []).map((r: any) => r.id);
-          if (classicIds.length) {
-            // Store previous linked order before clearing
-            for (const item of (classicLinked || [])) {
-              await sb
-                .from('inventory')
-                .update({ 
-                  status: 'NEEDS_UPDATE', 
-                  previous_linked_order_id: item.linked_order_id,
-                  linked_order_id: null
-                })
-                .eq('id', item.id);
+        // Only unlink previous inventory if we're actually replacing it
+        if (resolvedReplacementInventoryId) {
+          // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
+          try {
+            const { data: classicLinked } = await sb
+              .from('inventory')
+              .select('id, linked_order_id')
+              .eq('linked_order_id', resolvedOrderId);
+            const classicIds = (classicLinked || []).map((r: any) => r.id);
+            if (classicIds.length) {
+              // Store previous linked order before clearing
+              for (const item of (classicLinked || [])) {
+                await sb
+                  .from('inventory')
+                  .update({ 
+                    status: 'NEEDS_UPDATE', 
+                    previous_linked_order_id: item.linked_order_id,
+                    linked_order_id: null
+                  })
+                  .eq('id', item.id);
+              }
             }
-          }
-          const { data: accountItems } = await sb
-            .from('inventory')
-            .select('*')
-            .eq('is_account_based', true);
-          for (const it of (accountItems || [])) {
-            const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-            if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
-            const nextProfiles = profiles.map((p: any) => (
-              p.assignedOrderId === resolvedOrderId
-                ? { 
-                    ...p, 
-                    isAssigned: false, 
-                    assignedOrderId: null, 
-                    assignedAt: null, 
-                    expiryAt: null, 
-                    needsUpdate: true,
-                    previousOrderId: p.assignedOrderId // Store previous order
-                  }
-                : p
-            ));
-            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
-            const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
-            if (!stillAssigned) {
-              await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
-            }
-          }
-        } catch {}
-
-                // Reflect inventory state for replacement
-                if (resolvedReplacementInventoryId) {
-                  const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
-                  if (invRow) {
-                    if (!!invRow.is_account_based) {
-                      if (replacementProfileId) {
-                        const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
-                        // Validate chosen profile is free
-                        const chosen = profiles.find((p: any) => p.id === replacementProfileId);
-                        if (!chosen || chosen.isAssigned) throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
-                        const nextProfiles = profiles.map((p: any) => (
-                          p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
-                        ));
-                        await sb.from('inventory').update({ profiles: nextProfiles, status: 'SOLD' }).eq('id', invRow.id);
-                      }
-                    } else {
-                      await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
+            const { data: accountItems } = await sb
+              .from('inventory')
+              .select('*')
+              .eq('is_account_based', true);
+            for (const it of (accountItems || [])) {
+              const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+              if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
+              const nextProfiles = profiles.map((p: any) => (
+                p.assignedOrderId === resolvedOrderId
+                  ? { 
+                      ...p, 
+                      isAssigned: false, 
+                      assignedOrderId: null, 
+                      assignedAt: null, 
+                      expiryAt: null, 
+                      needsUpdate: true,
+                      previousOrderId: p.assignedOrderId // Store previous order
                     }
-                  }
-                }
+                  : p
+              ));
+              await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+              const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
+              if (!stillAssigned) {
+                await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
+              }
+            }
+          } catch {}
+
+          // Reflect inventory state for replacement
+          const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
+          if (invRow) {
+            if (!!invRow.is_account_based) {
+              if (replacementProfileId) {
+                const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
+                // Validate chosen profile is free
+                const chosen = profiles.find((p: any) => p.id === replacementProfileId);
+                if (!chosen || chosen.isAssigned) throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
+                const nextProfiles = profiles.map((p: any) => (
+                  p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
+                ));
+                await sb.from('inventory').update({ profiles: nextProfiles, status: 'SOLD' }).eq('id', invRow.id);
+              }
+            } else {
+              await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
+            }
+          }
+        }
 
         // Update order to point to the replacement inventory + profile and refresh order_info
-        try {
-          await sb
-            .from('orders')
-            .update({
-              inventory_item_id: resolvedReplacementInventoryId || null,
-              inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
-              order_info: (autoInfo ?? null)
-            })
-            .eq('id', resolvedOrderId);
-        } catch {}
+        if (resolvedReplacementInventoryId) {
+          try {
+            await sb
+              .from('orders')
+              .update({
+                inventory_item_id: resolvedReplacementInventoryId,
+                inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
+                order_info: (autoInfo ?? null)
+              })
+              .eq('id', resolvedOrderId);
+          } catch {}
+        }
 
         // Auto-relink original inventory if warranty completed without replacement
         if (form.status === 'DONE' && !resolvedReplacementInventoryId) {

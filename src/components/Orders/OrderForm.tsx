@@ -286,8 +286,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       items = items.filter((i: any) => {
         if (i.isAccountBased) {
           const profiles = Array.isArray(i.profiles) ? i.profiles : [];
-          const hasFree = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
-          return hasFree;
+          // Show inventory item if it has at least one available slot (not assigned and not needsUpdate)
+          const hasAvailable = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
+          return hasAvailable;
         }
         return i.status === 'AVAILABLE' && !i.linked_order_id;
       });
@@ -410,7 +411,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     const pkg = packages.find(p => p.id === formData.packageId);
     if (!(inv?.isAccountBased || pkg?.isAccountBased)) return;
     const profiles = Array.isArray(inv?.profiles) ? (inv as any).profiles : [];
-    const allowed = profiles.filter((p: any) => !p.isAssigned || p.assignedOrderId === (order?.id || ''));
+    const allowed = profiles.filter((p: any) => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate);
     if (!allowed.length) {
       setSelectedProfileIds([]);
       return;
