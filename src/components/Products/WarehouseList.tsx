@@ -157,7 +157,10 @@ const WarehouseList: React.FC = () => {
           } catch {}
           
           notify(`Đã fix ${fixedCount} slot bị kẹt (${fixedDetails.join(', ')})`, 'success');
-          refresh();
+          // Force refresh with delay to ensure database sync
+          setTimeout(() => {
+            refresh();
+          }, 1000);
           
         } catch (error) {
           console.error('Unexpected error fixing orphaned slots:', error);
@@ -1192,7 +1195,6 @@ const WarehouseList: React.FC = () => {
               }, 50); // Small delay to ensure fresh state
             }}>Nhập kho</button>
             {hasStuckSlots && (
-              <button className="btn btn-warning" onClick={fixOrphanedSlots}>Fix slot bị kẹt</button>
             )}
           </div>
         </div>
