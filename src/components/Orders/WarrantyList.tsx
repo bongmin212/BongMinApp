@@ -256,8 +256,10 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 
   const filteredOrders = React.useMemo(() => {
     const q = debouncedOrderSearch;
-    if (!q) return orders;
-    return orders.filter(o => {
+    // Only show completed orders for warranty creation
+    const completedOrders = orders.filter(o => o.status === 'COMPLETED');
+    if (!q) return completedOrders;
+    return completedOrders.filter(o => {
       const code = String(o.code || '').toLowerCase();
       const customer = customers.find(c => c.id === o.customerId)?.name?.toLowerCase() || '';
       const pkg = packages.find(p => p.id === o.packageId);
@@ -281,360 +283,246 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 
 	const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!((form.code || '').trim()) || !form.orderId || !form.reason.trim()) {
+    
+    // Validation
+    if (!form.code.trim() || !form.orderId || !form.reason.trim()) {
       notify('Vui lòng nhập mã bảo hành, chọn đơn hàng và nhập lý do.', 'warning');
       return;
     }
-    // Ensure newOrderInfo auto-fills from replacement selection when account-based
-    const selectedItem = (form.replacementInventoryId ? inventoryItems.find(i => i.id === form.replacementInventoryId) : undefined) as InventoryItem | undefined;
-    const autoInfo = (() => {
-      if (!selectedItem) return undefined;
-      if (selectedItem.isAccountBased) {
-        const itemForOrder = { ...selectedItem, packageId: selectedItem.packageId } as InventoryItem;
-        const text = Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId ? [replacementProfileId] : undefined);
-        return text || undefined;
-      }
-      return selectedItem.productInfo || undefined;
-    })();
+
+    // For REPLACED status, require replacement inventory
+    if (warranty && form.status === 'REPLACED' && !form.replacementInventoryId) {
+      notify('Vui lòng chọn sản phẩm thay thế khi chọn trạng thái "Đã đổi bảo hành".', 'warning');
+      return;
+    }
+
     try {
-			// Resolve canonical UUIDs to avoid "invalid input syntax for type uuid"
-			const sb = getSupabase();
-			if (!sb) throw new Error('Supabase not configured');
-			let resolvedOrderId = form.orderId;
-			let remoteOrder: any | null = null;
-			const localSelectedOrder = orders.find(o => o.id === form.orderId);
-			if (!looksLikeUuid(form.orderId)) {
-				const orderCode = localSelectedOrder?.code;
-				if (!orderCode) throw new Error('Không tìm thấy đơn hàng hợp lệ');
-				const { data: ro } = await sb
-					.from('orders')
-					.select('id, customer_id, product_id, package_id')
-					.eq('code', orderCode)
-					.maybeSingle();
-				if (ro?.id) {
-					resolvedOrderId = ro.id as string;
-					remoteOrder = ro;
-				}
-			}
-			// Resolve replacement inventory id if needed
-			let resolvedReplacementInventoryId = form.replacementInventoryId;
-			if (resolvedReplacementInventoryId && !looksLikeUuid(resolvedReplacementInventoryId)) {
-				const localItem = inventoryItems.find(i => i.id === resolvedReplacementInventoryId);
-				const itemCode = localItem?.code;
-				if (itemCode) {
-					const { data: invRow } = await sb
-						.from('inventory')
-						.select('id')
-						.eq('code', itemCode)
-						.maybeSingle();
-					if (invRow?.id) resolvedReplacementInventoryId = invRow.id as string;
-				}
-			}
+      const sb = getSupabase();
+      if (!sb) throw new Error('Supabase not configured');
 
-			// Denormalized pointers from remote order if available (fall back to local)
-			const denormCustomerId = (remoteOrder?.customer_id as string | undefined) || localSelectedOrder?.customerId || undefined;
-			const denormProductId = (remoteOrder?.product_id as string | undefined) || (() => {
-				const pkgId = localSelectedOrder?.packageId;
-				const pkg = packages.find(p => p.id === pkgId);
-				return pkg?.productId;
-			})() || undefined;
-			const denormPackageId = (remoteOrder?.package_id as string | undefined) || localSelectedOrder?.packageId || undefined;
-			if (warranty) {
-				const prevSnapshot = {
-					code: warranty.code || '',
-					orderId: warranty.orderId,
-					reason: warranty.reason,
-					status: warranty.status,
-					replacementInventoryId: warranty.replacementInventoryId,
-					newOrderInfo: warranty.newOrderInfo
-				} as const;
-				const nextSnapshot = {
-					code: form.code,
-					orderId: form.orderId,
-					reason: form.reason.trim(),
-					status: form.status,
-					replacementInventoryId: form.replacementInventoryId,
-					newOrderInfo: form.newOrderInfo
-				} as const;
-				const changedEntries: string[] = [];
-				(Object.keys(prevSnapshot) as Array<keyof typeof prevSnapshot>).forEach((key) => {
-					const beforeVal = String(prevSnapshot[key] ?? '');
-					const afterVal = String(nextSnapshot[key] ?? '');
-					if (beforeVal !== afterVal) {
-						changedEntries.push(`${key}=${beforeVal}->${afterVal}`);
-					}
-				});
+      // Resolve order ID
+      let resolvedOrderId = form.orderId;
+      if (!looksLikeUuid(form.orderId)) {
+        const order = orders.find(o => o.id === form.orderId);
+        if (!order?.code) throw new Error('Không tìm thấy đơn hàng hợp lệ');
+        const { data: ro } = await sb
+          .from('orders')
+          .select('id')
+          .eq('code', order.code)
+          .maybeSingle();
+        if (ro?.id) resolvedOrderId = ro.id as string;
+      }
 
-            const { error } = await sb
-					.from('warranties')
-					.update({
-						code: form.code,
-						order_id: resolvedOrderId,
-						reason: form.reason.trim(),
-						status: form.status,
-						replacement_inventory_id: resolvedReplacementInventoryId || null,
-						new_order_info: (form.newOrderInfo ?? autoInfo ?? null),
-						customer_id: denormCustomerId || null,
-						product_id: denormProductId || null,
-						package_id: denormPackageId || null
-					})
-					.eq('id', warranty.id);
-				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
+      if (warranty) {
+        // EDIT WARRANTY LOGIC
+        const { error } = await sb
+          .from('warranties')
+          .update({
+            status: form.status,
+            replacement_inventory_id: form.replacementInventoryId || null,
+            new_order_info: form.newOrderInfo || null
+          })
+          .eq('id', warranty.id);
+        
+        if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
-            // If replacement not changed, skip inventory mutations entirely
-            // FIX: Compare resolved IDs to handle local vs remote ID differences
-            const originalReplacementId = warranty.replacementInventoryId;
-            const currentReplacementId = resolvedReplacementInventoryId;
-            const replacementChanged = originalReplacementId !== currentReplacementId;
-            
-            if (!replacementChanged) {
-              try {
-                const sb2 = getSupabase();
-                if (sb2) await sb2.from('activity_logs').insert({ 
-                  employee_id: state.user?.id || 'system', 
-                  action: 'Cập nhật đơn bảo hành', 
-                  details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, 'no-replacement-change', `original=${originalReplacementId}, current=${currentReplacementId}`].join('; ') 
-                });
-              } catch {}
-              notify('Cập nhật đơn bảo hành thành công', 'success');
-              onSuccess();
-              onClose();
-              return;
-            }
-
-            // Only unlink previous inventory if we're actually replacing it with a different item
-            // FIX: Use resolved IDs for consistent comparison
-            const hasReplacementChanged = originalReplacementId !== currentReplacementId;
-            const hasNewReplacement = currentReplacementId && currentReplacementId !== originalReplacementId;
-            if (resolvedReplacementInventoryId && hasNewReplacement) {
-              // DEBUG: Log inventory unlink operation
-              try {
-                const sb2 = getSupabase();
-                if (sb2) await sb2.from('activity_logs').insert({ 
-                  employee_id: state.user?.id || 'system', 
-                  action: 'Warranty Inventory Unlink', 
-                  details: [`warrantyId=${warranty.id}`, `orderId=${resolvedOrderId}`, `oldReplacement=${originalReplacementId}`, `newReplacement=${currentReplacementId}`, 'unlinking-previous-inventory'].join('; ') 
-                });
-              } catch {}
-              
-              // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
-              try {
-                // Classic linked item(s)
-                const { data: classicLinked } = await sb
-                  .from('inventory')
-                  .select('id, linked_order_id')
-                  .eq('linked_order_id', resolvedOrderId)
-                  .neq('id', resolvedReplacementInventoryId);
-                const classicIds = (classicLinked || []).map((r: any) => r.id);
-                if (classicIds.length) {
-                  // Store previous linked order before clearing
-                  for (const item of (classicLinked || [])) {
-                    await sb
-                      .from('inventory')
-                      .update({ 
-                        status: 'NEEDS_UPDATE', 
-                        previous_linked_order_id: item.linked_order_id,
-                        linked_order_id: null
-                      })
-                      .eq('id', item.id);
-                  }
-                }
-                // Account-based: any profile pointing to this order gets unassigned; also set item status to NEEDS_UPDATE if all profiles freed
-                const { data: accountItems } = await sb
-                  .from('inventory')
-                  .select('*')
-                  .eq('is_account_based', true)
-                  .neq('id', resolvedReplacementInventoryId);
-                for (const it of (accountItems || [])) {
-                  const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-                  if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
-                  const nextProfiles = profiles.map((p: any) => (
-                    p.assignedOrderId === resolvedOrderId
-                      ? { 
-                          ...p, 
-                          isAssigned: false, 
-                          assignedOrderId: null, 
-                          assignedAt: null, 
-                          expiryAt: null, 
-                          needsUpdate: true,
-                          previousOrderId: resolvedOrderId // Store previous order id explicitly
-                        }
-                      : p
-                  ));
-                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
-                  // After unassigning, if no profiles are assigned, flip status to NEEDS_UPDATE
-                  const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
-                  if (!stillAssigned) {
-                    await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
-                  }
-                }
-              } catch {}
-
-              // Reflect availability in inventory for replacement
-              const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
-              if (invRow) {
-                // For classic inventory: ensure it's not linked elsewhere
-                if (!invRow.is_account_based) {
-                  if (invRow.linked_order_id && invRow.linked_order_id !== resolvedOrderId) throw new Error('Kho này đang liên kết đơn khác');
-                }
-                if (!!invRow.is_account_based) {
-                  // If account-based, mark selected profile as assigned when provided
-                  if (replacementProfileId) {
-                    const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
-                    // Validate chosen profile is free
-                    const chosen = profiles.find((p: any) => p.id === replacementProfileId);
-                    if (!chosen || chosen.isAssigned) throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
-                    const nextProfiles = profiles.map((p: any) => (
-                      p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
-                    ));
-                    await sb.from('inventory').update({ profiles: nextProfiles, status: 'SOLD' }).eq('id', invRow.id);
-                  }
-                } else {
-                  // Classic item -> mark SOLD and link to order
-                  await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
-                }
-              }
-            }
-
-            // Update order to point to the replacement inventory + profile and refresh order_info
-            if (resolvedReplacementInventoryId && hasNewReplacement) {
-              try {
-                // DEBUG: Log order update operation
-                const sb2 = getSupabase();
-                if (sb2) await sb2.from('activity_logs').insert({ 
-                  employee_id: state.user?.id || 'system', 
-                  action: 'Warranty Order Update', 
-                  details: [`warrantyId=${warranty.id}`, `orderId=${resolvedOrderId}`, `newInventoryId=${resolvedReplacementInventoryId}`, `profileId=${replacementProfileId || 'none'}`].join('; ') 
-                });
-              } catch {}
-              
-              try {
-                await sb
-                  .from('orders')
-                  .update({
-                    inventory_item_id: resolvedReplacementInventoryId,
-                    inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
-                    order_info: (autoInfo ?? null)
-                  })
-                  .eq('id', resolvedOrderId);
-              } catch {}
-            }
-
-            // Auto-relink original inventory if warranty completed without replacement
-            // Only relink if there's no current replacement AND we're not just changing status
-            if (form.status === 'DONE' && !resolvedReplacementInventoryId && !warranty.replacementInventoryId) {
-              // DEBUG: Log auto-relink operation
-              try {
-                const sb2 = getSupabase();
-                if (sb2) await sb2.from('activity_logs').insert({ 
-                  employee_id: state.user?.id || 'system', 
-                  action: 'Warranty Auto-Relink', 
-                  details: [`warrantyId=${warranty.id}`, `orderId=${resolvedOrderId}`, 'auto-relinking-original-inventory'].join('; ') 
-                });
-              } catch {}
-              
-              try {
-                // For classic inventory: find items that were marked NEEDS_UPDATE for this order
-                // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
-                const { data: classicLinked } = await sb
-                  .from('inventory')
-                  .select('id, status, previous_linked_order_id')
-                  .eq('status', 'NEEDS_UPDATE')
-                  .eq('previous_linked_order_id', resolvedOrderId)
-                  .is('linked_order_id', null);
-                
-                // For classic items: set status back to SOLD and relink, clear previous_linked_order_id
-                const classicIds = (classicLinked || []).map((r: any) => r.id);
-                if (classicIds.length) {
-                  await sb
-                    .from('inventory')
-                    .update({ status: 'SOLD', linked_order_id: resolvedOrderId, previous_linked_order_id: null })
-                    .in('id', classicIds);
-                }
-                
-                // For account-based: find profiles with needsUpdate for this order and reassign
-                const { data: accountItems } = await sb
-                  .from('inventory')
-                  .select('*')
-                  .eq('is_account_based', true);
-                  
-                for (const it of (accountItems || [])) {
-                  const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-                  const hasNeedsUpdate = profiles.some((p: any) => p.needsUpdate);
-                  if (!hasNeedsUpdate) continue;
-                  
-                  const nextProfiles = profiles.map((p: any) => (
-                    p.needsUpdate
-                      ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString(), needsUpdate: false }
-                      : p
-                  ));
-                  
-                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
-                  
-                  // Update status to SOLD if all slots are now assigned
-                  const allAssigned = nextProfiles.every((p: any) => p.isAssigned);
-                  if (allAssigned) {
-                    await sb.from('inventory').update({ status: 'SOLD' }).eq('id', it.id);
-                  }
-                }
-              } catch (err) {
-                console.error('Error relinking inventory:', err);
-              }
-            }
-				try {
-					const sb2 = getSupabase();
-					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, ...changedEntries].join('; ') });
-				} catch {}
-				notify('Cập nhật đơn bảo hành thành công', 'success');
-			} else {
-
-        const { error: insertError } = await sb
-					.from('warranties')
-					.insert({
-						code: form.code,
-						order_id: resolvedOrderId,
-						reason: form.reason.trim(),
-						status: form.status,
-						replacement_inventory_id: resolvedReplacementInventoryId || null,
-						new_order_info: (form.newOrderInfo ?? autoInfo ?? null),
-						customer_id: denormCustomerId || null,
-						product_id: denormProductId || null,
-						package_id: denormPackageId || null
-					});
-				if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
-
-        // Only unlink previous inventory if we're actually replacing it
-        if (resolvedReplacementInventoryId) {
-          // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
+        if (form.status === 'FIXED') {
+          // FIXED: Re-link original inventory
           try {
-            const { data: classicLinked } = await sb
+            // Find and re-link classic inventory
+            const { data: classicItems } = await sb
               .from('inventory')
-              .select('id, linked_order_id')
-              .eq('linked_order_id', resolvedOrderId)
-              .neq('id', resolvedReplacementInventoryId);
-            const classicIds = (classicLinked || []).map((r: any) => r.id);
-            if (classicIds.length) {
-              // Store previous linked order before clearing
-              for (const item of (classicLinked || [])) {
-                await sb
-                  .from('inventory')
-                  .update({ 
-                    status: 'NEEDS_UPDATE', 
-                    previous_linked_order_id: item.linked_order_id,
-                    linked_order_id: null
-                  })
-                  .eq('id', item.id);
-              }
+              .select('id, status, previous_linked_order_id')
+              .eq('status', 'NEEDS_UPDATE')
+              .eq('previous_linked_order_id', resolvedOrderId)
+              .is('linked_order_id', null);
+            
+            if (classicItems && classicItems.length > 0) {
+              await sb
+                .from('inventory')
+                .update({ 
+                  status: 'SOLD', 
+                  linked_order_id: resolvedOrderId, 
+                  previous_linked_order_id: null 
+                })
+                .in('id', classicItems.map(item => item.id));
             }
+
+            // Find and re-link account-based inventory
             const { data: accountItems } = await sb
               .from('inventory')
               .select('*')
-              .eq('is_account_based', true)
-              .neq('id', resolvedReplacementInventoryId);
-            for (const it of (accountItems || [])) {
-              const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-              if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
-              const nextProfiles = profiles.map((p: any) => (
+              .eq('is_account_based', true);
+            
+            for (const item of (accountItems || [])) {
+              const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+              const needsUpdateProfiles = profiles.filter((p: any) => p.needsUpdate && p.previousOrderId === resolvedOrderId);
+              
+              if (needsUpdateProfiles.length > 0) {
+                const updatedProfiles = profiles.map((p: any) => 
+                  p.needsUpdate && p.previousOrderId === resolvedOrderId
+                    ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString(), needsUpdate: false, previousOrderId: null }
+                    : p
+                );
+                
+                await sb
+                  .from('inventory')
+                  .update({ profiles: updatedProfiles })
+                  .eq('id', item.id);
+                
+                // Update item status if all profiles are assigned
+                const allAssigned = updatedProfiles.every((p: any) => p.isAssigned);
+                if (allAssigned) {
+                  await sb
+                    .from('inventory')
+                    .update({ status: 'SOLD' })
+                    .eq('id', item.id);
+                }
+              }
+            }
+          } catch (err) {
+            console.error('Error re-linking original inventory:', err);
+          }
+        } else if (form.status === 'REPLACED') {
+          // REPLACED: Link replacement inventory
+          if (!form.replacementInventoryId) throw new Error('Phải chọn sản phẩm thay thế');
+
+          // Resolve replacement inventory ID
+          let resolvedReplacementId = form.replacementInventoryId;
+          if (!looksLikeUuid(form.replacementInventoryId)) {
+            const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
+            if (item?.code) {
+              const { data: invRow } = await sb
+                .from('inventory')
+                .select('id')
+                .eq('code', item.code)
+                .maybeSingle();
+              if (invRow?.id) resolvedReplacementId = invRow.id as string;
+            }
+          }
+
+          // Link replacement inventory
+          const { data: replacementItem } = await sb
+            .from('inventory')
+            .select('*')
+            .eq('id', resolvedReplacementId)
+            .maybeSingle();
+
+          if (replacementItem) {
+            if (replacementItem.is_account_based) {
+              if (!replacementProfileId) throw new Error('Phải chọn slot cho sản phẩm account-based');
+              
+              const profiles = Array.isArray(replacementItem.profiles) ? replacementItem.profiles : [];
+              const chosenProfile = profiles.find((p: any) => p.id === replacementProfileId);
+              if (!chosenProfile || chosenProfile.isAssigned) {
+                throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
+              }
+
+              const updatedProfiles = profiles.map((p: any) => 
+                p.id === replacementProfileId 
+                  ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() }
+                  : p
+              );
+
+              await sb
+                .from('inventory')
+                .update({ 
+                  profiles: updatedProfiles, 
+                  status: 'SOLD' 
+                })
+                .eq('id', resolvedReplacementId);
+            } else {
+              // Classic inventory
+              if (replacementItem.linked_order_id && replacementItem.linked_order_id !== resolvedOrderId) {
+                throw new Error('Kho này đang liên kết đơn khác');
+              }
+              await sb
+                .from('inventory')
+                .update({ 
+                  status: 'SOLD', 
+                  linked_order_id: resolvedOrderId 
+                })
+                .eq('id', resolvedReplacementId);
+            }
+          }
+
+          // Update order with replacement inventory
+          const autoInfo = (() => {
+            if (!replacementItem) return null;
+            if (replacementItem.is_account_based) {
+              const itemForOrder = { ...replacementItem, packageId: replacementItem.package_id } as InventoryItem;
+              return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId ? [replacementProfileId] : undefined);
+            }
+            return replacementItem.product_info || null;
+          })();
+
+          await sb
+            .from('orders')
+            .update({
+              inventory_item_id: resolvedReplacementId,
+              inventory_profile_ids: replacementProfileId ? [replacementProfileId] : null,
+              order_info: autoInfo
+            })
+            .eq('id', resolvedOrderId);
+        }
+
+        // Log activity
+        try {
+          await sb.from('activity_logs').insert({ 
+            employee_id: state.user?.id || 'system', 
+            action: 'Cập nhật đơn bảo hành', 
+            details: `warrantyId=${warranty.id}; warrantyCode=${warranty.code}; newStatus=${form.status}` 
+          });
+        } catch {}
+
+        notify('Cập nhật đơn bảo hành thành công', 'success');
+      } else {
+        // CREATE WARRANTY LOGIC
+        const { error: insertError } = await sb
+          .from('warranties')
+          .insert({
+            code: form.code,
+            order_id: resolvedOrderId,
+            reason: form.reason.trim(),
+            status: 'PENDING',
+            created_by: state.user?.id || 'system'
+          });
+        
+        if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
+
+        // Unlink original inventory from order
+        try {
+          // Unlink classic inventory
+          const { data: classicLinked } = await sb
+            .from('inventory')
+            .select('id, linked_order_id')
+            .eq('linked_order_id', resolvedOrderId);
+          
+          if (classicLinked && classicLinked.length > 0) {
+            for (const item of classicLinked) {
+              await sb
+                .from('inventory')
+                .update({ 
+                  status: 'NEEDS_UPDATE', 
+                  previous_linked_order_id: item.linked_order_id,
+                  linked_order_id: null
+                })
+                .eq('id', item.id);
+            }
+          }
+
+          // Unlink account-based inventory
+          const { data: accountItems } = await sb
+            .from('inventory')
+            .select('*')
+            .eq('is_account_based', true);
+          
+          for (const item of (accountItems || [])) {
+            const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+            const assignedProfiles = profiles.filter((p: any) => p.assignedOrderId === resolvedOrderId);
+            
+            if (assignedProfiles.length > 0) {
+              const updatedProfiles = profiles.map((p: any) => 
                 p.assignedOrderId === resolvedOrderId
                   ? { 
                       ...p, 
@@ -643,114 +531,47 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                       assignedAt: null, 
                       expiryAt: null, 
                       needsUpdate: true,
-                      previousOrderId: resolvedOrderId // Store previous order id explicitly
+                      previousOrderId: resolvedOrderId
                     }
                   : p
-              ));
-              await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
-              const stillAssigned = nextProfiles.some((p: any) => p.isAssigned);
-              if (!stillAssigned) {
-                await sb.from('inventory').update({ status: 'NEEDS_UPDATE' }).eq('id', it.id);
-              }
-            }
-          } catch {}
-
-          // Reflect inventory state for replacement
-          const { data: invRow } = await sb.from('inventory').select('*').eq('id', resolvedReplacementInventoryId).maybeSingle();
-          if (invRow) {
-            if (!!invRow.is_account_based) {
-              if (replacementProfileId) {
-                const profiles = Array.isArray(invRow.profiles) ? invRow.profiles : [];
-                // Validate chosen profile is free
-                const chosen = profiles.find((p: any) => p.id === replacementProfileId);
-                if (!chosen || chosen.isAssigned) throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
-                const nextProfiles = profiles.map((p: any) => (
-                  p.id === replacementProfileId ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() } : p
-                ));
-                await sb.from('inventory').update({ profiles: nextProfiles, status: 'SOLD' }).eq('id', invRow.id);
-              }
-            } else {
-              await sb.from('inventory').update({ status: 'SOLD', linked_order_id: resolvedOrderId }).eq('id', invRow.id);
-            }
-          }
-        }
-
-        // Update order to point to the replacement inventory + profile and refresh order_info
-        if (resolvedReplacementInventoryId) {
-          try {
-            await sb
-              .from('orders')
-              .update({
-                inventory_item_id: resolvedReplacementInventoryId,
-                inventory_profile_ids: (replacementProfileId ? [replacementProfileId] : null),
-                order_info: (autoInfo ?? null)
-              })
-              .eq('id', resolvedOrderId);
-          } catch {}
-        }
-
-        // Auto-relink original inventory if warranty completed without replacement
-        // Only relink if there's no current replacement
-        if (form.status === 'DONE' && !resolvedReplacementInventoryId) {
-          try {
-            // For classic inventory: find items that were marked NEEDS_UPDATE for this order
-            // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
-            const { data: classicLinked } = await sb
-              .from('inventory')
-              .select('id, status, previous_linked_order_id')
-              .eq('status', 'NEEDS_UPDATE')
-              .eq('previous_linked_order_id', resolvedOrderId)
-              .is('linked_order_id', null);
-            
-            // For classic items: set status back to SOLD and relink, clear previous_linked_order_id
-            const classicIds = (classicLinked || []).map((r: any) => r.id);
-            if (classicIds.length) {
+              );
+              
               await sb
                 .from('inventory')
-                .update({ status: 'SOLD', linked_order_id: resolvedOrderId, previous_linked_order_id: null })
-                .in('id', classicIds);
-            }
-            
-            // For account-based: find profiles with needsUpdate for this order and reassign
-            const { data: accountItems } = await sb
-              .from('inventory')
-              .select('*')
-              .eq('is_account_based', true);
+                .update({ profiles: updatedProfiles })
+                .eq('id', item.id);
               
-            for (const it of (accountItems || [])) {
-              const profiles = Array.isArray(it.profiles) ? it.profiles : [];
-              const hasNeedsUpdate = profiles.some((p: any) => p.needsUpdate);
-              if (!hasNeedsUpdate) continue;
-              
-              const nextProfiles = profiles.map((p: any) => (
-                p.needsUpdate
-                  ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString(), needsUpdate: false }
-                  : p
-              ));
-              
-              await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
-              
-              // Update status to SOLD if all slots are now assigned
-              const allAssigned = nextProfiles.every((p: any) => p.isAssigned);
-              if (allAssigned) {
-                await sb.from('inventory').update({ status: 'SOLD' }).eq('id', it.id);
+              // Update item status if no profiles are assigned
+              const stillAssigned = updatedProfiles.some((p: any) => p.isAssigned);
+              if (!stillAssigned) {
+                await sb
+                  .from('inventory')
+                  .update({ status: 'NEEDS_UPDATE' })
+                  .eq('id', item.id);
               }
             }
-          } catch (err) {
-            console.error('Error relinking inventory:', err);
           }
+        } catch (err) {
+          console.error('Error unlinking inventory:', err);
         }
-				try {
-					const sb2 = getSupabase();
-					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}; status=${form.status}` });
-				} catch {}
-				notify('Tạo đơn bảo hành thành công', 'success');
-			}
-		} catch (error) {
-			const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu bảo hành';
-			notify(errorMessage, 'error');
-			return;
-		}
+
+        // Log activity
+        try {
+          await sb.from('activity_logs').insert({ 
+            employee_id: state.user?.id || 'system', 
+            action: 'Tạo đơn bảo hành', 
+            details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}` 
+          });
+        } catch {}
+
+        notify('Tạo đơn bảo hành thành công', 'success');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu bảo hành';
+      notify(errorMessage, 'error');
+      return;
+    }
+    
     onSuccess();
     onClose();
   };
@@ -765,80 +586,123 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         <form onSubmit={handleSubmit}>
           <div className="mb-3">
             <label className="form-label">Mã bảo hành *</label>
-            <input className="form-control" value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="Tự tạo như BH001" readOnly disabled aria-disabled title={'Mã tự động tạo - không chỉnh sửa'} style={{ opacity: 0.6 } as React.CSSProperties} />
+            <input 
+              className="form-control" 
+              value={form.code} 
+              readOnly 
+              disabled 
+              style={{ opacity: 0.6, cursor: 'not-allowed' }} 
+            />
           </div>
           <div className="mb-3">
 			<label className="form-label">Ngày tạo</label>
-			<input className="form-control" value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} disabled />
+			<input 
+        className="form-control" 
+        value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} 
+        disabled 
+        style={{ opacity: 0.6, cursor: 'not-allowed' }}
+      />
           </div>
           <div className="mb-3">
             <label className="form-label">Chọn đơn hàng *</label>
-            <input
-              type="text"
-              className="form-control mb-2"
-              placeholder="Tìm theo mã/khách/sản phẩm/gói..."
-              value={orderSearch}
-              onChange={(e) => setOrderSearch(e.target.value)}
-            />
-            <select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
-              <option value="">-- Chọn đơn hàng --</option>
-              {filteredOrders.map(o => (
-                <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
-              ))}
-            </select>
+            {!warranty ? (
+              <>
+                <input
+                  type="text"
+                  className="form-control mb-2"
+                  placeholder="Tìm theo mã/khách/sản phẩm/gói..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                />
+                <select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
+                  <option value="">-- Chọn đơn hàng --</option>
+                  {filteredOrders.map(o => (
+                    <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <input 
+                className="form-control" 
+                value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)} 
+                disabled 
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
+              />
+            )}
           </div>
           <div className="mb-3">
             <label className="form-label">Lý do bảo hành *</label>
-            <textarea className="form-control" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} required />
+            {!warranty ? (
+              <textarea className="form-control" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} required />
+            ) : (
+              <textarea 
+                className="form-control" 
+                value={form.reason} 
+                disabled 
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
+              />
+            )}
           </div>
           <div className="mb-3">
             <label className="form-label">Trạng thái</label>
-            <select className="form-control" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
-              {WARRANTY_STATUSES.map(s => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+            {!warranty ? (
+              <input 
+                className="form-control" 
+                value="Chưa xong" 
+                disabled 
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
+              />
+            ) : (
+              <select className="form-control" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+                <option value="FIXED">Đã fix</option>
+                <option value="REPLACED">Đã đổi bảo hành</option>
+              </select>
+            )}
           </div>
-          <div className="mb-3">
-            <label className="form-label">Sản phẩm thay thế (tùy chọn)</label>
-            <input
-              type="text"
-              className="form-control mb-2"
-              placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
-              value={inventorySearch}
-              onChange={(e) => setInventorySearch(e.target.value)}
-            />
-            <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
-              <option value="">-- Chọn sản phẩm từ kho hàng --</option>
-              {filteredInventory.map(item => (
-                <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
-              ))}
-            </select>
-            <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
-            {!!form.replacementInventoryId && (() => {
-              const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
-              if (!item) return null;
-              if (item.isAccountBased) {
-  return (
-                  <div className="mt-2">
-                    <label className="form-label"><strong>Chọn slot thay thế</strong></label>
-                    <select
-                      className="form-control"
-                      value={replacementProfileId}
-                      onChange={(e) => setReplacementProfileId(e.target.value)}
-                    >
-                      <option value="">-- Chọn slot --</option>
-                      {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
-                        <option key={p.id} value={p.id}>{p.label}</option>
-                      ))}
-                    </select>
-                    <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-          </div>
+          
+          {/* Only show replacement inventory selection when editing and status is REPLACED */}
+          {warranty && form.status === 'REPLACED' && (
+            <div className="mb-3">
+              <label className="form-label">Sản phẩm thay thế *</label>
+              <input
+                type="text"
+                className="form-control mb-2"
+                placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
+                value={inventorySearch}
+                onChange={(e) => setInventorySearch(e.target.value)}
+              />
+              <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
+                <option value="">-- Chọn sản phẩm từ kho hàng --</option>
+                {filteredInventory.map(item => (
+                  <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
+                ))}
+              </select>
+              <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
+              {!!form.replacementInventoryId && (() => {
+                const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
+                if (!item) return null;
+                if (item.isAccountBased) {
+                  return (
+                    <div className="mt-2">
+                      <label className="form-label"><strong>Chọn slot thay thế</strong></label>
+                      <select
+                        className="form-control"
+                        value={replacementProfileId}
+                        onChange={(e) => setReplacementProfileId(e.target.value)}
+                      >
+                        <option value="">-- Chọn slot --</option>
+                        {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </select>
+                      <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          )}
           
           <div className="d-flex justify-content-end gap-2">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
@@ -1322,7 +1186,7 @@ const handleDelete = (id: string) => {
               <div className="warranty-card-row">
                 <div className="warranty-card-label">Trạng thái</div>
                 <div className="warranty-card-value">
-                  <span className={`status-badge ${w.status === 'DONE' ? 'status-completed' : 'status-processing'}`}>
+                  <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
                     {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
                   </span>
                 </div>
@@ -1397,7 +1261,7 @@ const handleDelete = (id: string) => {
                     <div className="line-clamp-3" title={w.reason} style={{ maxWidth: 420 }}>{w.reason}</div>
                   </td>
                   <td>
-                    <span className={`status-badge ${w.status === 'DONE' ? 'status-completed' : 'status-processing'}`}>
+                    <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
                       {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
                     </span>
                   </td>

@@ -280,7 +280,7 @@ export interface EmployeeFormData {
 }
 
 // Warranty types
-export type WarrantyStatus = 'PENDING' | 'DONE';
+export type WarrantyStatus = 'PENDING' | 'FIXED' | 'REPLACED';
 
 export interface Warranty {
   id: string;
@@ -365,7 +365,8 @@ export const ORDER_STATUSES: { value: OrderStatus; label: string }[] = [
 
 export const WARRANTY_STATUSES: { value: WarrantyStatus; label: string }[] = [
   { value: 'PENDING', label: 'Chưa xong' },
-  { value: 'DONE', label: 'Đã xong' }
+  { value: 'FIXED', label: 'Đã fix' },
+  { value: 'REPLACED', label: 'Đã đổi bảo hành' }
 ];
 
 export const PAYMENT_STATUSES: { value: PaymentStatus; label: string }[] = [
