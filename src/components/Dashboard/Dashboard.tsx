@@ -557,52 +557,38 @@ const Dashboard: React.FC = () => {
           <div className="overview-tab">
             <div className="stats-grid">
               <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'products' }))}>
-                <div className="stat-icon">
-                  <IconBox />
-                </div>
                 <div className="stat-content">
-                  <h3>{stats.totalProducts}</h3>
-                  <p>Tổng sản phẩm</p>
+                  <h3>Tổng sản phẩm</h3>
+                  <div className="sales-amount">{stats.totalProducts}</div>
                 </div>
               </button>
 
               <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' }))}>
-                <div className="stat-icon">
-                  <IconUsers />
-                </div>
                 <div className="stat-content">
-                  <h3>{stats.totalCustomers}</h3>
-                  <p>Tổng khách hàng (CTV {stats.ctvCount} / Lẻ {stats.retailCount})</p>
+                  <h3>Tổng khách hàng</h3>
+                  <div className="sales-amount">{stats.totalCustomers}</div>
+                  <div className="sales-subtitle">CTV {stats.ctvCount} / Lẻ {stats.retailCount}</div>
                 </div>
               </button>
 
               <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }))}>
-                <div className="stat-icon">
-                  <IconCart />
-                </div>
                 <div className="stat-content">
-                  <h3>{stats.totalOrders}</h3>
-                  <p>Tổng đơn hàng</p>
+                  <h3>Tổng đơn hàng</h3>
+                  <div className="sales-amount">{stats.totalOrders}</div>
                 </div>
               </button>
 
               <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'sales' }))}>
-                <div className="stat-icon">
-                  <IconDollarSign />
-                </div>
                 <div className="stat-content">
-                  <h3>{formatCurrency(stats.totalRevenue)}</h3>
-                  <p>Tổng doanh thu</p>
+                  <h3>Tổng doanh thu</h3>
+                  <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
                 </div>
               </button>
 
               <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'sales' }))}>
-                <div className="stat-icon">
-                  <IconProfit />
-                </div>
                 <div className="stat-content">
-                  <h3>{formatCurrency(stats.netProfit)}</h3>
-                  <p>Tổng lãi thực tế</p>
+                  <h3>Tổng lãi thực tế</h3>
+                  <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
                 </div>
               </button>
             </div>
