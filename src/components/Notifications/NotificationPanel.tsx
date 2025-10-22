@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { Notification } from '../../types';
 import { 
   IconBell, 
   IconAlertTriangle, 
@@ -18,14 +19,17 @@ import {
 const NotificationPanel: React.FC = () => {
   const { 
     notifications, 
+    archivedNotifications,
     unreadCount, 
     markAsRead, 
     markAllAsRead, 
     removeNotification,
+    archiveNotification,
     navigateToNotification
   } = useNotifications();
   
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -112,18 +116,28 @@ const NotificationPanel: React.FC = () => {
     }
   };
 
+  // Get current notifications based on active tab
+  const currentNotifications = useMemo(() => {
+    return activeTab === 'active' ? notifications : archivedNotifications;
+  }, [activeTab, notifications, archivedNotifications]);
+
   // Filter notifications
   const filteredNotifications = useMemo(() => {
-    return notifications.filter(notification => {
+    return currentNotifications.filter(notification => {
       if (filterType !== 'all' && notification.type !== filterType) return false;
       if (filterPriority !== 'all' && notification.priority !== filterPriority) return false;
       return true;
-    });
-  }, [notifications, filterType, filterPriority]);
+    }).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()); // Sort by time (earliest to latest)
+  }, [currentNotifications, filterType, filterPriority]);
 
-  // Group notifications by type
-  const groupedNotifications = useMemo(() => {
-    const groups: { [key: string]: typeof notifications } = {};
+  // Group notifications by type (only for active notifications)
+  const groupedNotifications = useMemo((): Array<[string, Notification[]]> => {
+    if (activeTab === 'archived') {
+      // For archived notifications, return as a single group
+      return [['archived', filteredNotifications]];
+    }
+
+    const groups: { [key: string]: Notification[] } = {};
     
     filteredNotifications.forEach(notification => {
       if (!groups[notification.type]) {
@@ -139,7 +153,7 @@ const NotificationPanel: React.FC = () => {
       if (aHigh !== bHigh) return bHigh - aHigh;
       return b.length - a.length;
     });
-  }, [filteredNotifications]);
+  }, [filteredNotifications, activeTab]);
 
   const toggleGroup = (type: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -166,7 +180,7 @@ const NotificationPanel: React.FC = () => {
             Thông báo
           </h3>
           <div className="flex items-center gap-2">
-            {unreadCount > 0 && (
+            {unreadCount > 0 && activeTab === 'active' && (
               <button
                 onClick={markAllAsRead}
                 className="notification-mark-all"
@@ -175,6 +189,22 @@ const NotificationPanel: React.FC = () => {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="notification-tabs">
+          <button
+            onClick={() => setActiveTab('active')}
+            className={`notification-tab ${activeTab === 'active' ? 'active' : ''}`}
+          >
+            Hoạt động ({notifications.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('archived')}
+            className={`notification-tab ${activeTab === 'archived' ? 'active' : ''}`}
+          >
+            Lưu trữ ({archivedNotifications.length})
+          </button>
         </div>
 
         {/* Filter Controls */}
@@ -225,28 +255,72 @@ const NotificationPanel: React.FC = () => {
                 
                 return (
                   <div key={type} className="notification-group">
-                    <div 
-                      className="notification-group-header"
-                      onClick={() => toggleGroup(type)}
-                    >
-                      <div className="flex items-center gap-2">
-                        {getNotificationIcon(type)}
-                        <span className="notification-group-title">
-                          {type === 'EXPIRY_WARNING' && 'Sắp hết hạn'}
-                          {type === 'NEW_ORDER' && 'Đơn hàng mới'}
-                          {type === 'PAYMENT_REMINDER' && 'Thanh toán'}
-                          {type === 'PROCESSING_DELAY' && 'Xử lý chậm'}
-                          {type === 'PROFILE_NEEDS_UPDATE' && 'Profile cần cập nhật'}
-                          {type === 'NEW_WARRANTY' && 'Bảo hành'}
-                        </span>
-                        <span className="notification-group-count">
-                          {unreadCount > 0 && `${unreadCount}/`}{totalCount}
-                        </span>
+                    {activeTab === 'archived' ? (
+                      // For archived tab, show all notifications without grouping
+                      <div className="notification-group-content">
+                        {groupNotifications.map((notification) => (
+                          <div
+                            key={notification.id}
+                            className={`notification-item ${getPriorityColor(notification.priority)} ${
+                              !notification.isRead ? 'unread' : ''
+                            }`}
+                          >
+                            <div className="notification-content">
+                              <div className="notification-icon">
+                                {getNotificationIcon(notification.type)}
+                              </div>
+                              <div className="notification-details">
+                                <div className="notification-item-header">
+                                  <p className="notification-item-title">
+                                    {notification.title}
+                                  </p>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="notification-item-time">
+                                      {formatTime(notification.createdAt)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <p className="notification-item-message">
+                                  {notification.message}
+                                </p>
+                                <div className="notification-actions">
+                                  <button
+                                    onClick={() => navigateToNotification(notification)}
+                                    className="notification-action-button"
+                                  >
+                                    {getActionButtonText(notification.type)}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="notification-group-toggle">
-                        {isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
-                      </div>
-                    </div>
+                    ) : (
+                      // For active tab, show grouped notifications
+                      <>
+                        <div 
+                          className="notification-group-header"
+                          onClick={() => toggleGroup(type)}
+                        >
+                          <div className="flex items-center gap-2">
+                            {getNotificationIcon(type)}
+                            <span className="notification-group-title">
+                              {type === 'EXPIRY_WARNING' && 'Sắp hết hạn'}
+                              {type === 'NEW_ORDER' && 'Đơn hàng mới'}
+                              {type === 'PAYMENT_REMINDER' && 'Thanh toán'}
+                              {type === 'PROCESSING_DELAY' && 'Xử lý chậm'}
+                              {type === 'PROFILE_NEEDS_UPDATE' && 'Profile cần cập nhật'}
+                              {type === 'NEW_WARRANTY' && 'Bảo hành'}
+                            </span>
+                            <span className="notification-group-count">
+                              {unreadCount > 0 && `${unreadCount}/`}{totalCount}
+                            </span>
+                          </div>
+                          <div className="notification-group-toggle">
+                            {isExpanded ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />}
+                          </div>
+                        </div>
                     
                     {isExpanded && (
                       <div className="notification-group-content">
@@ -271,7 +345,7 @@ const NotificationPanel: React.FC = () => {
                                       {formatTime(notification.createdAt)}
                                     </span>
                                     <button
-                                      onClick={() => removeNotification(notification.id)}
+                                      onClick={() => archiveNotification(notification.id)}
                                       className="notification-remove"
                                     >
                                       <IconX size={14} />
@@ -302,6 +376,8 @@ const NotificationPanel: React.FC = () => {
                           </div>
                         ))}
                       </div>
+                    )}
+                      </>
                     )}
                   </div>
                 );

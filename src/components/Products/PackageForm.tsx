@@ -106,83 +106,29 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         } catch {}
       })();
     } else {
-      // Always generate fresh code for new package (from Supabase)
-      (async () => {
-        try {
-          const sb = getSupabase();
-          if (!sb) return;
-          const { data } = await sb.from('packages').select('code').order('created_at', { ascending: false }).limit(2000);
-          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const nextCode = Database.generateNextCodeFromList(codes, 'PK', 3);
-          setFormData({
-            code: nextCode,
-            productId: '',
-            name: '',
-            warrantyPeriod: 0,
-            costPrice: 0,
-            ctvPrice: 0,
-            retailPrice: 0,
-            customFields: [],
-            isAccountBased: false,
-            accountColumns: [],
-            defaultSlots: 5
-          });
-          setPriceDisplay({
-            costPrice: '0',
-            ctvPrice: '0',
-            retailPrice: '0'
-          });
-        } catch {
-          // Fallback to local storage method
-          const nextCode = Database.generateNextPackageCode();
-          setFormData({
-            code: nextCode,
-            productId: '',
-            name: '',
-            warrantyPeriod: 0,
-            costPrice: 0,
-            ctvPrice: 0,
-            retailPrice: 0,
-            customFields: [],
-            isAccountBased: false,
-            accountColumns: [],
-            defaultSlots: 5
-          });
-          setPriceDisplay({
-            costPrice: '0',
-            ctvPrice: '0',
-            retailPrice: '0'
-          });
-        }
-      })();
+      // Code will be generated server-side
+      setFormData({
+        code: '',
+        productId: '',
+        name: '',
+        warrantyPeriod: 0,
+        costPrice: 0,
+        ctvPrice: 0,
+        retailPrice: 0,
+        customFields: [],
+        isAccountBased: false,
+        accountColumns: [],
+        defaultSlots: 5
+      });
+      setPriceDisplay({
+        costPrice: '0',
+        ctvPrice: '0',
+        retailPrice: '0'
+      });
     }
   }, [pkg]);
 
-  // Force refresh code when form opens for new package (after deletion)
-  useEffect(() => {
-    if (!pkg) {
-      (async () => {
-        try {
-          const sb = getSupabase();
-          if (!sb) return;
-          const { data } = await sb.from('packages').select('code').order('created_at', { ascending: false }).limit(2000);
-          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const nextCode = Database.generateNextCodeFromList(codes, 'PK', 3);
-          setFormData(prev => ({
-            ...prev,
-            code: nextCode
-          }));
-        } catch {
-          // Fallback to local storage method
-          const nextCode = Database.generateNextPackageCode();
-          setFormData(prev => ({
-            ...prev,
-            code: nextCode
-          }));
-        }
-      })();
-    }
-  }, []);
+  // No need to refresh code - server will generate it
 
   // When selecting product for a NEW package, auto-copy shared settings from the first package if product uses shared pool
   useEffect(() => {
@@ -259,13 +205,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     
     // Validation
     const newErrors: {[key: string]: string} = {};
-    const ensuredCode = (formData.code || '').trim() || Database.generateNextPackageCode();
-    if (!(formData.code || '').trim()) {
-      setFormData(prev => ({ ...prev, code: ensuredCode }));
-    }
-    if (!ensuredCode.trim()) {
-      newErrors.code = 'Mã gói sản phẩm là bắt buộc';
-    }
+    // Code will be generated server-side, no validation needed
     if (!formData.productId) {
       newErrors.productId = 'Vui lòng chọn sản phẩm';
     }
@@ -455,12 +395,12 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
         const productUuid = await resolveProductUuid(formData.productId);
         const normalizedForm = {
           ...formData,
-          code: ensuredCode,
+          code: formData.code || null, // Let server generate
           defaultSlots: formData.isAccountBased ? Math.max(1, (formData.defaultSlots ?? 5)) : undefined
         };
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        const { data: createdRows, error: insertError } = await sb
+        const { data: createdPackage, error: insertError } = await sb
           .from('packages')
           .insert({
             code: normalizedForm.code,
@@ -475,27 +415,26 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             account_columns: normalizedForm.accountColumns,
             default_slots: normalizedForm.defaultSlots
           })
-          .select('id')
-          .limit(1);
-        if (insertError) throw new Error(insertError.message || 'Không thể tạo gói sản phẩm');
-        const createdId: string | undefined = Array.isArray(createdRows) && createdRows.length > 0 ? (createdRows[0] as any).id : undefined;
+          .select('*')
+          .single();
+        if (insertError || !createdPackage) throw new Error(insertError?.message || 'Không thể tạo gói sản phẩm');
         
-        // Update local storage immediately to avoid code conflicts
+        // Update local storage with server-generated data
         const newPackage = {
-          id: createdId || (Date.now().toString(36) + Math.random().toString(36).substr(2)),
-          code: normalizedForm.code,
-          productId: productUuid,
-          name: normalizedForm.name,
-          warrantyPeriod: normalizedForm.warrantyPeriod,
-          costPrice: normalizedForm.costPrice,
-          ctvPrice: normalizedForm.ctvPrice,
-          retailPrice: normalizedForm.retailPrice,
-          customFields: normalizedForm.customFields,
-          isAccountBased: !!normalizedForm.isAccountBased,
-          accountColumns: normalizedForm.accountColumns,
-          defaultSlots: normalizedForm.defaultSlots,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          id: createdPackage.id,
+          code: createdPackage.code,
+          productId: createdPackage.product_id,
+          name: createdPackage.name,
+          warrantyPeriod: createdPackage.warranty_period,
+          costPrice: createdPackage.cost_price,
+          ctvPrice: createdPackage.ctv_price,
+          retailPrice: createdPackage.retail_price,
+          customFields: createdPackage.custom_fields || [],
+          isAccountBased: !!createdPackage.is_account_based,
+          accountColumns: createdPackage.account_columns || [],
+          defaultSlots: createdPackage.default_slots,
+          createdAt: new Date(createdPackage.created_at),
+          updatedAt: new Date(createdPackage.updated_at)
         };
         const currentPackages = Database.getPackages();
         Database.setPackages([...currentPackages, newPackage]);
@@ -514,7 +453,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             employee_id: state.user?.id || 'system',
             action: 'Tạo gói sản phẩm',
             details: [
-              `packageId=${createdId || newPackage.id}; packageCode=${normalizedForm.code}; packageName=${normalizedForm.name}`,
+              `packageId=${newPackage.id}; packageCode=${newPackage.code}; packageName=${newPackage.name}`,
               `productId=${productUuid}`,
               productName ? `productName=${productName}` : ''
             ].filter(Boolean).join('; ')
@@ -610,15 +549,18 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               type="text"
               name="code"
               className="form-control"
-              value={formData.code}
+              value={formData.code || 'Sẽ được tạo tự động...'}
               onChange={handleChange}
-              placeholder="Tự tạo như PK001"
+              placeholder="Sẽ được tạo tự động..."
               readOnly
               disabled
               aria-disabled
-              title={'Mã tự động tạo - không chỉnh sửa'}
+              title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
+            <div className="text-muted small mt-1">
+              Mã gói sản phẩm được tạo tự động bởi server và không thể chỉnh sửa.
+            </div>
           </div>
 
           <div className="form-group">

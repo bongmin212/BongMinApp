@@ -90,11 +90,7 @@ const OrderList: React.FC = () => {
     notify('Đã đánh dấu gửi tin nhắn gia hạn', 'success');
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  // Initialize filters from URL (no localStorage)
+  // Initialize filters from URL first (no localStorage)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -107,6 +103,9 @@ const OrderList: React.FC = () => {
       const notSent = params.get('onlyExpiringNotSent') === '1';
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || '10'), 10);
+      
+      console.log('OrderList: Reading URL params:', { status, payment, expiry, p, l });
+      
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
       setFilterStatus(status);
@@ -127,7 +126,36 @@ const OrderList: React.FC = () => {
           if (found) setViewingOrder(found);
         }, 300);
       }
-    } catch {}
+    } catch (e) {
+      console.error('OrderList: Error reading URL params:', e);
+    }
+  }, []);
+
+  // Re-read URL parameters after a short delay (for lazy loading)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const status = (params.get('status') || '') as OrderStatus | '';
+        const payment = (params.get('payment') || '') as PaymentStatus | '';
+        const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
+        const notSent = params.get('onlyExpiringNotSent') === '1';
+        const p = parseInt(params.get('page') || '1', 10);
+        
+        // Only update if values are different to avoid infinite loops
+        if (status !== filterStatus) setFilterStatus(status);
+        if (payment !== filterPayment) setFilterPayment(payment);
+        if (expiry !== expiryFilter) setExpiryFilter(expiry);
+        if (notSent !== onlyExpiringNotSent) setOnlyExpiringNotSent(notSent);
+        if (p !== page) setPage(p);
+      } catch {}
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   // Debounce search
@@ -242,6 +270,7 @@ const OrderList: React.FC = () => {
       debugLog('Raw customer from Supabase:', r);
       return {
         ...r,
+        sourceDetail: r.source_detail || '',
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
@@ -778,7 +807,15 @@ const OrderList: React.FC = () => {
     const nowTs = Date.now();
     const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
     const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
-    return orders.filter(order => {
+    
+    console.log('OrderList: Filtering orders with:', { 
+      filterStatus, 
+      filterPayment, 
+      totalOrders: orders.length,
+      searchTerm: debouncedSearchTerm 
+    });
+    
+    const filtered = orders.filter(order => {
       // Search
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
@@ -865,6 +902,15 @@ const OrderList: React.FC = () => {
 
       return true;
     });
+    
+    console.log('OrderList: Filtered results:', { 
+      totalOrders: orders.length, 
+      filteredCount: filtered.length,
+      filterStatus,
+      sampleOrders: filtered.slice(0, 3).map(o => ({ id: o.id, code: o.code, status: o.status }))
+    });
+    
+    return filtered;
   }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {

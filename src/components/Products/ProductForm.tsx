@@ -30,72 +30,24 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         sharedInventoryPool: !!product.sharedInventoryPool
       });
     } else {
-      // Always generate fresh code for new product (from Supabase)
-      (async () => {
-        try {
-          const sb = getSupabase();
-          if (!sb) return;
-          const { data } = await sb.from('products').select('code').order('created_at', { ascending: false }).limit(2000);
-          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const nextCode = Database.generateNextCodeFromList(codes, 'SP', 3);
-          setFormData({
-            code: nextCode,
-            name: '',
-            description: '',
-            sharedInventoryPool: false
-          });
-        } catch {
-          // Fallback to local storage method
-          const nextCode = Database.generateNextProductCode();
-          setFormData({
-            code: nextCode,
-            name: '',
-            description: '',
-            sharedInventoryPool: false
-          });
-        }
-      })();
+      // Code will be generated server-side
+      setFormData({
+        code: '',
+        name: '',
+        description: '',
+        sharedInventoryPool: false
+      });
     }
   }, [product]);
 
-  // Force refresh code when form opens for new product (after deletion)
-  useEffect(() => {
-    if (!product) {
-      (async () => {
-        try {
-          const sb = getSupabase();
-          if (!sb) return;
-          const { data } = await sb.from('products').select('code').order('created_at', { ascending: false }).limit(2000);
-          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const nextCode = Database.generateNextCodeFromList(codes, 'SP', 3);
-          setFormData(prev => ({
-            ...prev,
-            code: nextCode
-          }));
-        } catch {
-          // Fallback to local storage method
-          const nextCode = Database.generateNextProductCode();
-          setFormData(prev => ({
-            ...prev,
-            code: nextCode
-          }));
-        }
-      })();
-    }
-  }, []);
+  // No need to refresh code - server will generate it
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
     const newErrors: {[key: string]: string} = {};
-    const ensuredCode = (formData.code || '').trim() || Database.generateNextProductCode();
-    if (!(formData.code || '').trim()) {
-      setFormData(prev => ({ ...prev, code: ensuredCode }));
-    }
-    if (!ensuredCode.trim()) {
-      newErrors.code = 'Mã sản phẩm là bắt buộc';
-    }
+    // Code will be generated server-side, no validation needed
     if (!formData.name.trim()) {
       newErrors.name = 'Tên sản phẩm là bắt buộc';
     }
@@ -169,32 +121,34 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         // Create new product directly in Supabase
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        const { error: insertError } = await sb
+        const { data: createdProduct, error: insertError } = await sb
           .from('products')
           .insert({
-            code: ensuredCode,
+            code: null, // Let server generate
             name: formData.name,
             description: formData.description,
             shared_inventory_pool: !!formData.sharedInventoryPool
-          });
-        if (insertError) throw new Error(insertError.message || 'Không thể tạo sản phẩm');
+          })
+          .select('*')
+          .single();
+        if (insertError || !createdProduct) throw new Error(insertError?.message || 'Không thể tạo sản phẩm');
         
-        // Update local storage immediately to avoid code conflicts
+        // Update local storage with server-generated data
         const newProduct = {
-          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-          code: ensuredCode,
-          name: formData.name,
-          description: formData.description,
-          sharedInventoryPool: !!formData.sharedInventoryPool,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          id: createdProduct.id,
+          code: createdProduct.code,
+          name: createdProduct.name,
+          description: createdProduct.description,
+          sharedInventoryPool: !!createdProduct.shared_inventory_pool,
+          createdAt: new Date(createdProduct.created_at),
+          updatedAt: new Date(createdProduct.updated_at)
         };
         const currentProducts = Database.getProducts();
         Database.setProducts([...currentProducts, newProduct]);
         
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo sản phẩm', details: `productCode=${ensuredCode}; name=${formData.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo sản phẩm', details: `productCode=${createdProduct.code}; name=${formData.name}` });
         } catch {}
         notify('Thêm sản phẩm thành công', 'success');
         onSuccess();
@@ -251,15 +205,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
               type="text"
               name="code"
               className="form-control"
-              value={formData.code}
+              value={formData.code || 'Sẽ được tạo tự động...'}
               onChange={handleChange}
-              placeholder="Tự tạo như SP001"
+              placeholder="Sẽ được tạo tự động..."
               readOnly
               disabled
               aria-disabled
-              title={'Mã tự động tạo - không chỉnh sửa'}
+              title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
+            <div className="text-muted small mt-1">
+              Mã sản phẩm được tạo tự động bởi server và không thể chỉnh sửa.
+            </div>
           </div>
 
           <div className="form-group">

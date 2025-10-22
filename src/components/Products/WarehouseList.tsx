@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, InventoryPaymentStatus, INVENTORY_PAYMENT_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
 import WarehouseForm from './WarehouseForm';
@@ -18,8 +18,6 @@ const WarehouseList: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [filterProduct, setFilterProduct] = useState<string>('');
-  const [filterPackage, setFilterPackage] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -474,9 +472,106 @@ const WarehouseList: React.FC = () => {
     checkForStuckSlots();
   };
 
+  // Initialize from URL/localStorage first
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      
+      // Check if we have order-related params that shouldn't be in warehouse
+      const orderParams = ['payment', 'expiry', 'onlyExpiringNotSent'];
+      const hasOrderParams = Array.from(params.keys()).some(key => orderParams.includes(key));
+      
+      // Also check for order-specific status values
+      const orderStatusValues = ['PROCESSING', 'COMPLETED', 'CANCELLED'];
+      const hasOrderStatus = params.get('status') && orderStatusValues.includes(params.get('status')!);
+      
+      // TEMPORARILY DISABLED: Clear URL logic that was interfering with dashboard navigation
+      // if (hasOrderParams || hasOrderStatus) {
+      //   // Clear URL completely when coming from orders tab
+      //   window.history.replaceState(null, '', window.location.pathname);
+      //   // Reset all filters to default
+      //   setSearchTerm('');
+      //   setDebouncedSearchTerm('');
+      //   setFilterProduct('');
+      //   setFilterPackage('');
+      //   setFilterStatus('');
+      //   setFilterPaymentStatus('');
+      //   setDateFrom('');
+      //   setDateTo('');
+      //   setOnlyAccounts(false);
+      //   setOnlyFreeSlots(false);
+      //   setPage(1);
+      //   setLimit(parseInt(localStorage.getItem('warehouseList.limit') || '10', 10));
+      //   return;
+      // }
+      
+      // Normal warehouse params initialization
+      const q = params.get('q') || '';
+      const status = params.get('status') || '';
+      const paymentStatus = params.get('paymentStatus') || '';
+      const from = params.get('from') || '';
+      const to = params.get('to') || '';
+      const accounts = params.get('accounts') === '1';
+      const free = params.get('free') === '1';
+      const p = parseInt(params.get('page') || '1', 10);
+      const l = parseInt((params.get('limit') || localStorage.getItem('warehouseList.limit') || '10'), 10);
+      console.log('WarehouseList: Reading URL params:', { 
+        status, 
+        paymentStatus, 
+        page: p, 
+        limit: l,
+        accounts,
+        free 
+      });
+      
+      // Update all states in a batch to avoid timing issues
+      setSearchTerm(q);
+      setDebouncedSearchTerm(q);
+      setFilterStatus(status);
+      setFilterPaymentStatus(paymentStatus);
+      setDateFrom(from);
+      setDateTo(to);
+      setOnlyAccounts(accounts);
+      setOnlyFreeSlots(free);
+      setPage(!Number.isNaN(p) && p > 0 ? p : 1);
+      if (!Number.isNaN(l) && l > 0) setLimit(l);
+      
+      console.log('WarehouseList: Set filterStatus to:', status);
+    } catch (e) {
+      console.error('WarehouseList: Error reading URL params:', e);
+    }
+  }, []);
+
   useEffect(() => {
     refresh();
   }, []);
+
+  // Re-read URL parameters when data is loaded (for lazy loading)
+  useEffect(() => {
+    if (items.length > 0) {
+      console.log('WarehouseList: Data loaded, re-reading URL params');
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get('status') || '';
+        const paymentStatus = params.get('paymentStatus') || '';
+        
+        if (status && status !== filterStatus) {
+          console.log('WarehouseList: Re-setting filterStatus from', filterStatus, 'to', status);
+          setFilterStatus(status);
+        }
+        if (paymentStatus && paymentStatus !== filterPaymentStatus) {
+          setFilterPaymentStatus(paymentStatus);
+        }
+      } catch (e) {
+        console.error('WarehouseList: Error re-reading URL params:', e);
+      }
+    }
+  }, [items.length, filterStatus, filterPaymentStatus]);
+
+  // Debug filterStatus changes
+  useEffect(() => {
+    console.log('WarehouseList: filterStatus changed to:', filterStatus);
+  }, [filterStatus]);
 
   // Listen for view warehouse events from notifications
   useEffect(() => {
@@ -507,65 +602,6 @@ const WarehouseList: React.FC = () => {
     return () => { try { ch.unsubscribe(); } catch {} };
   }, []);
 
-  // Initialize from URL/localStorage
-  useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      
-      // Check if we have order-related params that shouldn't be in warehouse
-      const orderParams = ['payment', 'expiry', 'onlyExpiringNotSent'];
-      const hasOrderParams = Array.from(params.keys()).some(key => orderParams.includes(key));
-      
-      // Also check for order-specific status values
-      const orderStatusValues = ['PROCESSING', 'COMPLETED', 'CANCELLED'];
-      const hasOrderStatus = params.get('status') && orderStatusValues.includes(params.get('status')!);
-      
-      if (hasOrderParams || hasOrderStatus) {
-        // Clear URL completely when coming from orders tab
-        window.history.replaceState(null, '', window.location.pathname);
-        // Reset all filters to default
-        setSearchTerm('');
-        setDebouncedSearchTerm('');
-        setFilterProduct('');
-        setFilterPackage('');
-        setFilterStatus('');
-        setFilterPaymentStatus('');
-        setDateFrom('');
-        setDateTo('');
-        setOnlyAccounts(false);
-        setOnlyFreeSlots(false);
-        setPage(1);
-        setLimit(parseInt(localStorage.getItem('warehouseList.limit') || '10', 10));
-        return;
-      }
-      
-      // Normal warehouse params initialization
-      const q = params.get('q') || '';
-      const prod = params.get('product') || '';
-      const pkg = params.get('package') || '';
-      const status = params.get('status') || '';
-      const paymentStatus = params.get('paymentStatus') || '';
-      const from = params.get('from') || '';
-      const to = params.get('to') || '';
-      const accounts = params.get('accounts') === '1';
-      const free = params.get('free') === '1';
-      const p = parseInt(params.get('page') || '1', 10);
-      const l = parseInt((params.get('limit') || localStorage.getItem('warehouseList.limit') || '10'), 10);
-      setSearchTerm(q);
-      setDebouncedSearchTerm(q);
-      setFilterProduct(prod);
-      setFilterPackage(pkg);
-      setFilterStatus(status);
-      setFilterPaymentStatus(paymentStatus);
-      setDateFrom(from);
-      setDateTo(to);
-      setOnlyAccounts(accounts);
-      setOnlyFreeSlots(free);
-      setPage(!Number.isNaN(p) && p > 0 ? p : 1);
-      if (!Number.isNaN(l) && l > 0) setLimit(l);
-    } catch {}
-  }, []);
-
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
@@ -575,7 +611,7 @@ const WarehouseList: React.FC = () => {
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterProduct, filterPackage, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
 
   // Persist limit
   useEffect(() => {
@@ -587,8 +623,6 @@ const WarehouseList: React.FC = () => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (debouncedSearchTerm) params.set('q', debouncedSearchTerm); else params.delete('q');
-      if (filterProduct) params.set('product', filterProduct); else params.delete('product');
-      if (filterPackage) params.set('package', filterPackage); else params.delete('package');
       if (filterStatus) params.set('status', filterStatus); else params.delete('status');
       if (filterPaymentStatus) params.set('paymentStatus', filterPaymentStatus); else params.delete('paymentStatus');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
@@ -601,7 +635,7 @@ const WarehouseList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterProduct, filterPackage, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
   const packageMap = useMemo(() => new Map(packages.map(p => [p.id, p.name])), [packages]);
@@ -657,7 +691,15 @@ const WarehouseList: React.FC = () => {
 
   const filteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
-    return items.filter(i => {
+    
+    console.log('WarehouseList: Filtering items with:', { 
+      filterStatus, 
+      filterPaymentStatus, 
+      totalItems: items.length,
+      searchTerm: debouncedSearchTerm 
+    });
+    
+    const filtered = items.filter(i => {
       // Search in account data fields
       const accountDataMatches = !norm || (() => {
         if (!i.accountData || typeof i.accountData !== 'object') return false;
@@ -707,8 +749,6 @@ const WarehouseList: React.FC = () => {
         accountDataMatches ||
         linkedOrderMatches;
 
-      const matchesProduct = !filterProduct || i.productId === filterProduct;
-      const matchesPackage = !filterPackage || i.packageId === filterPackage;
       const matchesStatus = !filterStatus || (
         filterStatus === 'EXPIRING_SOON' 
           ? isExpiringSoon(i) 
@@ -727,9 +767,18 @@ const WarehouseList: React.FC = () => {
       const accountsOk = !onlyAccounts || isAcc;
       const freeOk = !onlyFreeSlots || hasFree;
 
-      return matchesSearch && matchesProduct && matchesPackage && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
+      return matchesSearch && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
     });
-  }, [items, filterProduct, filterPackage, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+    
+    console.log('WarehouseList: Filtered results:', { 
+      totalItems: items.length, 
+      filteredCount: filtered.length,
+      filterStatus,
+      sampleItems: filtered.slice(0, 3).map(i => ({ id: i.id, code: i.code, status: i.status }))
+    });
+    
+    return filtered;
+  }, [items, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -1134,8 +1183,6 @@ const WarehouseList: React.FC = () => {
   const resetFilters = () => {
     setSearchTerm('');
     setDebouncedSearchTerm('');
-    setFilterProduct('');
-    setFilterPackage('');
     setFilterStatus('');
     setFilterPaymentStatus('');
     setDateFrom('');
@@ -1154,8 +1201,6 @@ const WarehouseList: React.FC = () => {
             <button className="btn btn-light" onClick={() => {
               const filename = generateExportFilename('KhoHang', {
                 searchTerm: debouncedSearchTerm,
-                filterProduct: filterProduct ? products.find(p => p.id === filterProduct)?.name : '',
-                filterPackage: filterPackage ? packages.find(p => p.id === filterPackage)?.name : '',
                 filterStatus,
                 filterPaymentStatus,
                 dateFrom,
@@ -1168,8 +1213,6 @@ const WarehouseList: React.FC = () => {
             <button className="btn btn-light" onClick={() => {
               const filename = generateExportFilename('KhoHang', {
                 searchTerm: debouncedSearchTerm,
-                filterProduct: filterProduct ? products.find(p => p.id === filterProduct)?.name : '',
-                filterPackage: filterPackage ? packages.find(p => p.id === filterPackage)?.name : '',
                 filterStatus,
                 filterPaymentStatus,
                 dateFrom,
@@ -1208,20 +1251,6 @@ const WarehouseList: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-          </div>
-          <div>
-            <select className="form-control" value={filterProduct} onChange={(e) => { setFilterProduct(e.target.value); setFilterPackage(''); }}>
-              <option value="">Lọc theo sản phẩm</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <select className="form-control" value={filterPackage} onChange={(e) => setFilterPackage(e.target.value)} disabled={!filterProduct}>
-              <option value="">Lọc theo gói</option>
-              {packages.filter(pk => !filterProduct || pk.productId === filterProduct).map(pk => (
-                <option key={pk.id} value={pk.id}>{pk.name}</option>
-              ))}
-            </select>
           </div>
           <div>
             <select className="form-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>

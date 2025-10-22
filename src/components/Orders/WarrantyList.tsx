@@ -67,6 +67,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         })));
         setCustomers((cRes.data || []).map((r: any) => ({
           ...r,
+          sourceDetail: r.source_detail || '',
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
         })) as any);
@@ -814,6 +815,7 @@ const WarrantyList: React.FC = () => {
     ]);
     const allCustomers = (cRes.data || []).map((r: any) => ({
       ...r,
+      sourceDetail: r.source_detail || '',
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Customer[];
@@ -1137,41 +1139,43 @@ const handleDelete = (id: string) => {
 
 	return (
     <div className="card">
-      <div className="card-header d-flex justify-content-between align-items-center">
-        <h2 className="card-title">Đơn bảo hành</h2>
-        <div className="d-flex gap-2">
-          <button className="btn btn-light" onClick={() => {
-            const filename = generateExportFilename('BaoHanh', {
-              debouncedSearchTerm,
-              searchStatus,
-              dateFrom,
-              dateTo
-            }, 'TrangHienTai');
-            exportWarrantiesXlsx(pageItems, filename);
-          }}>Xuất Excel (trang hiện tại)</button>
-          <button className="btn btn-light" onClick={() => {
-            const filename = generateExportFilename('BaoHanh', {
-              debouncedSearchTerm,
-              searchStatus,
-              dateFrom,
-              dateTo
-            }, 'KetQuaLoc');
-            exportWarrantiesXlsx(filteredWarranties, filename);
-          }}>Xuất Excel (kết quả đã lọc)</button>
-          {selectedIds.length > 0 && (
-            <>
-              <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
-              <div className="dropdown">
-                <button className="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown">Trạng thái</button>
-                <div className="dropdown-menu show" style={{ position: 'absolute' }}>
-                  {WARRANTY_STATUSES.map(s => (
-                    <button key={s.value} className="dropdown-item" onClick={() => bulkSetStatus(s.value)}>{s.label}</button>
-                  ))}
+      <div className="card-header">
+        <div className="d-flex justify-content-between align-items-center">
+          <h2 className="card-title">Đơn bảo hành</h2>
+          <div className="d-flex gap-2">
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('BaoHanh', {
+                debouncedSearchTerm,
+                searchStatus,
+                dateFrom,
+                dateTo
+              }, 'TrangHienTai');
+              exportWarrantiesXlsx(pageItems, filename);
+            }}>Xuất Excel (trang hiện tại)</button>
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('BaoHanh', {
+                debouncedSearchTerm,
+                searchStatus,
+                dateFrom,
+                dateTo
+              }, 'KetQuaLoc');
+              exportWarrantiesXlsx(filteredWarranties, filename);
+            }}>Xuất Excel (kết quả đã lọc)</button>
+            {selectedIds.length > 0 && (
+              <>
+                <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+                <div className="dropdown">
+                  <button className="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown">Trạng thái</button>
+                  <div className="dropdown-menu show" style={{ position: 'absolute' }}>
+                    {WARRANTY_STATUSES.map(s => (
+                      <button key={s.value} className="dropdown-item" onClick={() => bulkSetStatus(s.value)}>{s.label}</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
-          <button className="btn btn-primary" onClick={() => setShowForm(true)}>Tạo đơn bảo hành</button>
+              </>
+            )}
+            <button className="btn btn-primary" onClick={() => setShowForm(true)}>Tạo đơn bảo hành</button>
+          </div>
         </div>
       </div>
       

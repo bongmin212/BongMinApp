@@ -16,7 +16,6 @@ const PackageList: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingPackage, setEditingPackage] = useState<ProductPackage | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -293,8 +292,7 @@ const PackageList: React.FC = () => {
     const matchesSearch = pkg.name.toLowerCase().includes(normalizedSearch) ||
                          (pkg.code || '').toLowerCase().includes(normalizedSearch) ||
                          productName.includes(normalizedSearch);
-    const matchesProduct = !selectedProduct || pkg.productId === selectedProduct;
-    return matchesSearch && matchesProduct;
+    return matchesSearch;
   });
 
   const total = filteredPackages.length;
@@ -326,11 +324,11 @@ const PackageList: React.FC = () => {
               <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
             )}
             <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('GoiSanPham', { searchTerm, selectedProduct: selectedProduct ? products.find(p => p.id === selectedProduct)?.name : '' }, 'TrangHienTai');
+              const filename = generateExportFilename('GoiSanPham', { searchTerm }, 'TrangHienTai');
               exportPackagesXlsx(pageItems, filename);
             }}>Xuất Excel (trang hiện tại)</button>
             <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('GoiSanPham', { searchTerm, selectedProduct: selectedProduct ? products.find(p => p.id === selectedProduct)?.name : '' }, 'KetQuaLoc');
+              const filename = generateExportFilename('GoiSanPham', { searchTerm }, 'KetQuaLoc');
               exportPackagesXlsx(filteredPackages, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
             <button
@@ -353,20 +351,6 @@ const PackageList: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-          </div>
-          <div>
-            <select
-              className="form-control"
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
-            >
-              <option value="">Tất cả sản phẩm</option>
-              {products.map(product => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       </div>

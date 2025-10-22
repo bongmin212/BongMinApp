@@ -106,7 +106,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       
       setFormData({
         code: order.code,
-        purchaseDate: new Date(order.purchaseDate),
+        purchaseDate: order.purchaseDate instanceof Date ? order.purchaseDate : new Date(order.purchaseDate),
         packageId: order.packageId,
         customerId: order.customerId,
         status: order.status,
@@ -126,69 +126,32 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setSelectedProfileIds([(order as any).inventoryProfileId]);
       }
     } else {
-      // Prefill auto code for new order (from Supabase)
-      (async () => {
-        try {
-          const sb = getSupabase();
-          if (!sb) return;
-          const { data } = await sb.from('orders').select('code').order('created_at', { ascending: false }).limit(2000);
-          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const nextCode = Database.generateNextCodeFromList(codes, 'DH', 4);
-          setFormData(prev => ({ ...prev, code: nextCode }));
-        } catch {}
-      })();
+      // Code will be generated server-side, no need to prefill
+      setFormData(prev => ({ ...prev, code: '' }));
     }
   }, [order]);
 
-  // Force refresh code when form opens for new order
+  // Initialize form for new order
   useEffect(() => {
     if (!order) {
-      (async () => {
-        try {
-          const sb = getSupabase();
-          if (!sb) return;
-          const { data } = await sb.from('orders').select('code').order('created_at', { ascending: false }).limit(2000);
-          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
-          const nextCode = Database.generateNextCodeFromList(codes, 'DH', 4);
-          setFormData(prev => ({
-            ...prev,
-            code: nextCode,
-            purchaseDate: new Date(),
-            packageId: '',
-            customerId: '',
-            status: 'PROCESSING',
-            paymentStatus: 'UNPAID',
-            orderInfo: '',
-            notes: '',
-            useCustomPrice: false,
-            customPrice: 0,
-            customFieldValues: {},
-            inventoryProfileId: '',
-            useCustomExpiry: false,
-            customExpiryDate: undefined
-          }));
-        } catch {
-          // Fallback to local storage method
-          const nextCode = Database.generateNextOrderCode('DH', 4);
-          setFormData(prev => ({
-            ...prev,
-            code: nextCode,
-            purchaseDate: new Date(),
-            packageId: '',
-            customerId: '',
-            status: 'PROCESSING',
-            paymentStatus: 'UNPAID',
-            orderInfo: '',
-            notes: '',
-            useCustomPrice: false,
-            customPrice: 0,
-            customFieldValues: {},
-            inventoryProfileId: '',
-            useCustomExpiry: false,
-            customExpiryDate: undefined
-          }));
-        }
-      })();
+      const today = new Date();
+      setFormData(prev => ({
+        ...prev,
+        code: '', // Will be generated server-side
+        purchaseDate: today,
+        packageId: '',
+        customerId: '',
+        status: 'PROCESSING',
+        paymentStatus: 'UNPAID',
+        orderInfo: '',
+        notes: '',
+        useCustomPrice: false,
+        customPrice: 0,
+        customFieldValues: {},
+        inventoryProfileId: '',
+        useCustomExpiry: false,
+        customExpiryDate: undefined
+      }));
     }
   }, []);
 
@@ -202,6 +165,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     ]);
     const allCustomers = (customersRes.data || []).map((r: any) => ({
       ...r,
+      sourceDetail: r.source_detail || '',
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Customer[];
@@ -467,18 +431,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Ensure code exists even if effect hasn't populated yet
-    const ensuredCode = (formData.code || '').trim() || Database.generateNextOrderCode('DH', 4);
-    if (!(formData.code || '').trim()) {
-      setFormData(prev => ({ ...prev, code: ensuredCode }));
-    }
+    // Code will be generated server-side if empty
+    const code = (formData.code || '').trim();
 
     // Validation
     const newErrors: {[key: string]: string} = {};
-    // Inventory selection optional: allow creating orders without linking inventory
-    if (!ensuredCode.trim()) {
-      newErrors.code = 'Mã đơn hàng là bắt buộc';
-    }
+    // Code will be generated server-side, no validation needed
     if (!formData.packageId) {
       newErrors.packageId = 'Vui lòng chọn gói sản phẩm';
     }
@@ -591,7 +549,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
       const orderData = {
         ...formData,
-        code: ensuredCode,
+        code: code, // Will be generated server-side if empty
         expiryDate,
         createdBy: state.user?.id || '',
         inventoryItemId: selectedInventoryId || undefined,
@@ -743,85 +701,44 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               currentOrders[orderIndex] = updatedOrder;
               Database.setOrders(currentOrders);
             }
-            // Update inventory link/profile if changed
+            // Handle inventory changes using atomic functions
             const prevInventoryId = order.inventoryItemId;
             const nextInventoryId = selectedInventoryId || undefined;
 
-            // Release previous links in Supabase
-            try {
-              // Release classic link
-              const { data: linkedItems } = await sb
-                .from('inventory')
-                .select('*')
-                .eq('linked_order_id', order.id);
-              if (linkedItems && linkedItems.length) {
-                const ids = linkedItems.map((it: any) => it.id);
-                await sb.from('inventory').update({ status: 'AVAILABLE', linked_order_id: null }).in('id', ids);
-              }
-              // Release account-based profiles on the previous inventory item if any
-              if (order.inventoryItemId) {
-                const { data: prevInv } = await sb.from('inventory').select('*').eq('id', order.inventoryItemId).single();
-                if (prevInv && prevInv.is_account_based) {
-                  const profiles = Array.isArray(prevInv.profiles) ? prevInv.profiles : [];
-                  const nextProfiles = profiles.map((p: any) => p.assignedOrderId === order.id ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p);
-                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', order.inventoryItemId);
+            // Release previous inventory if changed
+            if (prevInventoryId && prevInventoryId !== nextInventoryId) {
+              try {
+                const { data: success, error: releaseError } = await sb.rpc('release_inventory_from_order', {
+                  p_order_id: order.id,
+                  p_inventory_id: prevInventoryId
+                });
+                
+                if (releaseError) {
+                  console.error('Error releasing inventory:', releaseError);
                 }
+              } catch (error) {
+                console.error('Error releasing previous inventory:', error);
               }
-            } catch {}
+            }
 
-            if (nextInventoryId) {
-              debugLog('=== INVENTORY UPDATE DEBUG ===');
-              debugLog('nextInventoryId:', nextInventoryId);
-              debugLog('selectedProfileIds:', selectedProfileIds);
-              
-              const { data: inv } = await sb.from('inventory').select('*').eq('id', nextInventoryId).single();
-              debugLog('Found inventory item:', inv);
-              
-              if (inv && inv.is_account_based) {
-                if (selectedProfileIds.length === 0) {
-                  notify('Vui lòng chọn slot để cấp', 'warning');
-                } else {
-                  let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
-                  debugLog('Current profiles:', profiles);
-                  
-                  // If profiles array is empty, generate default profiles
-                  if (profiles.length === 0 && inv.total_slots && inv.total_slots > 0) {
-                    debugLog('Generating default profiles for inventory item');
-                    profiles = Array.from({ length: inv.total_slots }, (_, idx) => ({
-                      id: `slot-${idx + 1}`,
-                      label: `Slot ${idx + 1}`,
-                      isAssigned: false
-                    }));
-                  }
-                  
-                  const nextProfiles = profiles.map((p: any) => 
-                    selectedProfileIds.includes(p.id)
-                      ? { ...p, isAssigned: true, assignedOrderId: order.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
-                      : p);
-                  debugLog('Updated profiles:', nextProfiles);
-                  
-                  // After updating profiles, check if all slots are occupied
-                  const allOccupied = nextProfiles.every((p: any) => p.isAssigned || p.needsUpdate);
-                  const newStatus = allOccupied ? 'SOLD' : 'AVAILABLE';
-                  
-                  const { error: updateError } = await sb.from('inventory').update({ 
-                    profiles: nextProfiles, 
-                    status: newStatus 
-                  }).eq('id', nextInventoryId);
-                  if (updateError) {
-                    console.error('Error updating inventory profiles:', updateError);
-                  } else {
-                    debugLog('Successfully updated inventory profiles and status');
-                  }
+            // Assign new inventory if selected
+            if (nextInventoryId && nextInventoryId !== prevInventoryId) {
+              try {
+                const { data: success, error: assignError } = await sb.rpc('assign_inventory_to_order', {
+                  p_order_id: order.id,
+                  p_inventory_id: nextInventoryId,
+                  p_profile_ids: selectedProfileIds.length > 0 ? selectedProfileIds : null
+                });
+                
+                if (assignError) {
+                  console.error('Error assigning inventory:', assignError);
+                  notify('Lỗi liên kết kho hàng: ' + assignError.message, 'warning');
+                } else if (!success) {
+                  notify('Kho hàng đã được sử dụng bởi người khác', 'warning');
                 }
-              } else {
-                debugLog('Updating classic inventory link');
-                const { error: updateError } = await sb.from('inventory').update({ status: 'SOLD', linked_order_id: order.id }).eq('id', nextInventoryId);
-                if (updateError) {
-                  console.error('Error updating inventory link:', updateError);
-                } else {
-                  debugLog('Successfully updated inventory link');
-                }
+              } catch (error) {
+                console.error('Error in atomic inventory assignment:', error);
+                notify('Lỗi liên kết kho hàng', 'warning');
               }
             }
             const base = [`orderId=${order.id}; orderCode=${order.code}`];
@@ -841,18 +758,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         // Create new order via Supabase
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        // Debug logging
-        debugLog('=== ORDER CREATION DEBUG ===');
-        debugLog('packageId:', orderData.packageId, 'Type:', typeof orderData.packageId);
-        debugLog('customerId:', orderData.customerId, 'Type:', typeof orderData.customerId);
-        debugLog('inventoryItemId:', orderData.inventoryItemId, 'Type:', typeof orderData.inventoryItemId);
-        debugLog('inventoryProfileId:', orderData.inventoryProfileId, 'Type:', typeof orderData.inventoryProfileId);
-        debugLog('selectedInventoryId:', selectedInventoryId, 'Type:', typeof selectedInventoryId);
-        debugLog('selectedProfileIds:', selectedProfileIds, 'Type:', typeof selectedProfileIds);
-        debugLog('inventory_profile_id being sent:', orderData.inventoryProfileId);
         
         const insertData = {
-          code: orderData.code,
+          code: orderData.code || null, // Let server generate if empty
           purchase_date: orderData.purchaseDate instanceof Date ? orderData.purchaseDate.toISOString() : orderData.purchaseDate,
           package_id: orderData.packageId,
           customer_id: orderData.customerId,
@@ -869,7 +777,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           sale_price: (orderData as any).salePrice || null,
           created_by: state.user?.id || 'system'
         };
-        debugLog('Insert data:', insertData);
         
         const { data: createData, error: createErr } = await sb
           .from('orders')
@@ -878,7 +785,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           .single();
         if (createErr || !createData) {
           console.error('Supabase create error:', createErr);
-          console.error('Error details:', JSON.stringify(createErr, null, 2));
           throw new Error(createErr?.message || 'Tạo đơn thất bại');
         }
         
@@ -907,70 +813,31 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           updatedAt: createData.updated_at ? new Date(createData.updated_at) : new Date()
         };
         
-        // Update local storage immediately to avoid code conflicts
+        // Update local storage immediately
         const currentOrders = Database.getOrders();
         Database.setOrders([...currentOrders, created]);
+        
+        // Use atomic inventory assignment if inventory is selected
         if (selectedInventoryId) {
           try {
             const sb2 = getSupabase();
             if (sb2) {
-              debugLog('=== CREATE ORDER INVENTORY UPDATE DEBUG ===');
-              debugLog('selectedInventoryId:', selectedInventoryId);
-              debugLog('selectedProfileIds:', selectedProfileIds);
-              debugLog('created order id:', created.id);
+              const { data: success, error: assignError } = await sb2.rpc('assign_inventory_to_order', {
+                p_order_id: created.id,
+                p_inventory_id: selectedInventoryId,
+                p_profile_ids: selectedProfileIds.length > 0 ? selectedProfileIds : null
+              });
               
-              const { data: inv } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
-              debugLog('Found inventory item:', inv);
-              
-              if (inv && inv.is_account_based) {
-                if (selectedProfileIds.length === 0) {
-                  notify('Vui lòng chọn profile để cấp', 'warning');
-                } else {
-                  let profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
-                  debugLog('Current profiles:', profiles);
-                  
-                  // If profiles array is empty, generate default profiles
-                  if (profiles.length === 0 && inv.total_slots && inv.total_slots > 0) {
-                    debugLog('Generating default profiles for inventory item');
-                    profiles = Array.from({ length: inv.total_slots }, (_, idx) => ({
-                      id: `slot-${idx + 1}`,
-                      label: `Slot ${idx + 1}`,
-                      isAssigned: false
-                    }));
-                  }
-                  
-                  const nextProfiles = profiles.map((p: any) => 
-                    selectedProfileIds.includes(p.id)
-                      ? { ...p, isAssigned: true, assignedOrderId: created.id, assignedAt: new Date().toISOString(), expiryAt: new Date(orderData.expiryDate).toISOString() }
-                      : p);
-                  debugLog('Updated profiles:', nextProfiles);
-                  
-                  // After updating profiles, check if all slots are occupied
-                  const allOccupied = nextProfiles.every((p: any) => p.isAssigned || p.needsUpdate);
-                  const newStatus = allOccupied ? 'SOLD' : 'AVAILABLE';
-                  
-                  const { error: updateError } = await sb2.from('inventory').update({ 
-                    profiles: nextProfiles, 
-                    status: newStatus 
-                  }).eq('id', selectedInventoryId);
-                  if (updateError) {
-                    console.error('Error updating inventory profiles:', updateError);
-                  } else {
-                    debugLog('Successfully updated inventory profiles and status');
-                  }
-                }
-              } else {
-                debugLog('Updating classic inventory link');
-                const { error: updateError } = await sb2.from('inventory').update({ status: 'SOLD', linked_order_id: created.id }).eq('id', selectedInventoryId);
-                if (updateError) {
-                  console.error('Error updating inventory link:', updateError);
-                } else {
-                  debugLog('Successfully updated inventory link');
-                }
+              if (assignError) {
+                console.error('Error assigning inventory:', assignError);
+                notify('Lỗi liên kết kho hàng: ' + assignError.message, 'warning');
+              } else if (!success) {
+                notify('Kho hàng đã được sử dụng bởi người khác', 'warning');
               }
             }
           } catch (error) {
-            console.error('Error in inventory update:', error);
+            console.error('Error in atomic inventory assignment:', error);
+            notify('Lỗi liên kết kho hàng', 'warning');
           }
         }
         try {
@@ -1017,8 +884,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       return;
     }
 
-    // Auto-generate customer code
-    const nextCode = Database.generateNextCustomerCode();
+    // Code will be generated server-side
     
     try {
       const sb = getSupabase();
@@ -1027,7 +893,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const { data: createdCustomer, error: insertError } = await sb
         .from('customers')
         .insert({
-          code: nextCode,
+          code: null, // Let server generate
           name: newCustomerData.name,
           type: newCustomerData.type,
           phone: newCustomerData.phone,
@@ -1076,14 +942,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         notes: ''
       });
       
-      try {
-        const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({ 
-          employee_id: state.user?.id || 'system', 
-          action: 'Tạo khách hàng', 
-          details: `customerCode=${nextCode}; name=${newCustomerData.name}` 
-        });
-      } catch {}
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ 
+            employee_id: state.user?.id || 'system', 
+            action: 'Tạo khách hàng', 
+            details: `customerCode=${createdCustomer.code}; name=${newCustomerData.name}` 
+          });
+        } catch {}
       
       notify('Tạo khách hàng mới thành công', 'success');
     } catch (error) {
@@ -1171,18 +1037,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               type="text"
               name="code"
               className="form-control"
-              value={formData.code}
+              value={formData.code || 'Sẽ được tạo tự động...'}
               onChange={handleChange}
-              placeholder="Tự tạo như DH0001"
+              placeholder="Sẽ được tạo tự động..."
               readOnly
               disabled
               aria-disabled
-              title={'Mã tự động tạo - không chỉnh sửa'}
+              title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
-            {!order && (
-              <div className="text-muted small mt-1">Mã đơn hàng được tạo tự động và không thể chỉnh sửa.</div>
-            )}
+            <div className="text-muted small mt-1">
+              Mã đơn hàng được tạo tự động bởi server và không thể chỉnh sửa.
+            </div>
           </div>
 
           <div className="form-group">
@@ -1193,7 +1059,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               type="date"
               name="purchaseDate"
               className="form-control"
-              value={formData.purchaseDate instanceof Date && !isNaN(formData.purchaseDate.getTime()) ? formData.purchaseDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
+              value={(() => {
+                const date = formData.purchaseDate instanceof Date ? formData.purchaseDate : new Date(formData.purchaseDate);
+                if (isNaN(date.getTime())) {
+                  return new Date().toISOString().split('T')[0];
+                }
+                // Ensure we get the local date without timezone conversion
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+              })()}
               onChange={(e) => setFormData(prev => ({
                 ...prev,
                 purchaseDate: new Date(e.target.value)
@@ -1604,12 +1480,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   const newShowState = !showNewCustomerForm;
                   setShowNewCustomerForm(newShowState);
                   if (newShowState) {
-                    // Auto-generate customer code when opening form
-                    const nextCode = Database.generateNextCustomerCode();
-                    setNewCustomerData(prev => ({
-                      ...prev,
-                      code: nextCode
-                    }));
+                  // Code will be generated server-side
+                  setNewCustomerData(prev => ({
+                    ...prev,
+                    code: ''
+                  }));
                   }
                 }}
                 className="btn btn-secondary"
@@ -1647,11 +1522,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   <input
                     type="text"
                     className="form-control"
-                    value={newCustomerData.code}
+                    value={newCustomerData.code || 'Sẽ được tạo tự động...'}
                     readOnly
                     disabled
                     aria-disabled
-                    title={'Mã tự động tạo - không chỉnh sửa'}
+                    title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
                     style={{ opacity: 0.6 } as React.CSSProperties}
                   />
                 </div>
@@ -1931,38 +1806,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   setConfirmState({
                     message: msg,
                     onConfirm: async () => {
-                      // Release links in Supabase to ensure slot counts drop server-side
+                      // Release inventory using atomic function
                       try {
                         const sb = getSupabase();
                         if (sb) {
-                          // Classic link: clear linked_order_id and set AVAILABLE
-                          const { data: classicLinked } = await sb
-                            .from('inventory')
-                            .select('id')
-                            .eq('linked_order_id', order.id);
-                          const classicIds = (classicLinked || []).map((r: any) => r.id);
-                          if (classicIds.length) {
-                            await sb
-                              .from('inventory')
-                              .update({ status: 'AVAILABLE', linked_order_id: null })
-                              .in('id', classicIds);
-                          }
-                          // Account-based: clear any profiles assigned to this order
-                          const { data: accountItems } = await sb
-                            .from('inventory')
-                            .select('*')
-                            .eq('is_account_based', true);
-                          const toUpdate = (accountItems || []).filter((it: any) => Array.isArray(it.profiles) && it.profiles.some((p: any) => p.assignedOrderId === order.id));
-                          for (const it of toUpdate) {
-                            const nextProfiles = (Array.isArray(it.profiles) ? it.profiles : []).map((p: any) => (
-                              p.assignedOrderId === order.id
-                                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
-                                : p
-                            ));
-                            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+                          const { data: success, error: releaseError } = await sb.rpc('release_inventory_from_order', {
+                            p_order_id: order.id
+                          });
+                          
+                          if (releaseError) {
+                            console.error('Error releasing inventory:', releaseError);
                           }
                         }
-                      } catch {}
+                      } catch (error) {
+                        console.error('Error releasing inventory:', error);
+                      }
                       const success = Database.deleteOrder(order.id);
                       if (success) {
                         try {

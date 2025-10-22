@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { Customer, CustomerType, CustomerSource, CUSTOMER_TYPES, CUSTOMER_SOURCES } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
@@ -26,11 +26,7 @@ const CustomerList: React.FC = () => {
   const [filterType, setFilterType] = useState<CustomerType | ''>('');
   const [filterSource, setFilterSource] = useState<CustomerSource | ''>('');
 
-  useEffect(() => {
-    loadCustomers();
-  }, []);
-
-  // Initialize state from URL (no localStorage)
+  // Initialize state from URL first (no localStorage)
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -43,13 +39,71 @@ const CustomerList: React.FC = () => {
       if (!Number.isNaN(savedLimit) && savedLimit > 0) {
         setLimit(savedLimit);
       }
+      
+      console.log('CustomerList: Reading URL params:', { type: t, source: s, page: p, limit: savedLimit });
+      
+      // Update all states in a batch to avoid timing issues
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
       setFilterType(t || '');
       setFilterSource(s || '');
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
-    } catch {}
+      
+      console.log('CustomerList: Set filterType to:', t);
+    } catch (e) {
+      console.error('CustomerList: Error reading URL params:', e);
+    }
   }, []);
+
+  // Re-read URL parameters after a short delay (for lazy loading)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const t = (params.get('type') || '') as CustomerType | '';
+        const s = (params.get('source') || '') as CustomerSource | '';
+        const p = parseInt(params.get('page') || '1', 10);
+        
+        // Only update if values are different to avoid infinite loops
+        if (t !== filterType) setFilterType(t);
+        if (s !== filterSource) setFilterSource(s);
+        if (p !== page) setPage(p);
+      } catch {}
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  // Re-read URL parameters when data is loaded (for lazy loading)
+  useEffect(() => {
+    if (customers.length > 0) {
+      console.log('CustomerList: Data loaded, re-reading URL params');
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const type = (params.get('type') || '') as CustomerType | '';
+        const source = (params.get('source') || '') as CustomerSource | '';
+        
+        if (type && type !== filterType) {
+          console.log('CustomerList: Re-setting filterType from', filterType, 'to', type);
+          setFilterType(type);
+        }
+        if (source && source !== filterSource) {
+          setFilterSource(source);
+        }
+      } catch (e) {
+        console.error('CustomerList: Error re-reading URL params:', e);
+      }
+    }
+  }, [customers.length, filterType, filterSource]);
+
+  // Debug filterType changes
+  useEffect(() => {
+    console.log('CustomerList: filterType changed to:', filterType);
+  }, [filterType]);
 
   // Debounce search term
   useEffect(() => {
@@ -87,6 +141,7 @@ const CustomerList: React.FC = () => {
     const { data } = await sb.from('customers').select('*').order('created_at', { ascending: true });
     const allCustomers = (data || []).map((r: any) => ({
       ...r,
+      sourceDetail: r.source_detail || '',
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Customer[];
@@ -233,6 +288,15 @@ const CustomerList: React.FC = () => {
                          (customer.code || '').toLowerCase().includes(normalizedSearch);
     const matchesType = !filterType || customer.type === filterType;
     const matchesSource = !filterSource || customer.source === filterSource;
+    
+    console.log('CustomerList: Filtering customer:', { 
+      name: customer.name, 
+      type: customer.type, 
+      filterType, 
+      matchesType,
+      matchesSource,
+      matchesSearch 
+    });
     
     return matchesSearch && matchesType && matchesSource;
   });

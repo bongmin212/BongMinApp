@@ -130,11 +130,24 @@ export async function mirrorInsert(table: string, payload: any): Promise<void> {
         }
       };
 
+      // Handle code generation - let server generate if empty
+      const handleCode = (obj: any) => {
+        if (!obj || typeof obj !== 'object') return;
+        if (Object.prototype.hasOwnProperty.call(obj, 'code')) {
+          const codeVal = obj.code;
+          if (!codeVal || String(codeVal).trim() === '') {
+            // Set to null to trigger server-side generation
+            obj.code = null;
+          }
+        }
+      };
+
       if (Array.isArray(clone)) {
-        clone.forEach((item) => { coerce(item); coerceId(item); });
+        clone.forEach((item) => { coerce(item); coerceId(item); handleCode(item); });
       } else {
         coerce(clone);
         coerceId(clone);
+        handleCode(clone);
       }
       return clone;
     })();
@@ -159,9 +172,35 @@ export async function mirrorUpdate(table: string, id: string, updates: any): Pro
   if (!sb) return;
   try {
     const snake = toSnake(updates);
-    await sb.from(table).update(snake).eq('id', id);
+    
+    // Add optimistic locking if version field exists
+    if (updates.version !== undefined) {
+      const { data, error } = await sb
+        .from(table)
+        .update(snake)
+        .eq('id', id)
+        .eq('version', updates.version - 1) // Expect current version to be one less
+        .select('version');
+      
+      if (error) {
+        console.error(`[SupabaseSync] mirrorUpdate ${table} error:`, error);
+        throw error;
+      }
+      
+      if (!data || data.length === 0) {
+        throw new Error('Optimistic lock failed - record was modified by another user');
+      }
+    } else {
+      // No version field, use regular update
+      const { error } = await sb.from(table).update(snake).eq('id', id);
+      if (error) {
+        console.error(`[SupabaseSync] mirrorUpdate ${table} error:`, error);
+        throw error;
+      }
+    }
   } catch (e) {
     console.warn('[SupabaseSync] mirrorUpdate failed', table, e);
+    throw e; // Re-throw to let caller handle the error
   }
 }
 

@@ -104,7 +104,12 @@ const ActivityLogList: React.FC = () => {
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Order[];
-    const allCustomers = (customersRes.data || []) as Customer[];
+    const allCustomers = (customersRes.data || []).map((r: any) => ({
+      ...r,
+      sourceDetail: r.source_detail || '',
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+    })) as Customer[];
     const allProducts = (productsRes.data || []) as Product[];
     const allPackages = (packagesRes.data || []) as ProductPackage[];
     const allInventory = (invRes.data || []).map((i: any) => ({

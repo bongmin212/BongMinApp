@@ -24,8 +24,6 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     const onNav = (e: any) => {
-      // Preserve existing query params when navigating between tabs so dashboard filters work
-      // If needed, individual pages sanitize irrelevant params on mount
       setActiveTab(e.detail);
     };
     const onSearch = (e: any) => {

@@ -7,11 +7,13 @@ import { DesktopNotification } from '../utils/desktopNotification';
 
 interface NotificationContextValue {
   notifications: Notification[];
+  archivedNotifications: Notification[];
   unreadCount: number;
   settings: NotificationSettings;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   removeNotification: (id: string) => void;
+  archiveNotification: (id: string) => void;
   updateSettings: (settings: Partial<NotificationSettings>) => void;
   refreshNotifications: () => void;
   navigateToNotification: (notification: Notification) => void;
@@ -34,6 +36,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [archivedNotifications, setArchivedNotifications] = useState<Notification[]>([]);
   const [settings, setSettings] = useState<NotificationSettings>(() => {
     // Load settings from localStorage on initialization
     try {
@@ -69,6 +72,35 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
+  // Save archived notifications to localStorage
+  const saveArchivedNotificationsToLocalStorage = useCallback((archivedNotifications: Notification[]) => {
+    try {
+      const archivedToSave = archivedNotifications.map(n => ({
+        ...n,
+        createdAt: n.createdAt.toISOString()
+      }));
+      localStorage.setItem('archived-notifications-backup', JSON.stringify(archivedToSave));
+    } catch (error) {
+      console.error('Error saving archived notifications to localStorage:', error);
+    }
+  }, []);
+
+  // Load archived notifications from localStorage
+  const loadArchivedNotificationsFromLocalStorage = useCallback((): Notification[] => {
+    try {
+      const stored = localStorage.getItem('archived-notifications-backup');
+      if (!stored) return [];
+      
+      const parsed = JSON.parse(stored);
+      return parsed.map((n: any) => ({
+        ...n,
+        createdAt: new Date(n.createdAt)
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
+
   // Load notifications from localStorage backup
   const loadNotificationsFromLocalStorage = useCallback((): Notification[] => {
     try {
@@ -94,10 +126,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
-  const markAsRead = useCallback((id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     setNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, isRead: true } : n)
     );
+    
+    // Update server
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        await sb
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', id);
+      } catch (error) {
+        console.error('Error marking notification as read on server:', error);
+      }
+    }
     
     // Persist to localStorage
     const readIds = getReadNotificationIds();
@@ -105,10 +150,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     saveReadNotificationIds(readIds);
   }, [getReadNotificationIds, saveReadNotificationIds]);
 
-  const markAllAsRead = useCallback(() => {
+  const markAllAsRead = useCallback(async () => {
     setNotifications(prev => 
       prev.map(n => ({ ...n, isRead: true }))
     );
+    
+    // Update server
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const currentUser = await sb.auth.getUser();
+        if (currentUser.data.user?.id) {
+          await sb
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('employee_id', currentUser.data.user.id);
+        }
+      } catch (error) {
+        console.error('Error marking all notifications as read on server:', error);
+      }
+    }
     
     // Persist all current notification IDs to localStorage
     const readIds = getReadNotificationIds();
@@ -119,6 +180,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
+
+  const archiveNotification = useCallback((id: string) => {
+    setNotifications(prev => {
+      const notificationToArchive = prev.find(n => n.id === id);
+      if (notificationToArchive) {
+        setArchivedNotifications(archived => {
+          const updatedArchived = [...archived, notificationToArchive];
+          saveArchivedNotificationsToLocalStorage(updatedArchived);
+          return updatedArchived;
+        });
+      }
+      return prev.filter(n => n.id !== id);
+    });
+  }, [saveArchivedNotificationsToLocalStorage]);
 
   const updateSettings = useCallback((newSettings: Partial<NotificationSettings>) => {
     setSettings(prev => {
@@ -300,99 +375,45 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const generateNotifications = useCallback(async () => {
     try {
-      const [orders, packages, inventoryItems, warranties] = await Promise.all([
-        Database.getOrders(),
-        Database.getPackages(),
-        Database.getInventory(),
-        Database.getWarranties()
-      ]);
-
-      const allNotifications = [
-        ...checkExpiryWarnings(orders, packages),
-        ...checkNewOrders(orders),
-        ...checkPaymentReminders(orders),
-        ...checkProcessingOrders(orders),
-        ...checkProfileNeedsUpdate(inventoryItems),
-        ...checkNewWarranties(warranties)
-      ];
-
-      // Save to Supabase if available
       const sb = getSupabase();
-      if (sb) {
-        try {
-          const currentUser = await sb.auth.getUser();
-          if (currentUser.data.user?.id) {
-            const userId = currentUser.data.user.id;
-            const notificationsToSave = allNotifications.map(notification => ({
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              priority: notification.priority,
-              is_read: notification.isRead,
-              created_at: notification.createdAt.toISOString(),
-              related_id: notification.relatedId,
-              action_url: notification.actionUrl,
-              employee_id: userId
-            }));
+      if (!sb) return;
 
-            // Check for existing notifications to avoid duplicates
-            const { data: existingNotifications } = await sb
-              .from('notifications')
-              .select('id, type, related_id')
-              .eq('employee_id', userId);
+      const currentUser = await sb.auth.getUser();
+      if (!currentUser.data.user?.id) return;
 
-            const existingIds = new Set(
-              existingNotifications?.map(n => `${n.type}-${n.related_id}`) || []
-            );
+      const userId = currentUser.data.user.id;
 
-            const newNotifications = notificationsToSave.filter(n => 
-              !existingIds.has(`${n.type}-${n.related_id}`)
-            );
+      // Use server-side notification generation
+      const { data: serverNotifications, error } = await sb.rpc('generate_user_notifications', {
+        p_user_id: userId
+      });
 
-            if (newNotifications.length > 0) {
-              await sb.from('notifications').insert(newNotifications);
-            }
-          }
-        } catch (error) {
-          console.error('Error saving notifications to Supabase:', error);
-        }
+      if (error) {
+        console.error('Error generating server-side notifications:', error);
+        return;
       }
 
-      // Remove duplicates and update existing notifications
+      // Convert server notifications to client format
+      const allNotifications: Notification[] = (serverNotifications || []).map((n: any) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        message: n.message,
+        priority: n.priority,
+        isRead: n.is_read,
+        createdAt: new Date(n.created_at),
+        relatedId: n.related_id,
+        actionUrl: n.action_url
+      }));
+
+      // Update local state with server-generated notifications
       const readIds = getReadNotificationIds();
       setNotifications(prev => {
-        // Create a map of existing notifications by their unique key (type + relatedId)
-        const existingMap = new Map<string, Notification>();
-        prev.forEach(n => {
-          const key = `${n.type}-${n.relatedId}`;
-          existingMap.set(key, n);
-        });
-
-        // Merge new notifications with existing ones
-        const mergedNotifications: Notification[] = [];
-        const processedKeys = new Set<string>();
-
-        // First, add all existing notifications
-        prev.forEach(n => {
-          const key = `${n.type}-${n.relatedId}`;
-          processedKeys.add(key);
-          mergedNotifications.push({
-            ...n,
-            isRead: readIds.has(n.id) || n.isRead
-          });
-        });
-
-        // Then add new notifications that don't already exist
-        allNotifications.forEach(newNotification => {
-          const key = `${newNotification.type}-${newNotification.relatedId}`;
-          if (!processedKeys.has(key)) {
-            mergedNotifications.push({
-              ...newNotification,
-              isRead: readIds.has(newNotification.id) || newNotification.isRead
-            });
-            processedKeys.add(key);
-          }
-        });
+        // Merge with existing notifications, preserving read status
+        const mergedNotifications = allNotifications.map(notification => ({
+          ...notification,
+          isRead: readIds.has(notification.id) || notification.isRead
+        }));
         
         // Save to localStorage as backup
         saveNotificationsToLocalStorage(mergedNotifications);
@@ -402,7 +423,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('Error generating notifications:', error);
     }
-  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties, getReadNotificationIds, saveNotificationsToLocalStorage]);
+  }, [getReadNotificationIds, saveNotificationsToLocalStorage]);
 
   const refreshNotifications = useCallback(() => {
     generateNotifications();
@@ -608,6 +629,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Load notifications from Supabase on mount, then generate new ones
   useEffect(() => {
     const initializeNotifications = async () => {
+      // Load archived notifications from localStorage
+      const archivedFromStorage = loadArchivedNotificationsFromLocalStorage();
+      setArchivedNotifications(archivedFromStorage);
+      
       // First try to load existing notifications from Supabase
       await loadNotificationsFromSupabase();
       
@@ -636,19 +661,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Set up interval for generating new notifications every 5 minutes
     const interval = setInterval(generateNotifications, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [loadNotificationsFromSupabase, generateNotifications, loadNotificationsFromLocalStorage, getReadNotificationIds]);
+  }, [loadNotificationsFromSupabase, generateNotifications, loadNotificationsFromLocalStorage, getReadNotificationIds, loadArchivedNotificationsFromLocalStorage]);
 
   const value = useMemo(() => ({
     notifications,
+    archivedNotifications,
     unreadCount,
     settings,
     markAsRead,
     markAllAsRead,
     removeNotification,
+    archiveNotification,
     updateSettings,
     refreshNotifications,
     navigateToNotification
-  }), [notifications, unreadCount, settings, markAsRead, markAllAsRead, removeNotification, updateSettings, refreshNotifications, navigateToNotification]);
+  }), [notifications, archivedNotifications, unreadCount, settings, markAsRead, markAllAsRead, removeNotification, archiveNotification, updateSettings, refreshNotifications, navigateToNotification]);
 
   return (
     <NotificationContext.Provider value={value}>
