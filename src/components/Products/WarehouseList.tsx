@@ -601,6 +601,12 @@ const WarehouseList: React.FC = () => {
     return { lines: baseLines, text };
   };
 
+  const isExpiringSoon = (i: InventoryItem) => {
+    const t = new Date(i.expiryDate).getTime();
+    const now = Date.now();
+    return i.status !== 'SOLD' && t >= now && t <= now + 7 * 24 * 3600 * 1000;
+  };
+
   const filteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
     return items.filter(i => {
@@ -655,7 +661,9 @@ const WarehouseList: React.FC = () => {
 
       const matchesProduct = !filterProduct || i.productId === filterProduct;
       const matchesPackage = !filterPackage || i.packageId === filterPackage;
-      const matchesStatus = !filterStatus || i.status === filterStatus as any;
+      const matchesStatus = !filterStatus || (
+        filterStatus === 'EXPIRING_SOON' ? isExpiringSoon(i) : i.status === filterStatus as any
+      );
       const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
 
       const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
@@ -1154,6 +1162,7 @@ const WarehouseList: React.FC = () => {
               <option value="AVAILABLE">Sẵn có</option>
               <option value="SOLD">Đã bán</option>
               <option value="EXPIRED">Hết hạn</option>
+              <option value="EXPIRING_SOON">Sắp hết hạn (≤7 ngày)</option>
               <option value="NEEDS_UPDATE">Cần update</option>
             </select>
           </div>

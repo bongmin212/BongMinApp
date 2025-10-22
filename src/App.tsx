@@ -23,7 +23,18 @@ const AppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
-    // Supabase-only mode: no local/demo seeding
+    const onNav = (e: any) => setActiveTab(e.detail);
+    const onSearch = (e: any) => {
+      const params = new URLSearchParams(window.location.search);
+      Object.entries(e.detail||{}).forEach(([k, v]) => v ? params.set(k, String(v)) : params.delete(k));
+      window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
+    };
+    window.addEventListener('app:navigate', onNav as any);
+    window.addEventListener('app:search', onSearch as any);
+    return () => {
+      window.removeEventListener('app:navigate', onNav as any);
+      window.removeEventListener('app:search', onSearch as any);
+    };
   }, []);
 
   if (!state.isAuthenticated) {

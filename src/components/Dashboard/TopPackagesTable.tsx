@@ -5,6 +5,7 @@ import { formatCurrencyVND } from '../../utils/money';
 export interface PackageAggRow {
   packageId: string;
   name: string;
+  productName: string;
   revenue: number;
   profit: number;
   orders: number;
@@ -26,6 +27,7 @@ const TopPackagesTable: React.FC<TopPackagesTableProps> = ({ rows, packagesById 
         <table className="table">
           <thead>
             <tr>
+              <th>Sản phẩm</th>
               <th>Gói</th>
               <th>Đơn</th>
               <th>Doanh thu</th>
@@ -37,6 +39,7 @@ const TopPackagesTable: React.FC<TopPackagesTableProps> = ({ rows, packagesById 
               const pkg = packagesById[r.packageId];
               return (
                 <tr key={r.packageId}>
+                  <td>{r.productName}</td>
                   <td>{pkg?.name || r.name}</td>
                   <td>{r.orders}</td>
                   <td>{formatCurrencyVND(r.revenue)}</td>

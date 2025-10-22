@@ -336,7 +336,14 @@ const Dashboard: React.FC = () => {
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const reservedInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'RESERVED').length;
       const soldInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'SOLD').length;
-      const expiredInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'EXPIRED').length;
+      const expiredInventory = inventoryItems.filter(i => {
+        const t = new Date(i.expiryDate).getTime();
+        return t < Date.now() && i.status !== 'SOLD';
+      }).length;
+      const expiringSoon7Count = inventoryItems.filter(i => {
+        const t = new Date(i.expiryDate).getTime();
+        return t >= Date.now() && t <= Date.now() + 7 * 24 * 3600 * 1000 && i.status !== 'SOLD';
+      }).length;
 
       // Backlog & customer split
       const unpaidOrders = orders.filter(o => o.status !== 'CANCELLED' && o.paymentStatus === 'UNPAID');
@@ -389,13 +396,15 @@ const Dashboard: React.FC = () => {
         return orderDate.getMonth() === targetMonth && orderDate.getFullYear() === targetYear;
       });
       const pkgAggMap: Record<string, PackageAggRow> = {};
+      const productById: Record<string, Product> = Object.fromEntries(products.map(p => [p.id, p]));
       for (const o of monthFiltered) {
         const pid = o.packageId;
         const price = getOrderSnapshotPrice(o);
         const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
         if (!pkgAggMap[pid]) {
           const pkg = packages.find(p => p.id === pid);
-          pkgAggMap[pid] = { packageId: pid, name: pkg?.name || 'Gói', revenue: 0, profit: 0, orders: 0 };
+          const prodName = pkg ? (productById[pkg.productId]?.name || '') : '';
+          pkgAggMap[pid] = { packageId: pid, name: pkg?.name || 'Gói', productName: prodName, revenue: 0, profit: 0, orders: 0 };
         }
         pkgAggMap[pid].revenue += price;
         pkgAggMap[pid].profit += profit;
@@ -431,7 +440,7 @@ const Dashboard: React.FC = () => {
         expectedRevenue,
         ctvCount,
         retailCount,
-        expiringSoonCount,
+        expiringSoonCount: expiringSoon7Count,
       });
 
       setTrends(initial);
@@ -536,7 +545,7 @@ const Dashboard: React.FC = () => {
         {activeTab === 'overview' && (
           <div className="overview-tab">
             <div className="stats-grid">
-              <div className="stat-card">
+              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'products' }))}>
                 <div className="stat-icon">
                   <IconBox />
                 </div>
@@ -544,9 +553,9 @@ const Dashboard: React.FC = () => {
                   <h3>{stats.totalProducts}</h3>
                   <p>Tổng sản phẩm</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="stat-card">
+              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' }))}>
                 <div className="stat-icon">
                   <IconUsers />
                 </div>
@@ -554,9 +563,9 @@ const Dashboard: React.FC = () => {
                   <h3>{stats.totalCustomers}</h3>
                   <p>Tổng khách hàng (CTV {stats.ctvCount} / Lẻ {stats.retailCount})</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="stat-card">
+              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }))}>
                 <div className="stat-icon">
                   <IconCart />
                 </div>
@@ -564,9 +573,9 @@ const Dashboard: React.FC = () => {
                   <h3>{stats.totalOrders}</h3>
                   <p>Tổng đơn hàng</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="stat-card">
+              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'sales' }))}>
                 <div className="stat-icon">
                   <IconDollarSign />
                 </div>
@@ -574,9 +583,9 @@ const Dashboard: React.FC = () => {
                   <h3>{formatCurrency(stats.totalRevenue)}</h3>
                   <p>Tổng doanh thu</p>
                 </div>
-              </div>
+              </button>
 
-              <div className="stat-card">
+              <button type="button" className="stat-card" onClick={() => window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'sales' }))}>
                 <div className="stat-icon">
                   <IconProfit />
                 </div>
@@ -584,14 +593,21 @@ const Dashboard: React.FC = () => {
                   <h3>{formatCurrency(stats.netProfit)}</h3>
                   <p>Tổng lãi thực tế</p>
                 </div>
-              </div>
+              </button>
             </div>
 
             <div className="recent-orders">
               <h2>Đơn hàng gần đây</h2>
               <div className="orders-list">
                 {recentOrders.map(order => (
-                  <div key={order.id} className="order-item">
+                  <button
+                    key={order.id}
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('app:search', { detail: { q: order.code } }));
+                      window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
+                    }}
+                    className="order-item"
+                  >
                     <div className="order-info">
                       <span className="order-code">{order.code}</span>
                       <span className="order-date">{formatDate(order.createdAt)}</span>
@@ -602,7 +618,7 @@ const Dashboard: React.FC = () => {
                          order.status === 'COMPLETED' ? 'Hoàn thành' : 'Đã hủy'}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -689,10 +705,18 @@ const Dashboard: React.FC = () => {
             <div className="orders-summary">
               <h3>Backlog đơn hàng</h3>
               <div className="orders-stats">
-                <div className="order-stat"><span className="stat-number">{stats.unpaidCount}</span><span className="stat-label">Chưa thanh toán</span></div>
-                <div className="order-stat"><span className="stat-number">{stats.processingCount}</span><span className="stat-label">Đang xử lý</span></div>
-                <div className="order-stat"><span className="stat-number">{stats.cancelledCount}</span><span className="stat-label">Đã hủy</span></div>
-                <div className="order-stat"><span className="stat-number">{formatCurrencyVND(stats.expectedRevenue)}</span><span className="stat-label">Doanh thu kỳ vọng</span></div>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                  <span className="stat-number">{stats.unpaidCount}</span><span className="stat-label">Chưa thanh toán</span>
+                </button>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'PROCESSING', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                  <span className="stat-number">{stats.processingCount}</span><span className="stat-label">Đang xử lý</span>
+                </button>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'CANCELLED', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                  <span className="stat-number">{stats.cancelledCount}</span><span className="stat-label">Đã hủy</span>
+                </button>
+                <button className="order-stat" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', status: '', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); }}>
+                  <span className="stat-number">{formatCurrencyVND(stats.expectedRevenue)}</span><span className="stat-label">Doanh thu kỳ vọng</span>
+                </button>
               </div>
             </div>
             <div className="card" style={{ marginTop: 16 }}>
@@ -717,26 +741,26 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="inventory-breakdown">
-                <div className="breakdown-item available">
+                <button className="breakdown-item available" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'AVAILABLE', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
                   <span className="breakdown-number">{stats.availableInventory}</span>
                   <span className="breakdown-label">Có sẵn</span>
-                </div>
-                <div className="breakdown-item reserved">
+                </button>
+                <button className="breakdown-item reserved" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'RESERVED', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
                   <span className="breakdown-number">{stats.reservedInventory}</span>
                   <span className="breakdown-label">Đã đặt</span>
-                </div>
-                <div className="breakdown-item sold">
+                </button>
+                <button className="breakdown-item sold" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'SOLD', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
                   <span className="breakdown-number">{stats.soldInventory}</span>
                   <span className="breakdown-label">Đã bán</span>
-                </div>
-                <div className="breakdown-item expired">
+                </button>
+                <button className="breakdown-item expired" onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRED', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
                   <span className="breakdown-number">{stats.expiredInventory}</span>
                   <span className="breakdown-label">Hết hạn</span>
-                </div>
-                <div className="breakdown-item" style={{ color: 'var(--text-warning, #b26a00)' }}>
+                </button>
+                <button className="breakdown-item" style={{ color: 'var(--text-warning, #b26a00)' }} onClick={() => { window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRING_SOON', page: 1 } })); window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); }}>
                   <span className="breakdown-number">{stats.expiringSoonCount}</span>
-                  <span className="breakdown-label">Sắp hết hạn (30 ngày)</span>
-                </div>
+                  <span className="breakdown-label">Sắp hết hạn (7 ngày)</span>
+                </button>
               </div>
             </div>
           </div>
