@@ -2932,6 +2932,7 @@ body:has(.modal) .main-content * {
   flex-direction: column;
   align-items: flex-start;
   text-align: left;
+  width: 100%;
 }
 .dashboard .stat-card .stat-content h3,
 .dashboard .stat-card .stat-content p {
@@ -2939,6 +2940,22 @@ body:has(.modal) .main-content * {
   align-self: flex-start;
   margin-left: 0;
   width: 100%;
+  justify-self: flex-start;
+}
+
+/* Force left alignment for dashboard stat cards */
+.dashboard .overview-tab .stat-card .stat-content h3 {
+  text-align: left !important;
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+
+.dashboard .overview-tab .stat-card .stat-content p {
+  text-align: left !important;
+  align-self: flex-start !important;
+  margin-left: 0 !important;
+  width: 100% !important;
 }
 
 .inventory-card h3 {
