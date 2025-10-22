@@ -174,7 +174,11 @@ const ProductList: React.FC = () => {
   };
 
   const handleToggleSelectAll = (checked: boolean, ids: string[]) => {
-    setSelectedIds(checked ? ids : []);
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
   };
 
   const handleToggleSelect = (id: string, checked: boolean) => {
@@ -258,16 +262,37 @@ const ProductList: React.FC = () => {
 
   const exportProductsXlsx = (items: Product[], filename: string) => {
     const rows = items.map((p, idx) => ({
+      // Basic info
       code: p.code || `SP${idx + 1}`,
       name: p.name || '',
       description: p.description || '',
-      createdAt: new Date(p.createdAt).toLocaleDateString('vi-VN')
+      
+      // Product features
+      sharedInventoryPool: p.sharedInventoryPool ? 'Có' : 'Không',
+      sharedInventoryPoolValue: p.sharedInventoryPool || false,
+      
+      // System info
+      createdAt: new Date(p.createdAt).toLocaleDateString('vi-VN'),
+      updatedAt: new Date(p.updatedAt).toLocaleDateString('vi-VN'),
+      
+      // Raw dates for sorting
+      createdAtRaw: p.createdAt.toISOString(),
+      updatedAtRaw: p.updatedAt.toISOString(),
     }));
+    
     exportToXlsx(rows, [
-      { header: 'Mã SP', key: 'code', width: 16 },
-      { header: 'Tên', key: 'name', width: 28 },
+      // Basic info
+      { header: 'Mã sản phẩm', key: 'code', width: 16 },
+      { header: 'Tên sản phẩm', key: 'name', width: 28 },
       { header: 'Mô tả', key: 'description', width: 60 },
+      
+      // Product features
+      { header: 'Kho chung', key: 'sharedInventoryPool', width: 12 },
+      { header: 'Kho chung (giá trị)', key: 'sharedInventoryPoolValue', width: 16 },
+      
+      // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Sản phẩm');
   };
 
@@ -285,36 +310,25 @@ const ProductList: React.FC = () => {
           <h2 className="card-title">Danh sách sản phẩm</h2>
           <div className="d-flex gap-2">
             {selectedIds.length > 0 && (
-              <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
+              <>
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+                <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
+              </>
             )}
             <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('SanPham', { debouncedSearchTerm }, 'TrangHienTai');
+              const filename = generateExportFilename('SanPham', { 
+                debouncedSearchTerm,
+                page,
+                limit
+              }, 'TrangHienTai');
               exportProductsXlsx(paginatedProducts, filename);
             }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={async () => {
-              const sb = getSupabase();
-              if (!sb) return notify('Không thể xuất Excel', 'error');
-              const q = (debouncedSearchTerm || '').trim();
-              let query = sb
-                .from('products')
-                .select('*')
-                .order('created_at', { ascending: true })
-                .range(0, 999);
-              if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
-              const { data } = await query;
-              const rows = (data || []).map((r: any, idx: number) => ({
-                code: r.code || `SP${idx + 1}`,
-                name: r.name || '',
-                description: r.description || '',
-                createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString('vi-VN') : ''
-              }));
-              const filename = generateExportFilename('SanPham', { debouncedSearchTerm }, 'KetQuaLoc');
-              exportToXlsx(rows, [
-                { header: 'Mã SP', key: 'code', width: 16 },
-                { header: 'Tên', key: 'name', width: 28 },
-                { header: 'Mô tả', key: 'description', width: 60 },
-                { header: 'Ngày tạo', key: 'createdAt', width: 14 },
-              ], filename, 'Sản phẩm');
+            <button className="btn btn-light" onClick={() => {
+              const filename = generateExportFilename('SanPham', { 
+                debouncedSearchTerm,
+                total: sortedProducts.length
+              }, 'KetQuaLoc');
+              exportProductsXlsx(sortedProducts, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
             <button
               onClick={handleCreate}

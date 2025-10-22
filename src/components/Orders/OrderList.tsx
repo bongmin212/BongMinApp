@@ -572,7 +572,11 @@ const OrderList: React.FC = () => {
   };
 
   const handleToggleSelectAll = (checked: boolean, ids: string[]) => {
-    setSelectedIds(checked ? ids : []);
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
   };
 
   const handleToggleSelect = (id: string, checked: boolean) => {
@@ -1009,28 +1013,173 @@ const OrderList: React.FC = () => {
   const exportOrdersXlsx = (items: Order[], filename: string) => {
     const rows = items.map((o, idx) => {
       const pkgInfo = getPackageInfo(o.packageId);
+      const customer = customerMap.get(o.customerId);
+      const product = pkgInfo?.product;
+      const packageInfo = pkgInfo?.package;
+      
+      // Get linked inventory information
+      const linkedInventory = (() => {
+        if (o.inventoryItemId) {
+          const found = inventory.find((i: any) => i.id === o.inventoryItemId);
+          if (found) return found;
+        }
+        const byLinked = inventory.find((i: any) => i.linked_order_id === o.id);
+        if (byLinked) return byLinked;
+        return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+      })();
+      
+      // Build custom field values
+      const customFieldValues = (o as any).customFieldValues || {};
+      const customFieldsText = packageInfo?.customFields?.map(cf => {
+        const value = customFieldValues[cf.id];
+        return value ? `${cf.title}: ${value}` : null;
+      }).filter(Boolean).join('; ') || '';
+      
+      // Build inventory account data
+      let inventoryAccountData = '';
+      if (linkedInventory && linkedInventory.is_account_based && linkedInventory.accountData) {
+        const accountColumns = linkedInventory.accountColumns || [];
+        const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+        inventoryAccountData = displayColumns.map((col: any) => {
+          const value = (linkedInventory.accountData || {})[col.id] || '';
+          return value ? `${col.title}: ${value}` : null;
+        }).filter(Boolean).join('; ');
+      }
+      
+      // Build renewal history
+      const renewalHistory = (o.renewals || []).map(r => {
+        const renewalDate = new Date(r.createdAt).toLocaleDateString('vi-VN');
+        const price = r.useCustomPrice ? (r as any).customPrice : r.price;
+        return `${renewalDate}: ${formatPrice(price)} (${r.months} tháng)`;
+      }).join('; ');
+      
       return {
+        // Basic order info
         code: o.code || `#${idx + 1}`,
-        customer: getCustomerName(o.customerId),
-        product: pkgInfo?.product?.name || '',
-        package: pkgInfo?.package?.name || '',
+        customerName: customer?.name || 'Không xác định',
+        customerCode: customer?.code || '',
+        customerType: customer?.type === 'CTV' ? 'CTV' : 'Khách lẻ',
+        customerPhone: customer?.phone || '',
+        customerEmail: customer?.email || '',
+        customerSource: customer?.source ? (CUSTOMER_SOURCES.find(s => s.value === customer.source)?.label || customer.source) : '',
+        customerSourceDetail: customer?.sourceDetail || '',
+        customerNotes: customer?.notes || '',
+        
+        // Product info
+        productName: product?.name || '',
+        productCode: product?.code || '',
+        productDescription: product?.description || '',
+        packageName: packageInfo?.name || '',
+        packageCode: packageInfo?.code || '',
+        warrantyPeriod: packageInfo?.warrantyPeriod ? `${packageInfo.warrantyPeriod} tháng` : '',
+        
+        // Order details
         purchaseDate: new Date(o.purchaseDate).toLocaleDateString('vi-VN'),
         expiryDate: new Date(o.expiryDate).toLocaleDateString('vi-VN'),
         status: getStatusLabel(o.status),
-        payment: getPaymentLabel(o.paymentStatus || 'UNPAID'),
-        price: getOrderPrice(o)
+        paymentStatus: getPaymentLabel(o.paymentStatus || 'UNPAID'),
+        
+        // Pricing
+        costPrice: packageInfo?.costPrice || 0,
+        ctvPrice: packageInfo?.ctvPrice || 0,
+        retailPrice: packageInfo?.retailPrice || 0,
+        orderPrice: getOrderPrice(o),
+        useCustomPrice: o.useCustomPrice ? 'Có' : 'Không',
+        customPrice: o.customPrice || '',
+        cogs: o.cogs || '',
+        salePrice: o.salePrice || '',
+        
+        // Order information
+        orderInfo: o.orderInfo || '',
+        notes: o.notes || '',
+        customFields: customFieldsText,
+        
+        // Inventory info
+        inventoryCode: linkedInventory?.code || '',
+        inventoryProductInfo: linkedInventory?.productInfo || '',
+        inventorySourceNote: linkedInventory?.sourceNote || '',
+        inventorySupplierName: linkedInventory?.supplierName || '',
+        inventorySupplierId: linkedInventory?.supplierId || '',
+        inventoryPurchasePrice: linkedInventory?.purchasePrice || '',
+        inventoryAccountData: inventoryAccountData,
+        inventoryTotalSlots: linkedInventory?.totalSlots || '',
+        inventoryAssignedSlots: linkedInventory?.profiles?.filter((p: any) => p.isAssigned).length || '',
+        
+        // Renewal info
+        renewalMessageSent: o.renewalMessageSent ? 'Đã gửi' : 'Chưa gửi',
+        renewalMessageSentBy: o.renewalMessageSentBy || '',
+        renewalMessageSentAt: o.renewalMessageSentAt ? new Date(o.renewalMessageSentAt).toLocaleDateString('vi-VN') : '',
+        renewalHistory: renewalHistory,
+        
+        // System info
+        createdBy: o.createdBy || '',
+        createdAt: new Date(o.createdAt).toLocaleDateString('vi-VN'),
+        updatedAt: new Date(o.updatedAt).toLocaleDateString('vi-VN'),
       };
     });
+    
     exportToXlsx(rows, [
+      // Basic order info
       { header: 'Mã đơn', key: 'code', width: 14 },
-      { header: 'Khách hàng', key: 'customer', width: 24 },
-      { header: 'Sản phẩm', key: 'product', width: 24 },
-      { header: 'Gói', key: 'package', width: 20 },
       { header: 'Ngày mua', key: 'purchaseDate', width: 14 },
-      { header: 'Hết hạn', key: 'expiryDate', width: 14 },
+      { header: 'Ngày hết hạn', key: 'expiryDate', width: 14 },
       { header: 'Trạng thái', key: 'status', width: 14 },
-      { header: 'Thanh toán', key: 'payment', width: 14 },
-      { header: 'Giá', key: 'price', width: 12 },
+      { header: 'Thanh toán', key: 'paymentStatus', width: 14 },
+      
+      // Customer info
+      { header: 'Tên khách hàng', key: 'customerName', width: 24 },
+      { header: 'Mã khách hàng', key: 'customerCode', width: 16 },
+      { header: 'Loại khách', key: 'customerType', width: 12 },
+      { header: 'SĐT khách', key: 'customerPhone', width: 16 },
+      { header: 'Email khách', key: 'customerEmail', width: 20 },
+      { header: 'Nguồn khách', key: 'customerSource', width: 16 },
+      { header: 'Chi tiết nguồn', key: 'customerSourceDetail', width: 20 },
+      { header: 'Ghi chú khách', key: 'customerNotes', width: 20 },
+      
+      // Product info
+      { header: 'Tên sản phẩm', key: 'productName', width: 24 },
+      { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
+      { header: 'Mô tả sản phẩm', key: 'productDescription', width: 24 },
+      { header: 'Tên gói', key: 'packageName', width: 20 },
+      { header: 'Mã gói', key: 'packageCode', width: 16 },
+      { header: 'Thời hạn bảo hành', key: 'warrantyPeriod', width: 16 },
+      
+      // Pricing
+      { header: 'Giá vốn', key: 'costPrice', width: 12 },
+      { header: 'Giá CTV', key: 'ctvPrice', width: 12 },
+      { header: 'Giá lẻ', key: 'retailPrice', width: 12 },
+      { header: 'Giá đơn hàng', key: 'orderPrice', width: 12 },
+      { header: 'Dùng giá tùy chỉnh', key: 'useCustomPrice', width: 16 },
+      { header: 'Giá tùy chỉnh', key: 'customPrice', width: 12 },
+      { header: 'Giá vốn snapshot', key: 'cogs', width: 12 },
+      { header: 'Giá bán snapshot', key: 'salePrice', width: 12 },
+      
+      // Order details
+      { header: 'Thông tin đơn hàng', key: 'orderInfo', width: 30 },
+      { header: 'Ghi chú', key: 'notes', width: 20 },
+      { header: 'Trường tùy chỉnh', key: 'customFields', width: 30 },
+      
+      // Inventory info
+      { header: 'Mã kho hàng', key: 'inventoryCode', width: 16 },
+      { header: 'Thông tin sản phẩm kho', key: 'inventoryProductInfo', width: 30 },
+      { header: 'Ghi chú nguồn kho', key: 'inventorySourceNote', width: 20 },
+      { header: 'Nhà cung cấp', key: 'inventorySupplierName', width: 20 },
+      { header: 'Mã nhà cung cấp', key: 'inventorySupplierId', width: 16 },
+      { header: 'Giá mua kho', key: 'inventoryPurchasePrice', width: 12 },
+      { header: 'Dữ liệu tài khoản', key: 'inventoryAccountData', width: 30 },
+      { header: 'Tổng slot', key: 'inventoryTotalSlots', width: 10 },
+      { header: 'Slot đã gán', key: 'inventoryAssignedSlots', width: 12 },
+      
+      // Renewal info
+      { header: 'Đã gửi tin nhắn gia hạn', key: 'renewalMessageSent', width: 20 },
+      { header: 'Người gửi tin nhắn', key: 'renewalMessageSentBy', width: 16 },
+      { header: 'Ngày gửi tin nhắn', key: 'renewalMessageSentAt', width: 16 },
+      { header: 'Lịch sử gia hạn', key: 'renewalHistory', width: 30 },
+      
+      // System info
+      { header: 'Người tạo', key: 'createdBy', width: 16 },
+      { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Đơn hàng');
   };
 
@@ -1199,6 +1348,7 @@ const OrderList: React.FC = () => {
             }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
             <div className="d-flex gap-2 align-items-center">
+              <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
               {/* Bulk delete removed per request */}
               <div className="d-flex gap-1">
                   <button className="btn btn-secondary" onClick={() => bulkSetStatus('CANCELLED')}>Đã hủy</button>
@@ -1462,6 +1612,7 @@ const OrderList: React.FC = () => {
             const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
             const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
             const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
+            const price = getOrderPrice(o);
             const out: string[] = [];
             out.push(`Mã đơn hàng: ${o.code || '-'}`);
             out.push(`Khách hàng: ${customerName}`);
@@ -1471,6 +1622,7 @@ const OrderList: React.FC = () => {
             out.push(`Ngày hết hạn: ${expiryDate}`);
             out.push(`Trạng thái: ${statusLabel}`);
             out.push(`Thanh toán: ${paymentLabel}`);
+            out.push(`Giá: ${formatPrice(price)}`);
             const customFieldValues = (o as any).customFieldValues || {};
             if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
               pkgInfo.package.customFields.forEach((cf: any) => {

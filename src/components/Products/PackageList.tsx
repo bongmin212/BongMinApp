@@ -165,7 +165,13 @@ const PackageList: React.FC = () => {
     loadData();
   };
 
-  const toggleSelectAll = (checked: boolean, ids: string[]) => setSelectedIds(checked ? ids : []);
+  const toggleSelectAll = (checked: boolean, ids: string[]) => {
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
+  };
   const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   const bulkDelete = () => {
     if (selectedIds.length === 0) return;
@@ -264,25 +270,84 @@ const PackageList: React.FC = () => {
   };
 
   const exportPackagesXlsx = (items: ProductPackage[], filename: string) => {
-    const rows = items.map((pkg, idx) => ({
-      code: pkg.code || `PK${idx + 1}`,
-      name: pkg.name || '',
-      product: getProductName(pkg.productId),
-      warrantyPeriod: formatWarrantyPeriod(pkg.warrantyPeriod),
-      costPrice: pkg.costPrice || 0,
-      ctvPrice: pkg.ctvPrice || 0,
-      retailPrice: pkg.retailPrice || 0,
-      createdAt: new Date(pkg.createdAt).toLocaleDateString('vi-VN')
-    }));
+    const rows = items.map((pkg, idx) => {
+      const product = products.find(p => p.id === pkg.productId);
+      
+      // Build custom fields info
+      const customFieldsInfo = pkg.customFields?.map(cf => cf.title).join('; ') || '';
+      
+      // Build account columns info
+      const accountColumnsInfo = pkg.accountColumns?.map(col => col.title).join('; ') || '';
+      
+      return {
+        // Basic info
+        code: pkg.code || `PK${idx + 1}`,
+        name: pkg.name || '',
+        productName: product?.name || 'Không xác định',
+        productCode: product?.code || '',
+        productDescription: product?.description || '',
+        
+        // Warranty info
+        warrantyPeriod: formatWarrantyPeriod(pkg.warrantyPeriod),
+        warrantyPeriodValue: pkg.warrantyPeriod,
+        
+        // Pricing
+        costPrice: pkg.costPrice || 0,
+        ctvPrice: pkg.ctvPrice || 0,
+        retailPrice: pkg.retailPrice || 0,
+        
+        // Custom fields
+        customFields: customFieldsInfo,
+        customFieldsCount: pkg.customFields?.length || 0,
+        
+        // Account-based info
+        isAccountBased: pkg.isAccountBased ? 'Có' : 'Không',
+        isAccountBasedValue: pkg.isAccountBased || false,
+        accountColumns: accountColumnsInfo,
+        accountColumnsCount: pkg.accountColumns?.length || 0,
+        defaultSlots: pkg.defaultSlots || 0,
+        
+        // System info
+        createdAt: new Date(pkg.createdAt).toLocaleDateString('vi-VN'),
+        updatedAt: new Date(pkg.updatedAt).toLocaleDateString('vi-VN'),
+        
+        // Raw dates for sorting
+        createdAtRaw: pkg.createdAt.toISOString(),
+        updatedAtRaw: pkg.updatedAt.toISOString(),
+      };
+    });
+    
     exportToXlsx(rows, [
+      // Basic info
       { header: 'Mã gói', key: 'code', width: 16 },
       { header: 'Tên gói', key: 'name', width: 28 },
-      { header: 'Sản phẩm', key: 'product', width: 24 },
-      { header: 'Thời hạn BH', key: 'warrantyPeriod', width: 16 },
+      { header: 'Tên sản phẩm', key: 'productName', width: 24 },
+      { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
+      { header: 'Mô tả sản phẩm', key: 'productDescription', width: 30 },
+      
+      // Warranty info
+      { header: 'Thời hạn bảo hành', key: 'warrantyPeriod', width: 16 },
+      { header: 'Thời hạn (tháng)', key: 'warrantyPeriodValue', width: 14 },
+      
+      // Pricing
       { header: 'Giá gốc', key: 'costPrice', width: 14 },
       { header: 'Giá CTV', key: 'ctvPrice', width: 14 },
       { header: 'Giá lẻ', key: 'retailPrice', width: 14 },
+      
+      // Custom fields
+      { header: 'Trường tùy chỉnh', key: 'customFields', width: 30 },
+      { header: 'Số trường tùy chỉnh', key: 'customFieldsCount', width: 16 },
+      
+      // Account-based info
+      { header: 'Dạng tài khoản', key: 'isAccountBased', width: 14 },
+      { header: 'Dạng tài khoản (giá trị)', key: 'isAccountBasedValue', width: 18 },
+      { header: 'Cột tài khoản', key: 'accountColumns', width: 30 },
+      { header: 'Số cột tài khoản', key: 'accountColumnsCount', width: 16 },
+      { header: 'Slot mặc định', key: 'defaultSlots', width: 14 },
+      
+      // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
     ], filename, 'Gói sản phẩm');
   };
 
@@ -321,14 +386,24 @@ const PackageList: React.FC = () => {
           <h2 className="card-title">Danh sách gói sản phẩm</h2>
           <div className="d-flex gap-2">
             {selectedIds.length > 0 && (
-              <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+              <>
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+                <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+              </>
             )}
             <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('GoiSanPham', { searchTerm }, 'TrangHienTai');
+              const filename = generateExportFilename('GoiSanPham', { 
+                searchTerm,
+                page,
+                limit
+              }, 'TrangHienTai');
               exportPackagesXlsx(pageItems, filename);
             }}>Xuất Excel (trang hiện tại)</button>
             <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('GoiSanPham', { searchTerm }, 'KetQuaLoc');
+              const filename = generateExportFilename('GoiSanPham', { 
+                searchTerm,
+                total: filteredPackages.length
+              }, 'KetQuaLoc');
               exportPackagesXlsx(filteredPackages, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
             <button

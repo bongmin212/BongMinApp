@@ -131,7 +131,13 @@ const ExpenseList: React.FC = () => {
     });
   };
 
-  const toggleSelectAll = (checked: boolean, ids: string[]) => setSelectedIds(checked ? ids : []);
+  const toggleSelectAll = (checked: boolean, ids: string[]) => {
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
+  };
   const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   const bulkDelete = () => {
     if (selectedIds.length === 0) return;
@@ -222,18 +228,36 @@ const ExpenseList: React.FC = () => {
 
   const exportExpensesXlsx = (items: Expense[], filename: string) => {
     const rows = items.map(e => ({
+      // Basic info
       code: e.code || '',
       type: getExpenseTypeLabel(e.type),
-      description: (e.description || ''),
+      typeValue: e.type,
+      description: e.description || '',
       amount: e.amount || 0,
-      date: formatDate(e.date)
+      date: formatDate(e.date),
+      dateRaw: e.date.toISOString().split('T')[0],
+      
+      // System info
+      createdBy: e.createdBy || '',
+      createdAt: new Date(e.createdAt).toLocaleDateString('vi-VN'),
+      updatedAt: new Date(e.updatedAt).toLocaleDateString('vi-VN'),
+      createdAtRaw: e.createdAt.toISOString(),
+      updatedAtRaw: e.updatedAt.toISOString(),
     }));
+    
     exportToXlsx(rows, [
-      { header: 'Mã', key: 'code', width: 12 },
-      { header: 'Loại', key: 'type', width: 16 },
+      // Basic info
+      { header: 'Mã chi phí', key: 'code', width: 14 },
+      { header: 'Loại chi phí', key: 'type', width: 16 },
+      { header: 'Loại (giá trị)', key: 'typeValue', width: 12 },
       { header: 'Mô tả', key: 'description', width: 50 },
       { header: 'Số tiền', key: 'amount', width: 14 },
       { header: 'Ngày', key: 'date', width: 14 },
+      
+      // System info
+      { header: 'Người tạo', key: 'createdBy', width: 16 },
+      { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Chi phí');
   };
 
@@ -269,7 +293,9 @@ const ExpenseList: React.FC = () => {
                 dateFrom,
                 dateTo,
                 minAmount,
-                maxAmount
+                maxAmount,
+                page,
+                limit
               }, 'TrangHienTai');
               exportExpensesXlsx(pageItems, filename);
             }}>Xuất Excel (trang hiện tại)</button>
@@ -280,12 +306,16 @@ const ExpenseList: React.FC = () => {
                 dateFrom,
                 dateTo,
                 minAmount,
-                maxAmount
+                maxAmount,
+                total: filteredExpenses.length
               }, 'KetQuaLoc');
               exportExpensesXlsx(filteredExpenses, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
-              <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+              <>
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+                <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+              </>
             )}
             <button 
               className="btn btn-primary"

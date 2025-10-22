@@ -405,17 +405,42 @@ const ActivityLogList: React.FC = () => {
   const pageItems = filteredLogs.slice(start, start + limit);
 
   const exportLogsXlsx = (items: ActivityLog[], filename: string) => {
-    const rows = items.map((log) => ({
-      timestamp: new Date(log.timestamp).toLocaleString('vi-VN'),
-      employee: getEmployeeName(log.employeeId),
-      action: log.action,
-      details: renderFriendlyDetails(log)
-    }));
+    const rows = items.map((log) => {
+      const employee = employees.find(e => e.id === log.employeeId);
+      
+      return {
+        // Basic info
+        timestamp: new Date(log.timestamp).toLocaleString('vi-VN'),
+        timestampRaw: log.timestamp.toISOString(),
+        employee: getEmployeeName(log.employeeId),
+        employeeCode: employee?.code || '',
+        employeeUsername: employee?.username || '',
+        action: log.action,
+        details: renderFriendlyDetails(log),
+        detailsRaw: log.details || '',
+        
+        // System info
+        id: log.id,
+        employeeId: log.employeeId,
+        createdAt: new Date(log.timestamp).toLocaleDateString('vi-VN'),
+        createdAtRaw: log.timestamp.toISOString(),
+      };
+    });
+    
     exportToXlsx(rows, [
+      // Basic info
       { header: 'Thời gian', key: 'timestamp', width: 22 },
-      { header: 'Nhân viên', key: 'employee', width: 18 },
-      { header: 'Hành động', key: 'action', width: 28 },
+      { header: 'Tên nhân viên', key: 'employee', width: 20 },
+      { header: 'Mã nhân viên', key: 'employeeCode', width: 16 },
+      { header: 'Username', key: 'employeeUsername', width: 16 },
+      { header: 'Hành động', key: 'action', width: 30 },
       { header: 'Chi tiết', key: 'details', width: 60 },
+      { header: 'Chi tiết (raw)', key: 'detailsRaw', width: 60 },
+      
+      // System info
+      { header: 'ID', key: 'id', width: 20 },
+      { header: 'ID nhân viên', key: 'employeeId', width: 20 },
+      { header: 'Ngày tạo', key: 'createdAt', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Hoạt động');
   };
 
@@ -475,14 +500,17 @@ const ActivityLogList: React.FC = () => {
               <button className="btn btn-light" onClick={() => {
                 const filename = generateExportFilename('NhatKyHoatDong', {
                   debouncedSearchTerm,
-                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : ''
+                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
+                  page,
+                  limit
                 }, 'TrangHienTai');
                 exportLogsXlsx(pageItems, filename);
               }}>Xuất Excel (trang hiện tại)</button>
               <button className="btn btn-light" onClick={() => {
                 const filename = generateExportFilename('NhatKyHoatDong', {
                   debouncedSearchTerm,
-                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : ''
+                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
+                  total: filteredLogs.length
                 }, 'KetQuaLoc');
                 exportLogsXlsx(filteredLogs, filename);
               }}>Xuất Excel (kết quả đã lọc)</button>

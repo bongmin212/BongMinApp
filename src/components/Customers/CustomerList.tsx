@@ -220,7 +220,11 @@ const CustomerList: React.FC = () => {
   };
 
   const handleToggleSelectAll = (checked: boolean, ids: string[]) => {
-    setSelectedIds(checked ? ids : []);
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
   };
 
   const handleToggleSelect = (id: string, checked: boolean) => {
@@ -285,7 +289,11 @@ const CustomerList: React.FC = () => {
     const matchesSearch = customer.name.toLowerCase().includes(normalizedSearch) ||
                          customer.phone?.includes(normalizedSearch) ||
                          customer.email?.toLowerCase().includes(normalizedSearch) ||
-                         (customer.code || '').toLowerCase().includes(normalizedSearch);
+                         (customer.code || '').toLowerCase().includes(normalizedSearch) ||
+                         (customer.notes || '').toLowerCase().includes(normalizedSearch) ||
+                         (customer.sourceDetail || '').toLowerCase().includes(normalizedSearch) ||
+                         customer.type.toLowerCase().includes(normalizedSearch) ||
+                         (customer.source || '').toLowerCase().includes(normalizedSearch);
     const matchesType = !filterType || customer.type === filterType;
     const matchesSource = !filterSource || customer.source === filterSource;
     
@@ -322,24 +330,55 @@ const CustomerList: React.FC = () => {
 
   const exportCustomersXlsx = (items: Customer[], filename: string) => {
     const rows = items.map((c, idx) => ({
+      // Basic info
       code: c.code || `KH${idx + 1}`,
       name: c.name || '',
       type: getCustomerTypeLabel(c.type as CustomerType),
+      typeValue: c.type || '',
+      
+      // Contact info
       phone: c.phone || '',
       email: c.email || '',
+      
+      // Source info
       source: c.source ? getCustomerSourceLabel(c.source as CustomerSource) : '',
+      sourceValue: c.source || '',
       sourceDetail: c.sourceDetail || '',
-      createdAt: new Date(c.createdAt).toLocaleDateString('vi-VN')
+      
+      // Additional info
+      notes: c.notes || '',
+      
+      // System info
+      createdAt: new Date(c.createdAt).toLocaleDateString('vi-VN'),
+      updatedAt: new Date(c.updatedAt).toLocaleDateString('vi-VN'),
+      
+      // Raw dates for sorting
+      createdAtRaw: c.createdAt.toISOString(),
+      updatedAtRaw: c.updatedAt.toISOString(),
     }));
+    
     exportToXlsx(rows, [
+      // Basic info
       { header: 'Mã KH', key: 'code', width: 14 },
-      { header: 'Tên', key: 'name', width: 24 },
-      { header: 'Loại', key: 'type', width: 10 },
-      { header: 'SĐT', key: 'phone', width: 14 },
+      { header: 'Tên khách hàng', key: 'name', width: 24 },
+      { header: 'Loại khách', key: 'type', width: 12 },
+      { header: 'Loại (giá trị)', key: 'typeValue', width: 10 },
+      
+      // Contact info
+      { header: 'SĐT', key: 'phone', width: 16 },
       { header: 'Email', key: 'email', width: 26 },
+      
+      // Source info
       { header: 'Nguồn', key: 'source', width: 16 },
-      { header: 'Nguồn chi tiết', key: 'sourceDetail', width: 28 },
+      { header: 'Nguồn (giá trị)', key: 'sourceValue', width: 12 },
+      { header: 'Chi tiết nguồn', key: 'sourceDetail', width: 30 },
+      
+      // Additional info
+      { header: 'Ghi chú', key: 'notes', width: 30 },
+      
+      // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Khách hàng');
   };
 
@@ -359,6 +398,7 @@ const CustomerList: React.FC = () => {
           <div className="d-flex gap-2">
             {selectedIds.length > 0 && (
               <>
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
               </>
             )}
@@ -366,7 +406,9 @@ const CustomerList: React.FC = () => {
               const filename = generateExportFilename('KhachHang', {
                 debouncedSearchTerm,
                 filterType,
-                filterSource
+                filterSource,
+                page,
+                limit
               }, 'TrangHienTai');
               exportCustomersXlsx(paginatedCustomers, filename);
             }}>Xuất Excel (trang hiện tại)</button>
@@ -374,7 +416,8 @@ const CustomerList: React.FC = () => {
               const filename = generateExportFilename('KhachHang', {
                 debouncedSearchTerm,
                 filterType,
-                filterSource
+                filterSource,
+                total: filteredCustomers.length
               }, 'KetQuaLoc');
               exportCustomersXlsx(filteredCustomers, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
@@ -394,7 +437,7 @@ const CustomerList: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Tìm kiếm khách hàng..."
+              placeholder="Tìm kiếm theo tên, SĐT, email, mã, ghi chú, nguồn..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />

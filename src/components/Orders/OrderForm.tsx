@@ -1748,30 +1748,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Thông tin đơn hàng</label>
-            <textarea
-              name="orderInfo"
-              className="form-control text-muted"
-              value={(() => {
-                const item = selectedInventoryId ? availableInventory.find(i => i.id === selectedInventoryId) : undefined;
-                if (!item) return '';
-                if (item.isAccountBased) {
-                  // Build using the currently selected package columns to avoid drift
-                  const itemForOrder = { ...item, packageId: formData.packageId } as InventoryItem;
-                  return Database.buildOrderInfoFromAccount(itemForOrder, selectedProfileIds.length > 0 ? selectedProfileIds : undefined);
-                }
-                return item.productInfo || '';
-              })()}
-              readOnly
-              disabled
-              style={{ opacity: 0.6, background: '#f8f9fa' } as React.CSSProperties}
-              title={'Thông tin được lấy tự động từ kho - không chỉnh sửa'}
-              placeholder="Ví dụ: mã kích hoạt/serial/tài khoản bàn giao..."
-              rows={3}
-            />
-            <div className="small text-muted mt-1">Thông tin này được tự động lấy từ kho hàng.</div>
-          </div>
 
           <div className="form-group">
             <label className="form-label">Ghi chú</label>

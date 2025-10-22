@@ -1036,27 +1036,92 @@ const WarrantyList: React.FC = () => {
   const pageItems = filteredWarranties.slice(start, start + limit);
 
   const exportWarrantiesXlsx = (items: Warranty[], filename: string) => {
-    const rows = items.map((w, idx) => ({
-      code: w.code || `BH${idx + 1}`,
-      createdAt: new Date(w.createdAt).toLocaleDateString('vi-VN'),
-      customer: getCustomerName(w.orderId),
-      productPackage: getProductText(w.orderId),
-      reason: (w.reason || ''),
-      status: WARRANTY_STATUSES.find(s => s.value === w.status)?.label || w.status,
-      replacement: getReplacementProductText(w.replacementInventoryId)
-    }));
+    const rows = items.map((w, idx) => {
+      const linkedOrder = orders.find(o => o.id === w.orderId);
+      const linkedCustomer = linkedOrder ? customers.find(c => c.id === linkedOrder.customerId) : null;
+      const linkedPackage = linkedOrder ? packages.find(p => p.id === linkedOrder.packageId) : null;
+      const linkedProduct = linkedPackage ? products.find(p => p.id === linkedPackage.productId) : null;
+      const replacementInventory = w.replacementInventoryId ? inventoryItems.find(i => i.id === w.replacementInventoryId) : null;
+      
+      return {
+        // Basic info
+        code: w.code || `BH${idx + 1}`,
+        createdAt: new Date(w.createdAt).toLocaleDateString('vi-VN'),
+        updatedAt: new Date(w.updatedAt).toLocaleDateString('vi-VN'),
+        
+        // Order info
+        orderCode: linkedOrder?.code || '',
+        customerName: linkedCustomer?.name || 'Không xác định',
+        customerCode: linkedCustomer?.code || '',
+        customerPhone: linkedCustomer?.phone || '',
+        customerEmail: linkedCustomer?.email || '',
+        
+        // Product info
+        productName: linkedProduct?.name || 'Không xác định',
+        productCode: linkedProduct?.code || '',
+        packageName: linkedPackage?.name || 'Không xác định',
+        packageCode: linkedPackage?.code || '',
+        
+        // Warranty details
+        reason: w.reason || '',
+        status: WARRANTY_STATUSES.find(s => s.value === w.status)?.label || w.status,
+        statusValue: w.status,
+        
+        // Replacement info
+        replacementInventoryCode: replacementInventory?.code || '',
+        replacementProductName: replacementInventory ? products.find(p => p.id === replacementInventory.productId)?.name || 'Không xác định' : '',
+        replacementProductInfo: replacementInventory?.productInfo || '',
+        newOrderInfo: w.newOrderInfo || '',
+        
+        // System info
+        createdBy: w.createdBy || '',
+        createdAtRaw: w.createdAt.toISOString(),
+        updatedAtRaw: w.updatedAt.toISOString(),
+      };
+    });
+    
     exportToXlsx(rows, [
-      { header: 'Mã BH', key: 'code', width: 12 },
+      // Basic info
+      { header: 'Mã bảo hành', key: 'code', width: 14 },
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
-      { header: 'Khách hàng', key: 'customer', width: 22 },
-      { header: 'Sản phẩm/Gói', key: 'productPackage', width: 28 },
-      { header: 'Lý do', key: 'reason', width: 50 },
-      { header: 'Trạng thái', key: 'status', width: 14 },
-      { header: 'Sản phẩm thay thế', key: 'replacement', width: 26 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
+      
+      // Order info
+      { header: 'Mã đơn hàng', key: 'orderCode', width: 16 },
+      { header: 'Tên khách hàng', key: 'customerName', width: 24 },
+      { header: 'Mã khách hàng', key: 'customerCode', width: 16 },
+      { header: 'SĐT khách', key: 'customerPhone', width: 16 },
+      { header: 'Email khách', key: 'customerEmail', width: 20 },
+      
+      // Product info
+      { header: 'Tên sản phẩm', key: 'productName', width: 24 },
+      { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
+      { header: 'Tên gói', key: 'packageName', width: 20 },
+      { header: 'Mã gói', key: 'packageCode', width: 16 },
+      
+      // Warranty details
+      { header: 'Lý do bảo hành', key: 'reason', width: 50 },
+      { header: 'Trạng thái', key: 'status', width: 16 },
+      { header: 'Trạng thái (giá trị)', key: 'statusValue', width: 14 },
+      
+      // Replacement info
+      { header: 'Mã kho thay thế', key: 'replacementInventoryCode', width: 16 },
+      { header: 'Tên sản phẩm thay thế', key: 'replacementProductName', width: 24 },
+      { header: 'Thông tin sản phẩm thay thế', key: 'replacementProductInfo', width: 30 },
+      { header: 'Thông tin đơn hàng mới', key: 'newOrderInfo', width: 30 },
+      
+      // System info
+      { header: 'Người tạo', key: 'createdBy', width: 16 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Bảo hành');
   };
 
-  const toggleSelectAll = (checked: boolean, ids: string[]) => setSelectedIds(checked ? ids : []);
+  const toggleSelectAll = (checked: boolean, ids: string[]) => {
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
+  };
   const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   const bulkDelete = () => {
     if (selectedIds.length === 0) return;
@@ -1082,21 +1147,6 @@ const WarrantyList: React.FC = () => {
     setDebouncedSearchTerm('');
     setSearchStatus('');
     setPage(1);
-  };
-  const bulkSetStatus = (status: string) => {
-    if (selectedIds.length === 0) return;
-    (async () => {
-      const sb = getSupabase();
-      if (!sb) return notify('Không thể cập nhật trạng thái', 'error');
-      const { error } = await sb.from('warranties').update({ status }).in('id', selectedIds);
-      if (error) return notify('Không thể cập nhật trạng thái', 'error');
-      try {
-        const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật trạng thái bảo hành hàng loạt', details: `status=${status}; ids=${selectedIds.join(',')}` });
-      } catch {}
-      load();
-      notify('Đã cập nhật trạng thái', 'success');
-    })();
   };
 
 const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
@@ -1148,7 +1198,9 @@ const handleDelete = (id: string) => {
                 debouncedSearchTerm,
                 searchStatus,
                 dateFrom,
-                dateTo
+                dateTo,
+                page,
+                limit
               }, 'TrangHienTai');
               exportWarrantiesXlsx(pageItems, filename);
             }}>Xuất Excel (trang hiện tại)</button>
@@ -1157,21 +1209,15 @@ const handleDelete = (id: string) => {
                 debouncedSearchTerm,
                 searchStatus,
                 dateFrom,
-                dateTo
+                dateTo,
+                total: filteredWarranties.length
               }, 'KetQuaLoc');
               exportWarrantiesXlsx(filteredWarranties, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
               <>
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
-                <div className="dropdown">
-                  <button className="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown">Trạng thái</button>
-                  <div className="dropdown-menu show" style={{ position: 'absolute' }}>
-                    {WARRANTY_STATUSES.map(s => (
-                      <button key={s.value} className="dropdown-item" onClick={() => bulkSetStatus(s.value)}>{s.label}</button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
             <button className="btn btn-primary" onClick={() => setShowForm(true)}>Tạo đơn bảo hành</button>

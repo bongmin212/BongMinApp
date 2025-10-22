@@ -800,57 +800,165 @@ const WarehouseList: React.FC = () => {
   const pageItems = sortedItems.slice(start, start + limit);
 
   const exportInventoryXlsx = (items: InventoryItem[], filename: string) => {
-      const rows = items.map((i, idx) => {
-      const prodName = productMap.get(i.productId) || i.productId;
-      const pkg = packages.find(p => p.id === i.packageId) as any;
-      const pool = (() => {
-        const prod = products.find(p => p.id === i.productId);
-        return prod?.sharedInventoryPool ? 'Pool chung' : (packageMap.get(i.packageId) || i.packageId);
-      })();
-      const isAcc = (i.isAccountBased || pkg?.isAccountBased);
+    const rows = items.map((i, idx) => {
+      const product = products.find(p => p.id === i.productId);
+      const packageInfo = packages.find(p => p.id === i.packageId);
+      const linkedOrder = i.linkedOrderId ? Database.getOrders().find(o => o.id === i.linkedOrderId) : null;
+      const linkedCustomer = linkedOrder ? customers.find(c => c.id === linkedOrder.customerId) : null;
+      
+      // Build account data info
+      const accountDataInfo = i.accountData ? Object.entries(i.accountData).map(([key, value]) => `${key}: ${value}`).join('; ') : '';
+      
+      // Build profiles info
+      const profilesInfo = i.profiles?.map(p => `${p.label}: ${p.isAssigned ? 'Đã gán' : 'Trống'}`).join('; ') || '';
+      
+      // Build renewal history (placeholder - renewals not available in InventoryItem)
+      const renewalHistory = '';
+      
+      const isAcc = (i.isAccountBased || packageInfo?.isAccountBased);
       const used = (i.profiles || []).filter(p => p.isAssigned).length;
       const totalSlots = i.totalSlots || 0;
+      
       return {
+        // Basic info
         code: i.code || `KHO${idx + 1}`,
-        product: prodName,
-        group: pool,
-        purchaseDate: new Date(i.purchaseDate).toISOString().split('T')[0],
-        expiryDate: new Date(i.expiryDate).toISOString().split('T')[0],
+        productName: product?.name || 'Không xác định',
+        productCode: product?.code || '',
+        productDescription: product?.description || '',
+        packageName: packageInfo?.name || 'Không xác định',
+        packageCode: packageInfo?.code || '',
+        
+        // Dates
+        purchaseDate: new Date(i.purchaseDate).toLocaleDateString('vi-VN'),
+        expiryDate: new Date(i.expiryDate).toLocaleDateString('vi-VN'),
+        purchaseDateRaw: i.purchaseDate.toISOString().split('T')[0],
+        expiryDateRaw: i.expiryDate.toISOString().split('T')[0],
+        
+        // Warranty info
         warrantyMonths: (() => {
-          const prod = products.find(p => p.id === i.productId);
-          if (prod?.sharedInventoryPool) {
+          if (product?.sharedInventoryPool) {
             return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
           }
-          const pkg = packages.find(p => p.id === i.packageId);
-          return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+          return packageInfo?.warrantyPeriod ? `${packageInfo.warrantyPeriod} tháng` : '-';
         })(),
-        source: i.sourceNote || '',
-        purchasePrice: typeof i.purchasePrice === 'number' ? i.purchasePrice : '',
-        paymentStatus: i.paymentStatus || 'UNPAID',
+        warrantyMonthsValue: product?.sharedInventoryPool ? (i.poolWarrantyMonths || 0) : (packageInfo?.warrantyPeriod || 0),
+        isSharedPool: product?.sharedInventoryPool ? 'Có' : 'Không',
+        
+        // Source info
+        sourceNote: i.sourceNote || '',
+        supplierName: i.supplierName || '',
+        supplierId: i.supplierId || '',
+        currency: i.currency || '',
+        
+        // Pricing
+        purchasePrice: i.purchasePrice || 0,
+        paymentStatus: i.paymentStatus ? INVENTORY_PAYMENT_STATUSES.find(p => p.value === i.paymentStatus)?.label || i.paymentStatus : '',
+        paymentStatusValue: i.paymentStatus || '',
+        
+        // Product info
         productInfo: i.productInfo || '',
         notes: i.notes || '',
         status: i.status,
-        slots: isAcc ? `${used}/${totalSlots}` : '-'
+        
+        // Account-based info
+        isAccountBased: isAcc ? 'Có' : 'Không',
+        isAccountBasedValue: isAcc,
+        accountColumns: i.accountColumns?.map(col => col.title).join('; ') || '',
+        accountColumnsCount: i.accountColumns?.length || 0,
+        accountData: accountDataInfo,
+        totalSlots: totalSlots,
+        usedSlots: used,
+        freeSlots: totalSlots - used,
+        slotsInfo: isAcc ? `${used}/${totalSlots}` : '-',
+        profiles: profilesInfo,
+        
+        // Linked order info
+        linkedOrderCode: linkedOrder?.code || '',
+        linkedCustomerName: linkedCustomer?.name || '',
+        linkedCustomerCode: linkedCustomer?.code || '',
+        previousLinkedOrderId: i.previousLinkedOrderId || '',
+        
+        // Renewal info
+        renewalHistory: renewalHistory,
+        renewalCount: 0,
+        
+        // System info
+        createdAt: new Date(i.createdAt).toLocaleDateString('vi-VN'),
+        updatedAt: new Date(i.updatedAt).toLocaleDateString('vi-VN'),
+        createdAtRaw: i.createdAt.toISOString(),
+        updatedAtRaw: i.updatedAt.toISOString(),
       };
     });
+    
     exportToXlsx(rows, [
+      // Basic info
       { header: 'Mã kho', key: 'code', width: 14 },
-      { header: 'Sản phẩm', key: 'product', width: 24 },
-      { header: 'Gói/Pool', key: 'group', width: 18 },
-      { header: 'Nhập', key: 'purchaseDate', width: 12 },
-      { header: 'Hết hạn', key: 'expiryDate', width: 12 },
-      { header: 'Thời hạn', key: 'warrantyMonths', width: 12 },
-      { header: 'Nguồn', key: 'source', width: 18 },
+      { header: 'Tên sản phẩm', key: 'productName', width: 24 },
+      { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
+      { header: 'Mô tả sản phẩm', key: 'productDescription', width: 30 },
+      { header: 'Tên gói', key: 'packageName', width: 20 },
+      { header: 'Mã gói', key: 'packageCode', width: 16 },
+      
+      // Dates
+      { header: 'Ngày nhập', key: 'purchaseDate', width: 14 },
+      { header: 'Ngày hết hạn', key: 'expiryDate', width: 14 },
+      
+      // Warranty info
+      { header: 'Thời hạn bảo hành', key: 'warrantyMonths', width: 16 },
+      { header: 'Thời hạn (tháng)', key: 'warrantyMonthsValue', width: 14 },
+      { header: 'Kho chung', key: 'isSharedPool', width: 12 },
+      
+      // Source info
+      { header: 'Ghi chú nguồn', key: 'sourceNote', width: 20 },
+      { header: 'Nhà cung cấp', key: 'supplierName', width: 20 },
+      { header: 'Mã nhà cung cấp', key: 'supplierId', width: 16 },
+      { header: 'Tiền tệ', key: 'currency', width: 10 },
+      
+      // Pricing
       { header: 'Giá nhập', key: 'purchasePrice', width: 14 },
-      { header: 'Thanh toán', key: 'paymentStatus', width: 14 },
-      { header: 'Thông tin', key: 'productInfo', width: 50 },
+      { header: 'Trạng thái thanh toán', key: 'paymentStatus', width: 16 },
+      { header: 'Trạng thái thanh toán (giá trị)', key: 'paymentStatusValue', width: 20 },
+      
+      // Product info
+      { header: 'Thông tin sản phẩm', key: 'productInfo', width: 50 },
       { header: 'Ghi chú', key: 'notes', width: 32 },
       { header: 'Trạng thái', key: 'status', width: 14 },
-      { header: 'Slot', key: 'slots', width: 10 },
+      
+      // Account-based info
+      { header: 'Dạng tài khoản', key: 'isAccountBased', width: 14 },
+      { header: 'Dạng tài khoản (giá trị)', key: 'isAccountBasedValue', width: 18 },
+      { header: 'Cột tài khoản', key: 'accountColumns', width: 30 },
+      { header: 'Số cột tài khoản', key: 'accountColumnsCount', width: 16 },
+      { header: 'Dữ liệu tài khoản', key: 'accountData', width: 40 },
+      { header: 'Tổng slot', key: 'totalSlots', width: 10 },
+      { header: 'Slot đã dùng', key: 'usedSlots', width: 12 },
+      { header: 'Slot trống', key: 'freeSlots', width: 10 },
+      { header: 'Thông tin slot', key: 'slotsInfo', width: 12 },
+      { header: 'Chi tiết profile', key: 'profiles', width: 40 },
+      
+      // Linked order info
+      { header: 'Mã đơn liên kết', key: 'linkedOrderCode', width: 16 },
+      { header: 'Tên khách liên kết', key: 'linkedCustomerName', width: 20 },
+      { header: 'Mã khách liên kết', key: 'linkedCustomerCode', width: 16 },
+      { header: 'Đơn liên kết trước', key: 'previousLinkedOrderId', width: 18 },
+      
+      // Renewal info
+      { header: 'Lịch sử gia hạn', key: 'renewalHistory', width: 40 },
+      { header: 'Số lần gia hạn', key: 'renewalCount', width: 14 },
+      
+      // System info
+      { header: 'Ngày tạo', key: 'createdAt', width: 14 },
+      { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Kho hàng');
   };
 
-  const toggleSelectAll = (checked: boolean, ids: string[]) => setSelectedIds(checked ? ids : []);
+  const toggleSelectAll = (checked: boolean, ids: string[]) => {
+    if (checked) {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+    } else {
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+    }
+  };
   const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   const bulkDelete = () => {
     const deletable = pageItems.filter(i => i.status === 'AVAILABLE').map(i => i.id).filter(id => selectedIds.includes(id));
@@ -1224,9 +1332,9 @@ const WarehouseList: React.FC = () => {
             }}>Xuất Excel (kết quả đã lọc)</button>
             {selectedIds.length > 0 && (
               <>
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>
                 <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn</button>
-                <button className="btn btn-secondary" onClick={bulkUnlink}>Gỡ liên kết đã chọn</button>
                 <button className="btn btn-info" onClick={bulkUpdatePaymentStatus}>Cập nhật thanh toán</button>
               </>
             )}
@@ -1605,7 +1713,7 @@ const WarehouseList: React.FC = () => {
                                 return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
                               })()}</td>
                               <td>{order ? `${order.code}` : prevOrder ? `(Trước: ${prevOrder.code})` : '-'}</td>
-                              <td>{p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-'}</td>
+                              <td>{order?.expiryDate ? new Date(order.expiryDate).toISOString().split('T')[0] : (p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-')}</td>
                               <td>
                                 <div className="d-flex gap-2">
                                   {order && (
@@ -1784,10 +1892,11 @@ const WarehouseList: React.FC = () => {
                               whiteSpace: 'pre-wrap', 
                               margin: 0, 
                               padding: '8px', 
-                              backgroundColor: '#f8f9fa', 
+                              backgroundColor: 'var(--bg-tertiary)', 
+                              color: 'var(--text-primary)',
                               borderRadius: '4px',
                               fontSize: '14px',
-                              border: '1px solid #e9ecef'
+                              border: '1px solid var(--border-color)'
                             }}>
                               {value}
                             </pre>
