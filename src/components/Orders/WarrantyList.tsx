@@ -380,7 +380,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 const { data: classicLinked } = await sb
                   .from('inventory')
                   .select('id, linked_order_id')
-                  .eq('linked_order_id', resolvedOrderId);
+                  .eq('linked_order_id', resolvedOrderId)
+                  .neq('id', resolvedReplacementInventoryId);
                 const classicIds = (classicLinked || []).map((r: any) => r.id);
                 if (classicIds.length) {
                   // Store previous linked order before clearing
@@ -399,7 +400,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 const { data: accountItems } = await sb
                   .from('inventory')
                   .select('*')
-                  .eq('is_account_based', true);
+                  .eq('is_account_based', true)
+                  .neq('id', resolvedReplacementInventoryId);
                 for (const it of (accountItems || [])) {
                   const profiles = Array.isArray(it.profiles) ? it.profiles : [];
                   if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
@@ -412,7 +414,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                           assignedAt: null, 
                           expiryAt: null, 
                           needsUpdate: true,
-                          previousOrderId: p.assignedOrderId // Store previous order
+                          previousOrderId: resolvedOrderId // Store previous order id explicitly
                         }
                       : p
                   ));
@@ -544,7 +546,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             const { data: classicLinked } = await sb
               .from('inventory')
               .select('id, linked_order_id')
-              .eq('linked_order_id', resolvedOrderId);
+              .eq('linked_order_id', resolvedOrderId)
+              .neq('id', resolvedReplacementInventoryId);
             const classicIds = (classicLinked || []).map((r: any) => r.id);
             if (classicIds.length) {
               // Store previous linked order before clearing
@@ -562,7 +565,8 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             const { data: accountItems } = await sb
               .from('inventory')
               .select('*')
-              .eq('is_account_based', true);
+              .eq('is_account_based', true)
+              .neq('id', resolvedReplacementInventoryId);
             for (const it of (accountItems || [])) {
               const profiles = Array.isArray(it.profiles) ? it.profiles : [];
               if (!profiles.some((p: any) => p.assignedOrderId === resolvedOrderId)) continue;
@@ -575,7 +579,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                       assignedAt: null, 
                       expiryAt: null, 
                       needsUpdate: true,
-                      previousOrderId: p.assignedOrderId // Store previous order
+                      previousOrderId: resolvedOrderId // Store previous order id explicitly
                     }
                   : p
               ));
