@@ -370,8 +370,9 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
 					.eq('id', warranty.id);
 				if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
-            // Only unlink previous inventory if we're actually replacing it
-            if (resolvedReplacementInventoryId) {
+            // Only unlink previous inventory if we're actually replacing it with a different item
+            const hasReplacementChanged = warranty.replacementInventoryId !== form.replacementInventoryId;
+            if (resolvedReplacementInventoryId && hasReplacementChanged) {
               // Mark previous inventory link as NEEDS_UPDATE and unlink profiles if any
               try {
                 // Classic linked item(s)
@@ -450,7 +451,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             }
 
             // Update order to point to the replacement inventory + profile and refresh order_info
-            if (resolvedReplacementInventoryId) {
+            if (resolvedReplacementInventoryId && hasReplacementChanged) {
               try {
                 await sb
                   .from('orders')
