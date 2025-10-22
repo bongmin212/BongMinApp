@@ -222,7 +222,7 @@ src/
 ├── utils/             # Utilities
 │   ├── database.ts   # Database operations
 │   ├── excel.ts      # Excel export
-│   ├── supabaseClient.ts # Supabase client
+│   ├──  # Supabase client
 │   └── supabaseAuth.ts   # Supabase authentication
 └── App.tsx           # Main component
 ```

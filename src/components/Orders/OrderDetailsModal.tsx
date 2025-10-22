@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEffect, useState } from 'react';
-import { Order, PaymentStatus, PAYMENT_STATUSES } from '../../types';
+import { Order, PaymentStatus, PAYMENT_STATUSES, WARRANTY_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 
@@ -270,7 +270,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 									<ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
 										{list.map((w: any) => (
 											<li key={w.id}>
-												{new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.reason} ({w.status === 'DONE' ? 'đã xong' : 'chưa xong'})
+												{new Date(w.createdAt).toLocaleDateString('vi-VN')} - {w.code} - {w.reason} ({WARRANTY_STATUSES.find(s => s.value === w.status)?.label || w.status})
 											</li>
 										))}
 									</ul>

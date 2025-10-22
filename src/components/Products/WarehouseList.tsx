@@ -350,6 +350,29 @@ const WarehouseList: React.FC = () => {
       if (toUnexpireIds.length > 0) {
         await sb.from('inventory').update({ status: 'AVAILABLE' }).in('id', toUnexpireIds);
       }
+
+      // Auto-update account-based inventory status
+      const accountBasedItems = raw.filter((r: any) => r.is_account_based);
+      const toMarkSold: string[] = [];
+      const toMarkAvailable: string[] = [];
+
+      for (const r of accountBasedItems) {
+        const profiles = Array.isArray(r.profiles) ? r.profiles : [];
+        const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
+        
+        if (!hasFreeSlot && r.status !== 'SOLD') {
+          toMarkSold.push(r.id);
+        } else if (hasFreeSlot && r.status === 'SOLD') {
+          toMarkAvailable.push(r.id);
+        }
+      }
+
+      if (toMarkSold.length > 0) {
+        await sb.from('inventory').update({ status: 'SOLD' }).in('id', toMarkSold);
+      }
+      if (toMarkAvailable.length > 0) {
+        await sb.from('inventory').update({ status: 'AVAILABLE' }).in('id', toMarkAvailable);
+      }
     } catch (e) {
       // Best-effort; ignore failures and continue rendering
       console.error('Auto-expire sweep failed', e);
@@ -998,7 +1021,25 @@ const WarehouseList: React.FC = () => {
   };
 
   const getActualStatus = (item: InventoryItem) => {
-    // Prefer computed expiry over persisted status to avoid sticky "EXPIRED"
+    // For account-based items, compute status from profiles
+    if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
+      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+      const totalSlots = item.totalSlots || profiles.length;
+      
+      if (totalSlots === 0) return item.status; // No slots = use persisted status
+      
+      // Check if any slot is free (not assigned and not needsUpdate)
+      const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
+      
+      if (!hasFreeSlot) {
+        // All slots are either assigned or needsUpdate
+        return 'SOLD';
+      }
+      // Has at least one free slot
+      return 'AVAILABLE';
+    }
+    
+    // Regular inventory: use expiry-based logic (existing code)
     const now = new Date();
     const expiryDate = new Date(item.expiryDate);
     // If truly past due, always show EXPIRED
@@ -1663,6 +1704,11 @@ const WarehouseList: React.FC = () => {
         const product = products.find(p => p.id === inv.productId);
         const pkg = packages.find(p => p.id === inv.packageId);
         const renewals = Database.getInventoryRenewals().filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+        
+        // Get account columns from package or inventory item
+        const accountColumns = pkg?.accountColumns || inv.accountColumns || [];
+        const accountData = inv.accountData || {};
+        
         return (
           <div className="modal" role="dialog" aria-modal>
             <div className="modal-content" style={{ maxWidth: 600 }}>
@@ -1688,6 +1734,35 @@ const WarehouseList: React.FC = () => {
                 })()}
                 {inv.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin sản phẩm:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre></div>}
                 {inv.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {inv.notes}</div>}
+                
+                {/* Account Information Section */}
+                {accountColumns.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <strong>Thông tin tài khoản:</strong>
+                    <div style={{ marginTop: 6 }}>
+                      {accountColumns.map((col: any) => {
+                        const value = accountData[col.id] || '';
+                        if (!value) return null;
+                        return (
+                          <div key={col.id} style={{ marginBottom: 8 }}>
+                            <div><strong>{col.title}:</strong></div>
+                            <pre style={{ 
+                              whiteSpace: 'pre-wrap', 
+                              margin: 0, 
+                              padding: '8px', 
+                              backgroundColor: '#f8f9fa', 
+                              borderRadius: '4px',
+                              fontSize: '14px',
+                              border: '1px solid #e9ecef'
+                            }}>
+                              {value}
+                            </pre>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 <div style={{ marginTop: 12 }}>
                   <strong>Lịch sử gia hạn:</strong>
                   {renewals.length === 0 ? (

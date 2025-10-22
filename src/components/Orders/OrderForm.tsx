@@ -800,11 +800,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       : p);
                   debugLog('Updated profiles:', nextProfiles);
                   
-                  const { error: updateError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', nextInventoryId);
+                  // After updating profiles, check if all slots are occupied
+                  const allOccupied = nextProfiles.every((p: any) => p.isAssigned || p.needsUpdate);
+                  const newStatus = allOccupied ? 'SOLD' : 'AVAILABLE';
+                  
+                  const { error: updateError } = await sb.from('inventory').update({ 
+                    profiles: nextProfiles, 
+                    status: newStatus 
+                  }).eq('id', nextInventoryId);
                   if (updateError) {
                     console.error('Error updating inventory profiles:', updateError);
                   } else {
-                    debugLog('Successfully updated inventory profiles');
+                    debugLog('Successfully updated inventory profiles and status');
                   }
                 }
               } else {
@@ -938,11 +945,18 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       : p);
                   debugLog('Updated profiles:', nextProfiles);
                   
-                  const { error: updateError } = await sb2.from('inventory').update({ profiles: nextProfiles }).eq('id', selectedInventoryId);
+                  // After updating profiles, check if all slots are occupied
+                  const allOccupied = nextProfiles.every((p: any) => p.isAssigned || p.needsUpdate);
+                  const newStatus = allOccupied ? 'SOLD' : 'AVAILABLE';
+                  
+                  const { error: updateError } = await sb2.from('inventory').update({ 
+                    profiles: nextProfiles, 
+                    status: newStatus 
+                  }).eq('id', selectedInventoryId);
                   if (updateError) {
                     console.error('Error updating inventory profiles:', updateError);
                   } else {
-                    debugLog('Successfully updated inventory profiles');
+                    debugLog('Successfully updated inventory profiles and status');
                   }
                 }
               } else {

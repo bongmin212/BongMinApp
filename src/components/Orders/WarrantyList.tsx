@@ -21,6 +21,10 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
   const [replacementProfileId, setReplacementProfileId] = useState<string>('');
   const [inventorySearch, setInventorySearch] = useState('');
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  
+  // Check if this is view-only mode (warranty exists and is not PENDING)
+  const isViewOnly = warranty && warranty.status !== 'PENDING';
 
   useEffect(() => {
     (async () => {
@@ -189,13 +193,13 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         code: warranty.code, 
         orderId: warranty.orderId, 
         reason: warranty.reason, 
-        status: warranty.status,
+        status: isViewOnly ? warranty.status : '' as any, // Empty for editing, actual status for viewing
         replacementInventoryId: warranty.replacementInventoryId,
         newOrderInfo: warranty.newOrderInfo
       });
       setReplacementProfileId('');
     }
-  }, [warranty]);
+  }, [warranty, isViewOnly]);
 
   const getOrderLabel = (o: Order) => {
     const customer = customers.find(c => c.id === o.customerId)?.name || 'Không xác định';
@@ -290,12 +294,25 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       return;
     }
 
+    // For editing warranty, require status selection
+    if (warranty && !form.status) {
+      notify('Vui lòng chọn trạng thái bảo hành.', 'warning');
+      return;
+    }
+
     // For REPLACED status, require replacement inventory
     if (warranty && form.status === 'REPLACED' && !form.replacementInventoryId) {
       notify('Vui lòng chọn sản phẩm thay thế khi chọn trạng thái "Đã đổi bảo hành".', 'warning');
       return;
     }
 
+    // Show confirmation dialog
+    setShowConfirmDialog(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    setShowConfirmDialog(false);
+    
     try {
       const sb = getSupabase();
       if (!sb) throw new Error('Supabase not configured');
@@ -580,7 +597,9 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
     <div className="modal">
       <div className="modal-content" style={{ maxWidth: '560px' }}>
         <div className="modal-header">
-			<h3 className="modal-title">{warranty ? 'Sửa đơn bảo hành' : 'Tạo đơn bảo hành'}</h3>
+			<h3 className="modal-title">
+        {warranty ? (isViewOnly ? 'Xem đơn bảo hành' : 'Sửa đơn bảo hành') : 'Tạo đơn bảo hành'}
+      </h3>
           <button type="button" className="close" onClick={onClose}>×</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -653,10 +672,20 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 style={{ opacity: 0.6, cursor: 'not-allowed' }}
               />
             ) : (
-              <select className="form-control" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
-                <option value="FIXED">Đã fix</option>
-                <option value="REPLACED">Đã đổi bảo hành</option>
-              </select>
+              isViewOnly ? (
+                <input 
+                  className="form-control" 
+                  value={WARRANTY_STATUSES.find(s => s.value === form.status)?.label || form.status} 
+                  disabled 
+                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                />
+              ) : (
+                <select className="form-control" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+                  <option value="">-- Chọn trạng thái --</option>
+                  <option value="FIXED">Đã fix</option>
+                  <option value="REPLACED">Đã đổi bảo hành</option>
+                </select>
+              )
             )}
           </div>
           
@@ -664,52 +693,82 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           {warranty && form.status === 'REPLACED' && (
             <div className="mb-3">
               <label className="form-label">Sản phẩm thay thế *</label>
-              <input
-                type="text"
-                className="form-control mb-2"
-                placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
-                value={inventorySearch}
-                onChange={(e) => setInventorySearch(e.target.value)}
-              />
-              <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
-                <option value="">-- Chọn sản phẩm từ kho hàng --</option>
-                {filteredInventory.map(item => (
-                  <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
-                ))}
-              </select>
-              <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
-              {!!form.replacementInventoryId && (() => {
-                const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
-                if (!item) return null;
-                if (item.isAccountBased) {
-                  return (
-                    <div className="mt-2">
-                      <label className="form-label"><strong>Chọn slot thay thế</strong></label>
-                      <select
-                        className="form-control"
-                        value={replacementProfileId}
-                        onChange={(e) => setReplacementProfileId(e.target.value)}
-                      >
-                        <option value="">-- Chọn slot --</option>
-                        {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
-                          <option key={p.id} value={p.id}>{p.label}</option>
-                        ))}
-                      </select>
-                      <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+              {isViewOnly ? (
+                <input 
+                  className="form-control" 
+                  value={form.replacementInventoryId ? `#${inventoryItems.find(i => i.id === form.replacementInventoryId)?.code || ''} | ${inventoryItems.find(i => i.id === form.replacementInventoryId) ? getInventoryLabel(inventoryItems.find(i => i.id === form.replacementInventoryId)!) : ''}` : '-'} 
+                  disabled 
+                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                />
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    className="form-control mb-2"
+                    placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
+                    value={inventorySearch}
+                    onChange={(e) => setInventorySearch(e.target.value)}
+                  />
+                  <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
+                    <option value="">-- Chọn sản phẩm từ kho hàng --</option>
+                    {filteredInventory.map(item => (
+                      <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
+                    ))}
+                  </select>
+                  <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
+                  {!!form.replacementInventoryId && (() => {
+                    const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
+                    if (!item) return null;
+                    if (item.isAccountBased) {
+                      return (
+                        <div className="mt-2">
+                          <label className="form-label"><strong>Chọn slot thay thế</strong></label>
+                          <select
+                            className="form-control"
+                            value={replacementProfileId}
+                            onChange={(e) => setReplacementProfileId(e.target.value)}
+                          >
+                            <option value="">-- Chọn slot --</option>
+                            {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
+                              <option key={p.id} value={p.id}>{p.label}</option>
+                            ))}
+                          </select>
+                          <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              )}
             </div>
           )}
           
           <div className="d-flex justify-content-end gap-2">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-			<button type="submit" className="btn btn-primary">Lưu</button>
+            {!isViewOnly && <button type="submit" className="btn btn-primary">Lưu</button>}
           </div>
         </form>
       </div>
+      
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="modal" role="dialog" aria-modal>
+          <div className="modal-content" style={{ maxWidth: 420 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Xác nhận</h3>
+              <button className="close" onClick={() => setShowConfirmDialog(false)}>×</button>
+            </div>
+            <div className="mb-4" style={{ color: 'var(--text-primary)' }}>
+              {warranty ? 'Xác nhận cập nhật đơn bảo hành?' : 'Xác nhận tạo đơn bảo hành?'}
+            </div>
+            <div className="d-flex justify-content-end gap-2">
+              <button className="btn btn-secondary" onClick={() => setShowConfirmDialog(false)}>Hủy</button>
+              <button className="btn btn-primary" onClick={handleConfirmSubmit}>Xác nhận</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1209,7 +1268,9 @@ const handleDelete = (id: string) => {
               )}
 
               <div className="warranty-card-actions">
-                <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>Sửa</button>
+                <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
+                  {w.status === 'PENDING' ? 'Sửa' : 'Xem'}
+                </button>
                 <button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
               </div>
             </div>
@@ -1271,7 +1332,9 @@ const handleDelete = (id: string) => {
                   </td>
 									<td>
 										<div className="d-flex gap-2">
-											<button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>Sửa</button>
+											<button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
+												{w.status === 'PENDING' ? 'Sửa' : 'Xem'}
+											</button>
 											<button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
 										</div>
 									</td>
