@@ -579,6 +579,15 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return pickedInventory.productInfo || '';
       })();
 
+      // Compute sale price snapshot
+      const selectedCustomer = customers.find(c => c.id === formData.customerId);
+      const computedBasePrice = (() => {
+        if (formData.useCustomPrice) return formData.customPrice || 0;
+        if (!selectedPackage) return 0;
+        const isCTV = (selectedCustomer?.type || 'RETAIL') === 'CTV';
+        return isCTV ? (selectedPackage.ctvPrice || 0) : (selectedPackage.retailPrice || 0);
+      })();
+
       const orderData = {
         ...formData,
         code: ensuredCode,
@@ -592,7 +601,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         customPrice: formData.useCustomPrice ? formData.customPrice : undefined,
         customFieldValues,
         orderInfo: (autoInfo || '').trim(),
-        status: (selectedInventoryId ? 'COMPLETED' : 'PROCESSING') as OrderStatus
+        status: (selectedInventoryId ? 'COMPLETED' : 'PROCESSING') as OrderStatus,
+        salePrice: computedBasePrice
       };
 
       if (order) {
@@ -673,7 +683,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             inventory_profile_ids: orderData.inventoryProfileIds || null,
             use_custom_price: orderData.useCustomPrice || false,
             custom_price: orderData.customPrice || null,
-            custom_field_values: orderData.customFieldValues || null
+            custom_field_values: orderData.customFieldValues || null,
+            sale_price: (orderData as any).salePrice || null
           };
           debugLog('=== ORDER UPDATE DEBUG ===');
           debugLog('Order ID:', order.id);
@@ -717,6 +728,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               cogs: updateResult.cogs,
               useCustomPrice: updateResult.use_custom_price,
               customPrice: updateResult.custom_price,
+              salePrice: updateResult.sale_price,
               customFieldValues: updateResult.custom_field_values,
               createdBy: updateResult.created_by || state.user?.id || 'system',
               createdAt: updateResult.created_at ? new Date(updateResult.created_at) : new Date(),
@@ -846,6 +858,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           use_custom_price: orderData.useCustomPrice || false,
           custom_price: orderData.customPrice || null,
           custom_field_values: orderData.customFieldValues || null,
+          sale_price: (orderData as any).salePrice || null,
           created_by: state.user?.id || 'system'
         };
         debugLog('Insert data:', insertData);
@@ -879,6 +892,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           cogs: createData.cogs,
           useCustomPrice: createData.use_custom_price,
           customPrice: createData.custom_price,
+          salePrice: createData.sale_price,
           customFieldValues: createData.custom_field_values,
           createdBy: createData.created_by || state.user?.id || 'system',
           createdAt: createData.created_at ? new Date(createData.created_at) : new Date(),

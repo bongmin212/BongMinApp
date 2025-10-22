@@ -140,7 +140,8 @@ const Dashboard: React.FC = () => {
           notes: r.notes,
           inventoryItemId: r.inventory_item_id,
           inventoryProfileId: r.inventory_profile_id,
-          cogs: r.cogs
+          cogs: r.cogs,
+          salePrice: r.sale_price
         })) as any;
         inventoryItems = (inv.data || []).map((r: any) => ({
           id: r.id,
@@ -198,19 +199,21 @@ const Dashboard: React.FC = () => {
       }
 
       // Calculate stats
+      const getOrderSnapshotPrice = (order: Order): number => {
+        const snapshot = (order as any).salePrice;
+        if (typeof snapshot === 'number' && !isNaN(snapshot)) return snapshot;
+        // Fallback for legacy orders: compute using existing logic
+        const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
+        if (!packageData) return 0;
+        if (order.useCustomPrice) return order.customPrice || 0;
+        const customer = customers.find((c: Customer) => c.id === order.customerId);
+        const isCTV = (customer?.type || 'RETAIL') === 'CTV';
+        return isCTV ? packageData.ctvPrice : packageData.retailPrice;
+      };
+
       const totalRevenue = orders
         .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID')
-        .reduce((sum, order) => {
-          const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (packageData) {
-            const price = order.useCustomPrice ? order.customPrice || 0 : 
-              (order.customerId ? 
-                (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-                packageData.retailPrice);
-            return sum + price;
-          }
-          return sum;
-        }, 0);
+        .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
 
       const now = new Date();
       const base = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -226,17 +229,7 @@ const Dashboard: React.FC = () => {
                  orderDate.getMonth() === targetMonth &&
                  orderDate.getFullYear() === targetYear;
         })
-        .reduce((sum, order) => {
-          const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (packageData) {
-            const price = order.useCustomPrice ? order.customPrice || 0 : 
-              (order.customerId ? 
-                (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-                packageData.retailPrice);
-            return sum + price;
-          }
-          return sum;
-        }, 0);
+        .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
 
       const lastTarget = new Date(targetYear, targetMonth, 1);
       lastTarget.setMonth(lastTarget.getMonth() - 1);
@@ -250,17 +243,7 @@ const Dashboard: React.FC = () => {
                  orderDate.getMonth() === lastMonth &&
                  orderDate.getFullYear() === lastMonthYear;
         })
-        .reduce((sum, order) => {
-          const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (packageData) {
-            const price = order.useCustomPrice ? order.customPrice || 0 : 
-              (order.customerId ? 
-                (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-                packageData.retailPrice);
-            return sum + price;
-          }
-          return sum;
-        }, 0);
+        .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
 
       const revenueGrowth = lastMonthRevenue > 0 ? 
         ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
@@ -268,16 +251,7 @@ const Dashboard: React.FC = () => {
       // Calculate total profit using order.cogs (COGS from inventory)
       const totalProfit = orders
         .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID')
-        .reduce((sum, order) => {
-          const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (!packageData) return sum;
-          const price = order.useCustomPrice ? order.customPrice || 0 : 
-            (order.customerId ? 
-              (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-              packageData.retailPrice);
-          const cogs = (order as any).cogs || 0;
-          return sum + (price - cogs);
-        }, 0);
+        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - ((order as any).cogs || 0)), 0);
 
       // Calculate monthly profit using order.cogs
       const monthlyProfit = orders
@@ -288,16 +262,7 @@ const Dashboard: React.FC = () => {
                  orderDate.getMonth() === targetMonth &&
                  orderDate.getFullYear() === targetYear;
         })
-        .reduce((sum, order) => {
-          const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (!packageData) return sum;
-          const price = order.useCustomPrice ? order.customPrice || 0 : 
-            (order.customerId ? 
-              (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-              packageData.retailPrice);
-          const cogs = (order as any).cogs || 0;
-          return sum + (price - cogs);
-        }, 0);
+        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - ((order as any).cogs || 0)), 0);
 
       // Calculate last month profit using order.cogs
       const lastMonthProfit = orders
@@ -308,16 +273,7 @@ const Dashboard: React.FC = () => {
                  orderDate.getMonth() === lastMonth &&
                  orderDate.getFullYear() === lastMonthYear;
         })
-        .reduce((sum, order) => {
-          const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-          if (!packageData) return sum;
-          const price = order.useCustomPrice ? order.customPrice || 0 : 
-            (order.customerId ? 
-              (customers.find((c: Customer) => c.id === order.customerId)?.type === 'CTV' ? packageData.ctvPrice : packageData.retailPrice) : 
-              packageData.retailPrice);
-          const cogs = (order as any).cogs || 0;
-          return sum + (price - cogs);
-        }, 0);
+        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - ((order as any).cogs || 0)), 0);
 
       const profitGrowth = lastMonthProfit > 0 ? 
         ((monthlyProfit - lastMonthProfit) / lastMonthProfit) * 100 : 0;
