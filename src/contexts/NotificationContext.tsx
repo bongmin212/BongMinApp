@@ -38,17 +38,46 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  // Load read notification IDs from localStorage
+  const getReadNotificationIds = useCallback((): Set<string> => {
+    try {
+      const stored = localStorage.getItem('read-notifications');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  }, []);
+
+  // Save read notification IDs to localStorage
+  const saveReadNotificationIds = useCallback((readIds: Set<string>) => {
+    try {
+      localStorage.setItem('read-notifications', JSON.stringify(Array.from(readIds)));
+    } catch (error) {
+      console.error('Error saving read notifications:', error);
+    }
+  }, []);
+
   const markAsRead = useCallback((id: string) => {
     setNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, isRead: true } : n)
     );
-  }, []);
+    
+    // Persist to localStorage
+    const readIds = getReadNotificationIds();
+    readIds.add(id);
+    saveReadNotificationIds(readIds);
+  }, [getReadNotificationIds, saveReadNotificationIds]);
 
   const markAllAsRead = useCallback(() => {
     setNotifications(prev => 
       prev.map(n => ({ ...n, isRead: true }))
     );
-  }, []);
+    
+    // Persist all current notification IDs to localStorage
+    const readIds = getReadNotificationIds();
+    notifications.forEach(n => readIds.add(n.id));
+    saveReadNotificationIds(readIds);
+  }, [notifications, getReadNotificationIds, saveReadNotificationIds]);
 
   const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -284,15 +313,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       // Remove duplicates and update existing notifications
+      const readIds = getReadNotificationIds();
       setNotifications(prev => {
         const existingIds = new Set(prev.map(n => n.id));
         const newNotifications = allNotifications.filter(n => !existingIds.has(n.id));
-        return [...prev, ...newNotifications];
+        
+        // Mark notifications as read if they're in localStorage
+        const allNotificationsWithReadStatus = [...prev, ...newNotifications].map(n => ({
+          ...n,
+          isRead: readIds.has(n.id) || n.isRead
+        }));
+        
+        return allNotificationsWithReadStatus;
       });
     } catch (error) {
       console.error('Error generating notifications:', error);
     }
-  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties]);
+  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties, getReadNotificationIds]);
 
   const refreshNotifications = useCallback(() => {
     generateNotifications();
@@ -346,6 +383,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Switch tab in the SPA
     try {
       window.dispatchEvent(new CustomEvent('app:navigate', { detail: targetTab } as any));
+      
+      // If we're already on the target tab and have a relatedId, dispatch a specific event
+      if (notification.relatedId) {
+        setTimeout(() => {
+          if (targetTab === 'orders') {
+            window.dispatchEvent(new CustomEvent('app:viewOrder', { detail: notification.relatedId } as any));
+          } else if (targetTab === 'warehouse') {
+            window.dispatchEvent(new CustomEvent('app:viewWarehouse', { detail: notification.relatedId } as any));
+          } else if (targetTab === 'warranties') {
+            window.dispatchEvent(new CustomEvent('app:viewWarranty', { detail: notification.relatedId } as any));
+          }
+        }, 100);
+      }
     } catch {}
   }, []);
 
@@ -370,13 +420,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       if (notificationsData) {
+        const readIds = getReadNotificationIds();
         const loadedNotifications: Notification[] = notificationsData.map((n: any) => ({
           id: n.id,
           type: n.type,
           title: n.title,
           message: n.message,
           priority: n.priority,
-          isRead: n.is_read,
+          isRead: readIds.has(n.id) || n.is_read,
           createdAt: new Date(n.created_at),
           relatedId: n.related_id,
           actionUrl: n.action_url,
@@ -388,7 +439,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('Error loading notifications from Supabase:', error);
     }
-  }, []);
+  }, [getReadNotificationIds]);
 
   // Initialize sound and desktop notifications
   useEffect(() => {

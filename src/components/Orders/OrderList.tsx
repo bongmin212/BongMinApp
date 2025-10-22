@@ -350,6 +350,22 @@ const OrderList: React.FC = () => {
     return () => { try { channel.unsubscribe(); } catch {} };
   }, []);
 
+  // Listen for view order events from notifications
+  useEffect(() => {
+    const handleViewOrder = (e: any) => {
+      const orderId = e.detail;
+      const found = orders.find(o => o.id === orderId);
+      if (found) {
+        setViewingOrder(found);
+      }
+    };
+
+    window.addEventListener('app:viewOrder', handleViewOrder as any);
+    return () => {
+      window.removeEventListener('app:viewOrder', handleViewOrder as any);
+    };
+  }, [orders]);
+
   const handleCreate = () => {
     setEditingOrder(null);
     setShowForm(false); // Force close first

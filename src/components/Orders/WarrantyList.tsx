@@ -444,6 +444,56 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                 })
                 .eq('id', resolvedOrderId);
             } catch {}
+
+            // Auto-relink original inventory if warranty completed without replacement
+            if (form.status === 'DONE' && !resolvedReplacementInventoryId) {
+              try {
+                // For classic inventory: find items that were marked NEEDS_UPDATE for this order
+                // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
+                const { data: classicLinked } = await sb
+                  .from('inventory')
+                  .select('id, status')
+                  .eq('status', 'NEEDS_UPDATE')
+                  .is('linked_order_id', null);
+                
+                // For classic items: set status back to SOLD and relink
+                const classicIds = (classicLinked || []).map((r: any) => r.id);
+                if (classicIds.length) {
+                  await sb
+                    .from('inventory')
+                    .update({ status: 'SOLD', linked_order_id: resolvedOrderId })
+                    .in('id', classicIds);
+                }
+                
+                // For account-based: find profiles with needsUpdate for this order and reassign
+                const { data: accountItems } = await sb
+                  .from('inventory')
+                  .select('*')
+                  .eq('is_account_based', true);
+                  
+                for (const it of (accountItems || [])) {
+                  const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+                  const hasNeedsUpdate = profiles.some((p: any) => p.needsUpdate);
+                  if (!hasNeedsUpdate) continue;
+                  
+                  const nextProfiles = profiles.map((p: any) => (
+                    p.needsUpdate
+                      ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString(), needsUpdate: false }
+                      : p
+                  ));
+                  
+                  await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+                  
+                  // Update status to SOLD if all slots are now assigned
+                  const allAssigned = nextProfiles.every((p: any) => p.isAssigned);
+                  if (allAssigned) {
+                    await sb.from('inventory').update({ status: 'SOLD' }).eq('id', it.id);
+                  }
+                }
+              } catch (err) {
+                console.error('Error relinking inventory:', err);
+              }
+            }
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn bảo hành', details: [`warrantyId=${warranty.id}; warrantyCode=${warranty.code}`, ...changedEntries].join('; ') });
@@ -531,6 +581,56 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             })
             .eq('id', resolvedOrderId);
         } catch {}
+
+        // Auto-relink original inventory if warranty completed without replacement
+        if (form.status === 'DONE' && !resolvedReplacementInventoryId) {
+          try {
+            // For classic inventory: find items that were marked NEEDS_UPDATE for this order
+            // We need to find items that were previously linked to this order and are now NEEDS_UPDATE
+            const { data: classicLinked } = await sb
+              .from('inventory')
+              .select('id, status')
+              .eq('status', 'NEEDS_UPDATE')
+              .is('linked_order_id', null);
+            
+            // For classic items: set status back to SOLD and relink
+            const classicIds = (classicLinked || []).map((r: any) => r.id);
+            if (classicIds.length) {
+              await sb
+                .from('inventory')
+                .update({ status: 'SOLD', linked_order_id: resolvedOrderId })
+                .in('id', classicIds);
+            }
+            
+            // For account-based: find profiles with needsUpdate for this order and reassign
+            const { data: accountItems } = await sb
+              .from('inventory')
+              .select('*')
+              .eq('is_account_based', true);
+              
+            for (const it of (accountItems || [])) {
+              const profiles = Array.isArray(it.profiles) ? it.profiles : [];
+              const hasNeedsUpdate = profiles.some((p: any) => p.needsUpdate);
+              if (!hasNeedsUpdate) continue;
+              
+              const nextProfiles = profiles.map((p: any) => (
+                p.needsUpdate
+                  ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString(), needsUpdate: false }
+                  : p
+              ));
+              
+              await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+              
+              // Update status to SOLD if all slots are now assigned
+              const allAssigned = nextProfiles.every((p: any) => p.isAssigned);
+              if (allAssigned) {
+                await sb.from('inventory').update({ status: 'SOLD' }).eq('id', it.id);
+              }
+            }
+          } catch (err) {
+            console.error('Error relinking inventory:', err);
+          }
+        }
 				try {
 					const sb2 = getSupabase();
 					if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn bảo hành', details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}; status=${form.status}` });
@@ -789,6 +889,23 @@ const WarrantyList: React.FC = () => {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Listen for view warranty events from notifications
+  useEffect(() => {
+    const handleViewWarranty = (e: any) => {
+      const warrantyId = e.detail;
+      const found = warranties.find(w => w.id === warrantyId);
+      if (found) {
+        setEditingWarranty(found);
+        setShowForm(true);
+      }
+    };
+
+    window.addEventListener('app:viewWarranty', handleViewWarranty as any);
+    return () => {
+      window.removeEventListener('app:viewWarranty', handleViewWarranty as any);
+    };
+  }, [warranties]);
 
   // Realtime subscribe to warranties
   useEffect(() => {

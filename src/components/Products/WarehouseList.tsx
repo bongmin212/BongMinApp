@@ -446,6 +446,22 @@ const WarehouseList: React.FC = () => {
     refresh();
   }, []);
 
+  // Listen for view warehouse events from notifications
+  useEffect(() => {
+    const handleViewWarehouse = (e: any) => {
+      const inventoryId = e.detail;
+      const found = items.find(item => item.id === inventoryId);
+      if (found) {
+        setViewingInventory(found);
+      }
+    };
+
+    window.addEventListener('app:viewWarehouse', handleViewWarehouse as any);
+    return () => {
+      window.removeEventListener('app:viewWarehouse', handleViewWarehouse as any);
+    };
+  }, [items]);
+
   // Realtime inventory subscribe
   useEffect(() => {
     const sb = getSupabase();
@@ -662,7 +678,11 @@ const WarehouseList: React.FC = () => {
       const matchesProduct = !filterProduct || i.productId === filterProduct;
       const matchesPackage = !filterPackage || i.packageId === filterPackage;
       const matchesStatus = !filterStatus || (
-        filterStatus === 'EXPIRING_SOON' ? isExpiringSoon(i) : i.status === filterStatus as any
+        filterStatus === 'EXPIRING_SOON' 
+          ? isExpiringSoon(i) 
+          : filterStatus === 'NEEDS_UPDATE'
+            ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
+            : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
 

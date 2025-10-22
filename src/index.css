@@ -2698,6 +2698,7 @@ body:has(.modal) .main-content * {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: var(--space-6);
   margin-bottom: var(--space-8);
+  justify-items: center;
 }
 
 .stat-card {
@@ -2709,6 +2710,8 @@ body:has(.modal) .main-content * {
   align-items: center;
   gap: var(--space-4);
   transition: all 0.2s ease;
+  width: 100%;
+  max-width: 300px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -3220,6 +3223,7 @@ body:has(.modal) .main-content * {
   .dashboard .stats-grid {
     grid-template-columns: 1fr;
     gap: var(--space-4);
+    justify-items: center;
   }
 
   .sales-stats,
