@@ -533,6 +533,8 @@ const ExpenseForm: React.FC<{
   onSubmit: (data: ExpenseFormData) => void;
   onCancel: () => void;
 }> = ({ expense, onSubmit, onCancel }) => {
+  const { notify } = useToast();
+  
   const coerceDate = (value: unknown): Date => {
     if (value instanceof Date) return value;
     if (typeof value === 'string' || typeof value === 'number') return new Date(value);
@@ -585,6 +587,25 @@ const ExpenseForm: React.FC<{
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    const newErrors: {[key: string]: string} = {};
+    if (!formData.amount || formData.amount <= 0) {
+      newErrors.amount = 'Số tiền phải lớn hơn 0';
+    }
+    if (!formData.description.trim()) {
+      newErrors.description = 'Mô tả là bắt buộc';
+    }
+    if (!formData.date || isNaN(formData.date.getTime())) {
+      newErrors.date = 'Ngày là bắt buộc';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      const errorMessages = Object.values(newErrors).join(', ');
+      notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
+      return;
+    }
+    
     onSubmit(formData);
   };
 

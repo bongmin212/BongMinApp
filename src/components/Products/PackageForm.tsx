@@ -28,7 +28,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     accountColumns: [],
     defaultSlots: undefined
   });
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [priceDisplay, setPriceDisplay] = useState<{ costPrice: string; ctvPrice: string; retailPrice: string }>({ costPrice: '0', ctvPrice: '0', retailPrice: '0' });
   const [sharedConfigLocked, setSharedConfigLocked] = useState<boolean>(false);
   const [firstPackageId, setFirstPackageId] = useState<string | null>(null);
@@ -287,7 +286,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     }
     
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      const errorMessages = Object.values(newErrors).join(', ');
+      notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
       return;
     }
 
@@ -536,13 +536,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
       [name]: name.includes('Price') || name === 'warrantyPeriod' ? Number(value) : value
     }));
     
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
   };
 
   const formatNumberVn = (num: number): string => {
@@ -558,9 +551,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     const numeric = parseVnCurrencyString(raw);
     setFormData(prev => ({ ...prev, [field]: numeric }));
     setPriceDisplay(prev => ({ ...prev, [field]: formatNumberVn(numeric) }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
-    }
   };
 
   const handleWarrantyChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -37,7 +37,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     useCustomExpiry: false,
     customExpiryDate: undefined
   });
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [selectedProduct, setSelectedProduct] = useState<string>('');
   const [availableInventory, setAvailableInventory] = useState<InventoryItem[]>([]);
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
@@ -534,7 +533,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      const errorMessages = Object.values(newErrors).join(', ');
+      notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
       return;
     }
 
@@ -964,13 +964,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       [name]: value
     }));
     
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
   };
 
   const handleCustomFieldChange = (fieldId: string, value: string) => {
@@ -978,10 +971,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       ...prev,
       customFieldValues: { ...(prev.customFieldValues || {}), [fieldId]: value }
     }));
-    const errorKey = `cf_${fieldId}`;
-    if (errors[errorKey]) {
-      setErrors(prev => ({ ...prev, [errorKey]: '' }));
-    }
   };
 
   const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -1152,7 +1141,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             <input
               type="text"
               name="code"
-              className={`form-control ${errors.code ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.code}
               onChange={handleChange}
               placeholder="Tự tạo như DH0001"
@@ -1162,10 +1151,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               title={'Mã tự động tạo - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
-            {errors.code && (
-              <div className="text-danger small mt-1">{errors.code}</div>
-            )}
-            {!order && !errors.code && (
+            {!order && (
               <div className="text-muted small mt-1">Mã đơn hàng được tạo tự động và không thể chỉnh sửa.</div>
             )}
           </div>
@@ -1177,16 +1163,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             <input
               type="date"
               name="purchaseDate"
-              className={`form-control ${errors.purchaseDate ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.purchaseDate instanceof Date && !isNaN(formData.purchaseDate.getTime()) ? formData.purchaseDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]}
               onChange={(e) => setFormData(prev => ({
                 ...prev,
                 purchaseDate: new Date(e.target.value)
               }))}
             />
-            {errors.purchaseDate && (
-              <div className="text-danger small mt-1">{errors.purchaseDate}</div>
-            )}
           </div>
 
           <div className="form-group">
@@ -1221,7 +1204,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </label>
             <select
               name="packageId"
-              className={`form-control ${errors.packageId ? 'is-invalid' : ''}`}
+              className="form-control"
               value={formData.packageId}
               onChange={handleChange}
               disabled={!selectedProduct}
@@ -1241,9 +1224,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 </option>
               ))}
             </select>
-            {errors.packageId && (
-              <div className="text-danger small mt-1">{errors.packageId}</div>
-            )}
           </div>
 
           {getSelectedPackage() && (
@@ -1265,7 +1245,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 <div className="mt-2">
                   <input
                     type="date"
-                    className={`form-control ${errors.customExpiryDate ? 'is-invalid' : ''}`}
+                    className="form-control"
                     value={(formData.customExpiryDate instanceof Date && !isNaN(formData.customExpiryDate.getTime()))
                       ? formData.customExpiryDate.toISOString().split('T')[0]
                       : ''}
@@ -1274,14 +1254,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         ...prev,
                         customExpiryDate: e.target.value ? new Date(e.target.value) : undefined
                       }));
-                      if (errors.customExpiryDate) {
-                        setErrors(prev => ({ ...prev, customExpiryDate: '' }));
-                      }
                     }}
                   />
-                  {errors.customExpiryDate && (
-                    <div className="text-danger small mt-1">{errors.customExpiryDate}</div>
-                  )}
                 </div>
               )}
               {(() => {
@@ -1330,14 +1304,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       </label>
                       <input
                         type="text"
-                        className={`form-control ${errors[`cf_${cf.id}`] ? 'is-invalid' : ''}`}
+                        className="form-control"
                         value={(formData.customFieldValues || {})[cf.id] || ''}
                         onChange={(e) => handleCustomFieldChange(cf.id, e.target.value)}
                         placeholder={cf.placeholder || `Nhập ${cf.title.toLowerCase()}`}
                       />
-                      {errors[`cf_${cf.id}`] && (
-                        <div className="text-danger small mt-1">{errors[`cf_${cf.id}`]}</div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1361,7 +1332,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     onChange={(e) => setInventorySearch(e.target.value)}
                   />
                   <select
-                    className={`form-control ${errors["inventory"] ? 'is-invalid' : ''}`}
+                    className="form-control"
                     value={selectedInventoryId}
                     onChange={(e) => {
                       debugLog('Inventory selection changed to:', e.target.value);
@@ -1404,9 +1375,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       );
                     })}
                   </select>
-                  {errors["inventory"] && (
-                    <div className="text-danger small mt-1">{errors["inventory"]}</div>
-                  )}
                   <div className="small text-muted mt-1">Nếu chọn, đơn sẽ sử dụng hàng trong kho và tự đánh dấu là đã bán.</div>
                   {!!selectedInventoryId && (() => {
                     const item = availableInventory.find(i => i.id === selectedInventoryId);
@@ -1582,14 +1550,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               <div style={{ flex: 1 }}>
                 <input
                   type="text"
-                  className={`form-control mb-2 ${errors.customerId ? 'is-invalid' : ''}`}
+                  className="form-control mb-2"
                   placeholder="Tìm khách theo tên/SĐT/email/mã..."
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                 />
                 <select
                   name="customerId"
-                  className={`form-control ${errors.customerId ? 'is-invalid' : ''}`}
+                  className="form-control"
                   value={formData.customerId}
                   onChange={handleChange}
                 >
@@ -1620,9 +1588,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 Tạo mới
               </button>
             </div>
-            {errors.customerId && (
-              <div className="text-danger small mt-1">{errors.customerId}</div>
-            )}
           </div>
 
           {(() => {
@@ -1816,7 +1781,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     <label className="form-label">Giá bán tùy chỉnh (₫)</label>
                     <input
                       type="number"
-                      className={`form-control ${errors.customPrice ? 'is-invalid' : ''}`}
+                      className="form-control"
                       value={formData.customPrice || ''}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
@@ -1826,9 +1791,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       min="0"
                       step="1000"
                     />
-                    {errors.customPrice && (
-                      <div className="text-danger small mt-1">{errors.customPrice}</div>
-                    )}
                   </div>
                   <div className="alert alert-success">
                     <strong>Giá bán:</strong> {formatPrice(formData.customPrice || 0)}

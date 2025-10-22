@@ -24,7 +24,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
     sourceDetail: '',
     notes: ''
   });
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     if (customer) {
@@ -124,7 +123,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
     }
     
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      const errorMessages = Object.values(newErrors).join(', ');
+      notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
       return;
     }
 
@@ -260,13 +260,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
       [name]: value
     }));
     
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
   };
 
   const isValidEmail = (email: string): boolean => {

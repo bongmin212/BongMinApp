@@ -20,7 +20,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
     description: '',
     sharedInventoryPool: false
   });
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     if (product) {
@@ -102,7 +101,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
     }
     
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
+      const errorMessages = Object.values(newErrors).join(', ');
+      notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
       return;
     }
 
@@ -212,13 +212,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
       [name]: value
     }));
     
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
-    }
   };
 
   return (

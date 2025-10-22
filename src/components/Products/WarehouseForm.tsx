@@ -34,7 +34,6 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     accountData: {},
     totalSlots: undefined
   });
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
@@ -287,7 +286,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     });
     // no account config here; package defines structure
     if (Object.keys(newErrors).length) {
-      setErrors(newErrors);
+      const errorMessages = Object.values(newErrors).join(', ');
+      notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
       return;
     }
 
@@ -705,7 +705,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                         {!isRequired && <span className="text-muted small"> (không hiển thị trong đơn hàng)</span>}
                       </label>
                       <textarea
-                        className={`form-control ${errors[`account_${col.id}`] ? 'is-invalid' : ''}`}
+                        className="form-control"
                         value={(formData.accountData || {})[col.id] || ''}
                         onChange={(e) =>
                           setFormData(prev => ({
@@ -716,9 +716,6 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                         placeholder={col.title}
                         rows={col.title.toLowerCase().includes('hướng dẫn') ? 4 : 2}
                       />
-                      {errors[`account_${col.id}`] && (
-                        <div className="text-danger small mt-1">{errors[`account_${col.id}`]}</div>
-                      )}
                     </div>
                   );
                 })}
