@@ -65,18 +65,23 @@ const WarehouseList: React.FC = () => {
           }
           
           if (orphanedSlots && orphanedSlots.length > 0) {
+            console.log('Found orphaned slots:', orphanedSlots.map(s => ({ id: s.id, code: s.code, status: s.status, linked_order_id: s.linked_order_id })));
             const slotIds = orphanedSlots.map(slot => slot.id);
-            const { error: updateError } = await sb
+            const { data: updateResult, error: updateError } = await sb
               .from('inventory')
               .update({ status: 'AVAILABLE', linked_order_id: null })
-              .in('id', slotIds);
+              .in('id', slotIds)
+              .select('id');
             
             if (updateError) {
               console.error('Error fixing orphaned slots:', updateError);
               notify('Lỗi khi fix slot thường bị kẹt', 'error');
+            } else if (updateResult && updateResult.length > 0) {
+              console.log('Successfully fixed slots:', updateResult.map(r => r.id));
+              fixedCount += updateResult.length;
+              fixedDetails.push(`${updateResult.length} slot thường`);
             } else {
-              fixedCount += orphanedSlots.length;
-              fixedDetails.push(`${orphanedSlots.length} slot thường`);
+              console.log('No slots were actually updated');
             }
           }
           
