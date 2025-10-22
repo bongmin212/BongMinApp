@@ -2968,15 +2968,9 @@ body:has(.modal) .main-content * {
   transform: translateY(-1px) !important;
 }
 
+/* Hide icons in overview tab to match sales cards */
 .dashboard .overview-tab .stat-card .stat-icon {
-  width: 48px !important;
-  height: 48px !important;
-  background: var(--primary-50) !important;
-  border-radius: var(--radius-lg) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  color: var(--primary-600) !important;
+  display: none !important;
 }
 
 .dashboard .overview-tab .stat-card .stat-content {
@@ -2989,8 +2983,8 @@ body:has(.modal) .main-content * {
 
 .dashboard .overview-tab .stat-card .stat-content h3 {
   font-size: var(--text-3xl) !important;
-  font-weight: 600 !important;
-  color: var(--text-primary) !important;
+  font-weight: 700 !important;
+  color: var(--primary-600) !important;
   margin: 0 0 var(--space-2) 0 !important;
   text-align: center !important;
 }
@@ -3223,39 +3217,11 @@ body:has(.modal) .main-content * {
     justify-items: center;
   }
 
-  /* Ensure stat cards are centered on mobile */
-  .dashboard .overview-tab .stat-card {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    text-align: center !important;
-    justify-content: center !important;
-    width: 100% !important;
-    max-width: 300px !important;
-    margin: 0 auto !important;
-  }
-
-  .dashboard .overview-tab .stat-card .stat-icon {
-    margin: 0 auto !important;
-  }
-
-  .dashboard .overview-tab .stat-card .stat-content {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    text-align: center !important;
-    width: 100% !important;
-    justify-content: center !important;
-  }
-
-  .dashboard .overview-tab .stat-card .stat-content h3 {
-    text-align: center !important;
-    margin: 0 auto var(--space-2) auto !important;
-  }
-
-  .dashboard .overview-tab .stat-card .stat-content p {
-    text-align: center !important;
-    margin: 0 auto !important;
+  /* Mobile styles for overview tab cards */
+  .dashboard .overview-tab .stats-grid {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+    padding: var(--space-3);
   }
 
   .sales-stats,
