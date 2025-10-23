@@ -1303,14 +1303,6 @@ const WarehouseList: React.FC = () => {
               <option value="NEEDS_UPDATE">Cần update</option>
             </select>
           </div>
-          <div>
-            <select className="form-control" value={filterPaymentStatus} onChange={(e) => setFilterPaymentStatus(e.target.value)}>
-              <option value="">Thanh toán</option>
-              {INVENTORY_PAYMENT_STATUSES.map(status => (
-                <option key={status.value} value={status.value}>{status.label}</option>
-              ))}
-            </select>
-          </div>
           <div style={{ gridColumn: 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày nhập"
@@ -1318,6 +1310,14 @@ const WarehouseList: React.FC = () => {
               to={dateTo}
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
+          </div>
+          <div>
+            <select className="form-control" value={filterPaymentStatus} onChange={(e) => setFilterPaymentStatus(e.target.value)}>
+              <option value="">Thanh toán</option>
+              {INVENTORY_PAYMENT_STATUSES.map(status => (
+                <option key={status.value} value={status.value}>{status.label}</option>
+              ))}
+            </select>
           </div>
           <div>
             <select

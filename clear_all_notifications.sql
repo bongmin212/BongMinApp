@@ -14,3 +14,4 @@ DELETE FROM notifications;
 -- Verify deletion
 SELECT COUNT(*) as remaining_notifications FROM notifications;
 
+
