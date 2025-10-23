@@ -61,7 +61,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           customFieldValues: r.custom_field_values,
           purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
           expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
-          createdBy: r.created_by || 'system',
+          createdBy: 'system',
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
         })));
@@ -487,7 +487,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         // Log activity
         try {
           await sb.from('activity_logs').insert({ 
-            employee_id: state.user?.id || 'system', 
+            employee_id: 'system', 
             action: 'Cập nhật đơn bảo hành', 
             details: `warrantyId=${warranty.id}; warrantyCode=${warranty.code}; newStatus=${form.status}` 
           });
@@ -502,8 +502,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             code: form.code,
             order_id: resolvedOrderId,
             reason: form.reason.trim(),
-            status: 'PENDING',
-            created_by: state.user?.id || 'system'
+            status: 'PENDING'
           });
         
         if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
@@ -576,7 +575,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         // Log activity
         try {
           await sb.from('activity_logs').insert({ 
-            employee_id: state.user?.id || 'system', 
+            employee_id: 'system', 
             action: 'Tạo đơn bảo hành', 
             details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}` 
           });
@@ -889,7 +888,7 @@ const WarrantyList: React.FC = () => {
       status: r.status,
       replacementInventoryId: r.replacement_inventory_id || undefined,
       newOrderInfo: r.new_order_info || undefined,
-      createdBy: r.created_by || 'system',
+      createdBy: 'system',
       customerId: r.customer_id || undefined,
       productId: r.product_id || undefined,
       packageId: r.package_id || undefined,

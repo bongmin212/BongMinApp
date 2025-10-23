@@ -77,46 +77,107 @@ const saveToStorage = <T>(key: string, data: T[]): void => {
 
 // Database operations
 export class Database {
-  // Code generation is now handled server-side by Supabase triggers
-  // These functions are kept for backward compatibility but should not be used
+  // Order code helpers
   static generateNextOrderCode(prefix: string = 'DH', padLength: number = 4): string {
-    console.warn('generateNextOrderCode is deprecated - codes are now generated server-side');
-    return `${prefix}${String(Date.now()).slice(-4)}`; // Fallback using timestamp
+    const orders = this.getOrders();
+    if (orders.length === 0) {
+      return `${prefix}${String(1).padStart(padLength, '0')}`;
+    }
+    
+    const existingNumbers = new Set<number>();
+    let detectedPad = padLength;
+    
+    orders.forEach(o => {
+      const m = String(o.code || '').match(/^([A-Za-z]+)(\d+)$/);
+      if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
+        const numStr = m[2];
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num)) {
+          existingNumbers.add(num);
+          detectedPad = Math.max(detectedPad, numStr.length);
+        }
+      }
+    });
+    
+    // Find the first available number starting from 1
+    // This will reuse deleted codes immediately
+    let nextNum = 1;
+    while (existingNumbers.has(nextNum)) {
+      nextNum++;
+    }
+    
+    const width = Math.max(padLength, detectedPad);
+    return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
-  
+  // Generic code helpers for other modules
   static generateNextCodeFromList(codes: string[], prefix: string, padLength: number = 3): string {
-    console.warn('generateNextCodeFromList is deprecated - codes are now generated server-side');
-    return `${prefix}${String(Date.now()).slice(-3)}`; // Fallback using timestamp
+    const existingNumbers = new Set<number>();
+    let detectedPad = padLength;
+    
+    codes.forEach(code => {
+      const m = String(code || '').match(/^([A-Za-z]+)(\d+)$/);
+      if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
+        const numStr = m[2];
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num)) {
+          existingNumbers.add(num);
+          detectedPad = Math.max(detectedPad, numStr.length);
+        }
+      }
+    });
+    
+    // Find the first available number starting from 1
+    // This will reuse deleted codes immediately
+    let nextNum = 1;
+    while (existingNumbers.has(nextNum)) {
+      nextNum++;
+    }
+    
+    const width = Math.max(padLength, detectedPad);
+    return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
-  
   static generateNextCustomerCode(): string {
-    console.warn('generateNextCustomerCode is deprecated - codes are now generated server-side');
-    return `KH${String(Date.now()).slice(-3)}`;
+    const customers = this.getCustomers();
+    if (customers.length === 0) {
+      return 'KH001';
+    }
+    return this.generateNextCodeFromList(customers.map(c => c.code), 'KH', 3);
   }
-  
   static generateNextProductCode(): string {
-    console.warn('generateNextProductCode is deprecated - codes are now generated server-side');
-    return `SP${String(Date.now()).slice(-3)}`;
+    const products = this.getProducts();
+    if (products.length === 0) {
+      return 'SP001';
+    }
+    return this.generateNextCodeFromList(products.map(p => p.code), 'SP', 3);
   }
-  
   static generateNextPackageCode(): string {
-    console.warn('generateNextPackageCode is deprecated - codes are now generated server-side');
-    return `PK${String(Date.now()).slice(-3)}`;
+    const packages = this.getPackages();
+    if (packages.length === 0) {
+      return 'PK001';
+    }
+    return this.generateNextCodeFromList(packages.map(p => p.code), 'PK', 3);
   }
-  
   static generateNextInventoryCode(): string {
-    console.warn('generateNextInventoryCode is deprecated - codes are now generated server-side');
-    return `KHO${String(Date.now()).slice(-3)}`;
+    const inventory = this.getInventory();
+    if (inventory.length === 0) {
+      return 'KHO001';
+    }
+    return this.generateNextCodeFromList(inventory.map(i => i.code), 'KHO', 3);
   }
-  
+  // Employees are managed by Supabase; no local code generation
   static async generateNextExpenseCode(): Promise<string> {
-    console.warn('generateNextExpenseCode is deprecated - codes are now generated server-side');
-    return `CP${String(Date.now()).slice(-3)}`;
+    const expenses = await this.getExpenses();
+    if (expenses.length === 0) {
+      return 'CP001';
+    }
+    return this.generateNextCodeFromList(expenses.map(e => e.code), 'CP', 3);
   }
-  
   static generateNextWarrantyCode(): string {
-    console.warn('generateNextWarrantyCode is deprecated - codes are now generated server-side');
-    return `BH${String(Date.now()).slice(-3)}`;
+    const warranties = this.getWarranties();
+    if (warranties.length === 0) {
+      return 'BH001';
+    }
+    return this.generateNextCodeFromList(warranties.map(w => w.code), 'BH', 3);
   }
   // Date helpers
   static addMonths(base: Date, months: number): Date {
@@ -145,12 +206,14 @@ export class Database {
   static saveWarranty(data: Omit<Warranty, 'id' | 'createdAt' | 'updatedAt'>): Warranty {
     const warranties = this.getWarranties();
     
-    // Let server generate code if not provided
-    const code = String(data.code || '').trim() || '';
+    const autoCode = String(data.code || '').trim() || this.generateNextWarrantyCode();
+    if (warranties.some(w => w.code === autoCode)) {
+      throw new Error(`Mã bảo hành "${autoCode}" đã tồn tại`);
+    }
     
     const newWarranty: Warranty = {
       ...data,
-      code: code, // Will be generated by server if empty
+      code: autoCode,
       id: generateId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -265,8 +328,11 @@ export class Database {
   static saveInventoryItem(data: InventoryFormData): InventoryItem {
     const items = this.getInventory();
     
-    // Let server generate code if not provided
-    const code = String(data.code || '').trim() || '';
+    // Auto-assign code if missing/blank
+    const autoCode = String(data.code || '').trim() || this.generateNextInventoryCode();
+    if (items.some(i => i.code === autoCode)) {
+      throw new Error(`Mã kho hàng "${autoCode}" đã tồn tại`);
+    }
     
     // compute expiry from package warranty
     const pkg = this.getPackages().find(p => p.id === data.packageId);
@@ -292,7 +358,7 @@ export class Database {
 
     const newItem: InventoryItem = {
       id: generateId(),
-      code: code, // Will be generated by server if empty
+      code: autoCode,
       productId: data.productId,
       packageId: data.packageId,
       purchaseDate,
@@ -586,12 +652,14 @@ export class Database {
   static saveProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Product {
     const products = this.getProducts();
     
-    // Let server generate code if not provided
-    const code = String(product.code || '').trim() || '';
+    const autoCode = String(product.code || '').trim() || this.generateNextProductCode();
+    if (products.some(p => p.code === autoCode)) {
+      throw new Error(`Mã sản phẩm "${autoCode}" đã tồn tại`);
+    }
     
     const newProduct: Product = {
       ...product,
-      code: code, // Will be generated by server if empty
+      code: autoCode,
       id: generateId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -647,12 +715,14 @@ export class Database {
   static savePackage(pkg: Omit<ProductPackage, 'id' | 'createdAt' | 'updatedAt'>): ProductPackage {
     const packages = this.getPackages();
     
-    // Let server generate code if not provided
-    const code = String(pkg.code || '').trim() || '';
+    const autoCode = String(pkg.code || '').trim() || this.generateNextPackageCode();
+    if (packages.some(p => p.code === autoCode)) {
+      throw new Error(`Mã gói sản phẩm "${autoCode}" đã tồn tại`);
+    }
     
     const newPackage: ProductPackage = {
       ...pkg,
-      code: code, // Will be generated by server if empty
+      code: autoCode,
       id: generateId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -733,12 +803,14 @@ export class Database {
   static saveCustomer(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Customer {
     const customers = this.getCustomers();
     
-    // Let server generate code if not provided
-    const code = String(customer.code || '').trim() || '';
+    const autoCode = String(customer.code || '').trim() || this.generateNextCustomerCode();
+    if (customers.some(c => c.code === autoCode)) {
+      throw new Error(`Mã khách hàng "${autoCode}" đã tồn tại`);
+    }
     
     const newCustomer: Customer = {
       ...customer,
-      code: code, // Will be generated by server if empty
+      code: autoCode,
       id: generateId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -794,12 +866,17 @@ export class Database {
   static saveOrder(order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Order {
     const orders = this.getOrders();
     
-    // Let server generate code if not provided
-    const code = String(order.code || '').trim() || '';
+    // Auto-assign code if missing/blank
+    const code = String(order.code || '').trim() || this.generateNextOrderCode('DH', 4);
+
+    // Check if code already exists
+    if (orders.some(o => o.code === code)) {
+      throw new Error(`Mã đơn hàng "${code}" đã tồn tại`);
+    }
     
     const newOrder: Order = {
       ...order,
-      code: code, // Will be generated by server if empty
+      code,
       id: generateId(),
       createdAt: new Date(),
       updatedAt: new Date()
@@ -1123,13 +1200,14 @@ export class Database {
 
   static async createExpense(expenseData: ExpenseFormData): Promise<Expense> {
     const expenses = await this.getExpenses();
-    // Let server generate code if not provided
-    const code = String(expenseData.code || '').trim() || '';
-    
+    const autoCode = String(expenseData.code || '').trim() || await this.generateNextExpenseCode();
+    if (expenses.some(e => e.code === autoCode)) {
+      throw new Error(`Mã chi phí "${autoCode}" đã tồn tại`);
+    }
     const newExpense: Expense = {
       id: generateId(),
       ...expenseData,
-      code: code, // Will be generated by server if empty
+      code: autoCode,
       createdBy: 'system', // Default user ID - will be replaced by actual user ID in Supabase
       createdAt: new Date(),
       updatedAt: new Date(),

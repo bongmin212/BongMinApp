@@ -43,17 +43,9 @@ export async function cleanupOrphanedEmployees() {
   if (!sb) return { ok: false, message: 'Supabase not configured' };
   
   try {
-    const { data, error } = await sb.rpc('cleanup_orphaned_employees');
-    if (error) {
-      console.error('[Cleanup] Failed to cleanup orphaned employees:', error);
-      return { ok: false, message: error.message };
-    }
-    
-    return { 
-      ok: true, 
-      deletedCount: data?.[0]?.deleted_count || 0,
-      deletedEmployees: data?.[0]?.deleted_employees || []
-    };
+    // Function removed - no longer available after rollback
+    console.warn('[Cleanup] cleanup_orphaned_employees function no longer available');
+    return { ok: false, message: 'Function no longer available' };
   } catch (e) {
     console.error('[Cleanup] Error:', e);
     return { ok: false, message: 'Cleanup failed' };

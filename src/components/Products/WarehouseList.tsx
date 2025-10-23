@@ -148,7 +148,7 @@ const WarehouseList: React.FC = () => {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: state.user?.id || 'system', 
+              employee_id: 'system', 
               action: 'Fix slot bị kẹt', 
               details: `Fixed ${fixedCount} slots: ${fixedDetails.join(', ')}` 
             });
@@ -472,40 +472,10 @@ const WarehouseList: React.FC = () => {
     checkForStuckSlots();
   };
 
-  // Initialize from URL/localStorage first
+  // Initialize from URL once
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      
-      // Check if we have order-related params that shouldn't be in warehouse
-      const orderParams = ['payment', 'expiry', 'onlyExpiringNotSent'];
-      const hasOrderParams = Array.from(params.keys()).some(key => orderParams.includes(key));
-      
-      // Also check for order-specific status values
-      const orderStatusValues = ['PROCESSING', 'COMPLETED', 'CANCELLED'];
-      const hasOrderStatus = params.get('status') && orderStatusValues.includes(params.get('status')!);
-      
-      // TEMPORARILY DISABLED: Clear URL logic that was interfering with dashboard navigation
-      // if (hasOrderParams || hasOrderStatus) {
-      //   // Clear URL completely when coming from orders tab
-      //   window.history.replaceState(null, '', window.location.pathname);
-      //   // Reset all filters to default
-      //   setSearchTerm('');
-      //   setDebouncedSearchTerm('');
-      //   setFilterProduct('');
-      //   setFilterPackage('');
-      //   setFilterStatus('');
-      //   setFilterPaymentStatus('');
-      //   setDateFrom('');
-      //   setDateTo('');
-      //   setOnlyAccounts(false);
-      //   setOnlyFreeSlots(false);
-      //   setPage(1);
-      //   setLimit(parseInt(localStorage.getItem('warehouseList.limit') || '10', 10));
-      //   return;
-      // }
-      
-      // Normal warehouse params initialization
       const q = params.get('q') || '';
       const status = params.get('status') || '';
       const paymentStatus = params.get('paymentStatus') || '';
@@ -515,14 +485,6 @@ const WarehouseList: React.FC = () => {
       const free = params.get('free') === '1';
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || localStorage.getItem('warehouseList.limit') || '10'), 10);
-      console.log('WarehouseList: Reading URL params:', { 
-        status, 
-        paymentStatus, 
-        page: p, 
-        limit: l,
-        accounts,
-        free 
-      });
       
       // Update all states in a batch to avoid timing issues
       setSearchTerm(q);
@@ -535,8 +497,6 @@ const WarehouseList: React.FC = () => {
       setOnlyFreeSlots(free);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
-      
-      console.log('WarehouseList: Set filterStatus to:', status);
     } catch (e) {
       console.error('WarehouseList: Error reading URL params:', e);
     }
@@ -545,33 +505,6 @@ const WarehouseList: React.FC = () => {
   useEffect(() => {
     refresh();
   }, []);
-
-  // Re-read URL parameters when data is loaded (for lazy loading)
-  useEffect(() => {
-    if (items.length > 0) {
-      console.log('WarehouseList: Data loaded, re-reading URL params');
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const status = params.get('status') || '';
-        const paymentStatus = params.get('paymentStatus') || '';
-        
-        if (status && status !== filterStatus) {
-          console.log('WarehouseList: Re-setting filterStatus from', filterStatus, 'to', status);
-          setFilterStatus(status);
-        }
-        if (paymentStatus && paymentStatus !== filterPaymentStatus) {
-          setFilterPaymentStatus(paymentStatus);
-        }
-      } catch (e) {
-        console.error('WarehouseList: Error re-reading URL params:', e);
-      }
-    }
-  }, [items.length, filterStatus, filterPaymentStatus]);
-
-  // Debug filterStatus changes
-  useEffect(() => {
-    console.log('WarehouseList: filterStatus changed to:', filterStatus);
-  }, [filterStatus]);
 
   // Listen for view warehouse events from notifications
   useEffect(() => {
@@ -1154,7 +1087,7 @@ const WarehouseList: React.FC = () => {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: state.user?.id || 'system', 
+              employee_id: 'system', 
               action: 'Gia hạn hàng loạt kho hàng', 
               details: `count=${successCount}; ids=${renewables.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}` 
             });
@@ -1815,8 +1748,7 @@ const WarehouseList: React.FC = () => {
                       amount: renewalDialog.amount,
                       previous_expiry_date: currentExpiry.toISOString(),
                       new_expiry_date: newExpiry.toISOString(),
-                      note: renewalDialog.note,
-                      created_by: state.user?.id || 'system'
+                      note: renewalDialog.note
                     });
                     
                     if (!renewalError) {
@@ -2033,7 +1965,7 @@ const WarehouseList: React.FC = () => {
                   try {
                     const sb2 = getSupabase();
                     if (sb2) await sb2.from('activity_logs').insert({ 
-                      employee_id: state.user?.id || 'system', 
+                      employee_id: 'system', 
                       action: 'Cập nhật trạng thái thanh toán hàng loạt', 
                       details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}` 
                     });

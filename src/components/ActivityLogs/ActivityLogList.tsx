@@ -127,7 +127,7 @@ const ActivityLogList: React.FC = () => {
       orderId: w.order_id || w.orderId,
       reason: w.reason,
       status: (w.status || 'PENDING').toUpperCase(),
-      createdBy: w.created_by || w.createdBy,
+      createdBy: 'system',
       replacementInventoryId: w.replacement_inventory_id || w.replacementInventoryId,
       newOrderInfo: w.new_order_info || w.newOrderInfo
     })) as Warranty[];

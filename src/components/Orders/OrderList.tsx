@@ -53,7 +53,7 @@ const OrderList: React.FC = () => {
 
   // Mark renewal message sent (Supabase-backed)
   const markRenewalMessageSent = async (orderId: string) => {
-    // Optimistic update in component state
+    // Update component state
     const prevOrders = orders;
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: state.user?.id || 'system' } : o));
 
@@ -73,7 +73,7 @@ const OrderList: React.FC = () => {
       renewal_message_sent_by: state.user?.id || null
     }).eq('id', orderId);
     if (error) {
-      // If Supabase write fails, keep optimistic state and persist locally
+      // If Supabase write fails, keep state and persist locally
       try {
         Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(nowIso), renewalMessageSentBy: state.user?.id || 'system' } as any);
       } catch {}
@@ -83,7 +83,7 @@ const OrderList: React.FC = () => {
     }
     try {
       const sb2 = getSupabase();
-      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu đã gửi tin nhắn gia hạn', details: `orderId=${orderId}` });
+      if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Đánh dấu đã gửi tin nhắn gia hạn', details: `orderId=${orderId}` });
     } catch {}
     // Mirror into local DB for consistency and trigger any dependent recomputations
     Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(nowIso), renewalMessageSentBy: state.user?.id || 'system' } as any);
@@ -420,7 +420,7 @@ const OrderList: React.FC = () => {
 
   const handleDelete = (id: string) => {
     const order = orders.find(o => o.id === id);
-    const invLinked: any = null; // inventory unlink handled server-side if needed
+    const invLinked: any = null; // inventory unlink handled if needed
     const now = new Date();
     const isExpired = order ? new Date(order.expiryDate) < now : false;
 
@@ -512,7 +512,7 @@ const OrderList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: (() => { const o = orders.find(x => x.id === id); return `orderId=${id}; orderCode=${o?.code}`; })() });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa đơn hàng', details: (() => { const o = orders.find(x => x.id === id); return `orderId=${id}; orderCode=${o?.code}`; })() });
             } catch {}
             loadData();
             notify('Xóa đơn hàng thành công', 'success');
@@ -563,7 +563,7 @@ const OrderList: React.FC = () => {
         }
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Trả slot về kho', details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked!.id}; inventoryCode=${invLinked!.code}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Trả slot về kho', details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked!.id}; inventoryCode=${invLinked!.code}` });
         } catch {}
         loadData();
         notify('Đã trả slot về kho', 'success');
@@ -596,7 +596,7 @@ const OrderList: React.FC = () => {
         });
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt đơn hàng', details: `orderCodes=${codes.join(',')}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa hàng loạt đơn hàng', details: `orderCodes=${codes.join(',')}` });
         } catch {}
         setSelectedIds([]);
         loadData();
@@ -615,7 +615,7 @@ const OrderList: React.FC = () => {
       const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
       try {
         const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật trạng thái hàng loạt', details: `status=${status}; orderCodes=${codes.join(',')}` });
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật trạng thái hàng loạt', details: `status=${status}; orderCodes=${codes.join(',')}` });
       } catch {}
       loadData();
       notify('Đã cập nhật trạng thái', 'success');
@@ -632,7 +632,7 @@ const OrderList: React.FC = () => {
       const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
       try {
         const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
       } catch {}
       loadData();
       notify('Đã cập nhật thanh toán', 'success');
@@ -1899,7 +1899,7 @@ const OrderList: React.FC = () => {
                   if (updated) {
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
+                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
                     } catch {}
                     setRenewState(null);
                     setViewingOrder(updated);
@@ -2087,7 +2087,7 @@ const OrderList: React.FC = () => {
                   const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED' });
                   try {
                     const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}` });
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}` });
                   } catch {}
                   setRefundState(null);
                   setViewingOrder(null);
@@ -2158,7 +2158,7 @@ const OrderList: React.FC = () => {
                   Database.updateOrder(order.id, { orderInfo: String((order as any).orderInfo || '') } as any);
                   try {
                     const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho', details: `orderId=${order.id}; inventoryId=${inventoryId}` });
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho', details: `orderId=${order.id}; inventoryId=${inventoryId}` });
                   } catch {}
                   if (mode === 'RETURN_ONLY') {
                     setReturnConfirmState(null);
@@ -2171,7 +2171,7 @@ const OrderList: React.FC = () => {
                   if (success) {
                   try {
                     const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}; orderCode=${order.code}` });
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}; orderCode=${order.code}` });
                   } catch {}
                     setReturnConfirmState(null);
                     loadData();

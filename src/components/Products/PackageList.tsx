@@ -139,7 +139,7 @@ const PackageList: React.FC = () => {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({
-              employee_id: state.user?.id || 'system',
+              employee_id: 'system',
               action: 'Xóa gói sản phẩm',
               details: [
                 `packageId=${id}`,
@@ -227,7 +227,7 @@ const PackageList: React.FC = () => {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({
-              employee_id: state.user?.id || 'system',
+              employee_id: 'system',
               action: 'Xóa hàng loạt gói',
               details: [
                 `ids=${selectedIds.join(',')}`,

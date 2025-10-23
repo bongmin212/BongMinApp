@@ -38,28 +38,80 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         notes: customer.notes || ''
       });
     } else {
-      // Code will be generated server-side
-      setFormData({
-        code: '',
-        name: '',
-        type: 'RETAIL',
-        phone: '',
-        email: '',
-        source: undefined,
-        sourceDetail: '',
-        notes: ''
-      });
+      // Always generate fresh code for new customer (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('customers').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'KH', 3);
+          setFormData({
+            code: nextCode,
+            name: '',
+            type: 'RETAIL',
+            phone: '',
+            email: '',
+            source: undefined,
+            sourceDetail: '',
+            notes: ''
+          });
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextCustomerCode();
+          setFormData({
+            code: nextCode,
+            name: '',
+            type: 'RETAIL',
+            phone: '',
+            email: '',
+            source: undefined,
+            sourceDetail: '',
+            notes: ''
+          });
+        }
+      })();
     }
   }, [customer]);
 
-  // No need to refresh code - server will generate it
+  // Force refresh code when form opens for new customer (after deletion)
+  useEffect(() => {
+    if (!customer) {
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('customers').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'KH', 3);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextCustomerCode();
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode
+          }));
+        }
+      })();
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
     const newErrors: {[key: string]: string} = {};
-    // Code will be generated server-side, no validation needed
+    const ensuredCode = (formData.code || '').trim() || Database.generateNextCustomerCode();
+    if (!(formData.code || '').trim()) {
+      setFormData(prev => ({ ...prev, code: ensuredCode }));
+    }
+    if (!ensuredCode.trim()) {
+      newErrors.code = 'Mã khách hàng là bắt buộc';
+    }
     if (!formData.name.trim()) {
       newErrors.name = 'Tên khách hàng là bắt buộc';
     }
@@ -142,7 +194,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             const detail = [`customerId=${customer.id}; customerCode=${customer.code}`, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật khách hàng', details: detail });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật khách hàng', details: detail });
             } catch {}
             notify('Cập nhật khách hàng thành công', 'success');
             onSuccess();
@@ -157,10 +209,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         // Create new customer
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        const { data: createdCustomer, error: insertError } = await sb
+        const { error: insertError } = await sb
           .from('customers')
           .insert({
-            code: null, // Let server generate
+            code: ensuredCode,
             name: formData.name,
             type: formData.type,
             phone: formData.phone,
@@ -168,31 +220,29 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             source: formData.source,
             source_detail: formData.sourceDetail,
             notes: formData.notes
-          })
-          .select('*')
-          .single();
-        if (insertError || !createdCustomer) throw new Error(insertError?.message || 'Không thể tạo khách hàng');
+          });
+        if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
         
-        // Update local storage with server-generated data
+        // Update local storage immediately to avoid code conflicts
         const newCustomer = {
-          id: createdCustomer.id,
-          code: createdCustomer.code,
-          name: createdCustomer.name,
-          type: createdCustomer.type,
-          phone: createdCustomer.phone,
-          email: createdCustomer.email,
-          source: createdCustomer.source,
-          sourceDetail: createdCustomer.source_detail || '',
-          notes: createdCustomer.notes,
-          createdAt: new Date(createdCustomer.created_at),
-          updatedAt: new Date(createdCustomer.updated_at)
+          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+          code: ensuredCode,
+          name: formData.name,
+          type: formData.type,
+          phone: formData.phone,
+          email: formData.email,
+          source: formData.source,
+          sourceDetail: formData.sourceDetail,
+          notes: formData.notes,
+          createdAt: new Date(),
+          updatedAt: new Date()
         };
         const currentCustomers = Database.getCustomers();
         Database.setCustomers([...currentCustomers, newCustomer]);
         
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo khách hàng', details: `customerCode=${createdCustomer.code}; name=${formData.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo khách hàng', details: `customerCode=${ensuredCode}; name=${formData.name}` });
         } catch {}
         notify('Thêm khách hàng thành công', 'success');
         onSuccess();
@@ -256,18 +306,15 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
               type="text"
               name="code"
               className="form-control"
-              value={formData.code || 'Sẽ được tạo tự động...'}
+              value={formData.code}
               onChange={handleChange}
-              placeholder="Sẽ được tạo tự động..."
+              placeholder="Tự tạo như KH001"
               readOnly
               disabled
               aria-disabled
-              title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
+              title={'Mã tự động tạo - không chỉnh sửa'}
               style={{ opacity: 0.6 } as React.CSSProperties}
             />
-            <div className="text-muted small mt-1">
-              Mã khách hàng được tạo tự động bởi server và không thể chỉnh sửa.
-            </div>
           </div>
 
           <div className="form-group">

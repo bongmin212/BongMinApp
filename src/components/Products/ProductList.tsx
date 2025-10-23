@@ -115,7 +115,7 @@ const ProductList: React.FC = () => {
     return () => { try { channel.unsubscribe(); } catch {} };
   }, [page, limit, debouncedSearchTerm]);
 
-  // Load server-side when page/limit/search changes
+  // Load when page/limit/search changes
   useEffect(() => {
     loadProducts();
   }, [page, limit, debouncedSearchTerm]);
@@ -161,7 +161,7 @@ const ProductList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa sản phẩm', details: `productId=${id}; productCode=${snapshot?.code || ''}; productName=${snapshot?.name || ''}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa sản phẩm', details: `productId=${id}; productCode=${snapshot?.code || ''}; productName=${snapshot?.name || ''}` });
             } catch {}
             loadProducts();
             notify('Xóa sản phẩm thành công', 'success');
@@ -214,7 +214,7 @@ const ProductList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}; names=${names}; codes=${codes}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}; names=${names}; codes=${codes}` });
             } catch {}
             setSelectedIds([]);
             loadProducts();

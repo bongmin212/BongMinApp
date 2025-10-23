@@ -126,23 +126,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
-  const markAsRead = useCallback(async (id: string) => {
+  const markAsRead = useCallback((id: string) => {
     setNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, isRead: true } : n)
     );
-    
-    // Update server
-    const sb = getSupabase();
-    if (sb) {
-      try {
-        await sb
-          .from('notifications')
-          .update({ is_read: true })
-          .eq('id', id);
-      } catch (error) {
-        console.error('Error marking notification as read on server:', error);
-      }
-    }
     
     // Persist to localStorage
     const readIds = getReadNotificationIds();
@@ -150,26 +137,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     saveReadNotificationIds(readIds);
   }, [getReadNotificationIds, saveReadNotificationIds]);
 
-  const markAllAsRead = useCallback(async () => {
+  const markAllAsRead = useCallback(() => {
     setNotifications(prev => 
       prev.map(n => ({ ...n, isRead: true }))
     );
-    
-    // Update server
-    const sb = getSupabase();
-    if (sb) {
-      try {
-        const currentUser = await sb.auth.getUser();
-        if (currentUser.data.user?.id) {
-          await sb
-            .from('notifications')
-            .update({ is_read: true })
-            .eq('employee_id', currentUser.data.user.id);
-        }
-      } catch (error) {
-        console.error('Error marking all notifications as read on server:', error);
-      }
-    }
     
     // Persist all current notification IDs to localStorage
     const readIds = getReadNotificationIds();
@@ -375,45 +346,99 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const generateNotifications = useCallback(async () => {
     try {
+      const [orders, packages, inventoryItems, warranties] = await Promise.all([
+        Database.getOrders(),
+        Database.getPackages(),
+        Database.getInventory(),
+        Database.getWarranties()
+      ]);
+
+      const allNotifications = [
+        ...checkExpiryWarnings(orders, packages),
+        ...checkNewOrders(orders),
+        ...checkPaymentReminders(orders),
+        ...checkProcessingOrders(orders),
+        ...checkProfileNeedsUpdate(inventoryItems),
+        ...checkNewWarranties(warranties)
+      ];
+
+      // Save to Supabase if available
       const sb = getSupabase();
-      if (!sb) return;
+      if (sb) {
+        try {
+          const currentUser = await sb.auth.getUser();
+          if (currentUser.data.user?.id) {
+            const userId = currentUser.data.user.id;
+            const notificationsToSave = allNotifications.map(notification => ({
+              type: notification.type,
+              title: notification.title,
+              message: notification.message,
+              priority: notification.priority,
+              is_read: notification.isRead,
+              created_at: notification.createdAt.toISOString(),
+              related_id: notification.relatedId,
+              action_url: notification.actionUrl,
+              employee_id: userId
+            }));
 
-      const currentUser = await sb.auth.getUser();
-      if (!currentUser.data.user?.id) return;
+            // Check for existing notifications to avoid duplicates
+            const { data: existingNotifications } = await sb
+              .from('notifications')
+              .select('id, type, related_id')
+              .eq('employee_id', userId);
 
-      const userId = currentUser.data.user.id;
+            const existingIds = new Set(
+              existingNotifications?.map(n => `${n.type}-${n.related_id}`) || []
+            );
 
-      // Use server-side notification generation
-      const { data: serverNotifications, error } = await sb.rpc('generate_user_notifications', {
-        p_user_id: userId
-      });
+            const newNotifications = notificationsToSave.filter(n => 
+              !existingIds.has(`${n.type}-${n.related_id}`)
+            );
 
-      if (error) {
-        console.error('Error generating server-side notifications:', error);
-        return;
+            if (newNotifications.length > 0) {
+              await sb.from('notifications').insert(newNotifications);
+            }
+          }
+        } catch (error) {
+          console.error('Error saving notifications to Supabase:', error);
+        }
       }
 
-      // Convert server notifications to client format
-      const allNotifications: Notification[] = (serverNotifications || []).map((n: any) => ({
-        id: n.id,
-        type: n.type,
-        title: n.title,
-        message: n.message,
-        priority: n.priority,
-        isRead: n.is_read,
-        createdAt: new Date(n.created_at),
-        relatedId: n.related_id,
-        actionUrl: n.action_url
-      }));
-
-      // Update local state with server-generated notifications
+      // Remove duplicates and update existing notifications
       const readIds = getReadNotificationIds();
       setNotifications(prev => {
-        // Merge with existing notifications, preserving read status
-        const mergedNotifications = allNotifications.map(notification => ({
-          ...notification,
-          isRead: readIds.has(notification.id) || notification.isRead
-        }));
+        // Create a map of existing notifications by their unique key (type + relatedId)
+        const existingMap = new Map<string, Notification>();
+        prev.forEach(n => {
+          const key = `${n.type}-${n.relatedId}`;
+          existingMap.set(key, n);
+        });
+
+        // Merge new notifications with existing ones
+        const mergedNotifications: Notification[] = [];
+        const processedKeys = new Set<string>();
+
+        // First, add all existing notifications
+        prev.forEach(n => {
+          const key = `${n.type}-${n.relatedId}`;
+          processedKeys.add(key);
+          mergedNotifications.push({
+            ...n,
+            isRead: readIds.has(n.id) || n.isRead
+          });
+        });
+
+        // Then add new notifications that don't already exist
+        allNotifications.forEach(newNotification => {
+          const key = `${newNotification.type}-${newNotification.relatedId}`;
+          if (!processedKeys.has(key)) {
+            mergedNotifications.push({
+              ...newNotification,
+              isRead: readIds.has(newNotification.id) || newNotification.isRead
+            });
+            processedKeys.add(key);
+          }
+        });
         
         // Save to localStorage as backup
         saveNotificationsToLocalStorage(mergedNotifications);
@@ -423,7 +448,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (error) {
       console.error('Error generating notifications:', error);
     }
-  }, [getReadNotificationIds, saveNotificationsToLocalStorage]);
+  }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties, getReadNotificationIds, saveNotificationsToLocalStorage]);
 
   const refreshNotifications = useCallback(() => {
     generateNotifications();

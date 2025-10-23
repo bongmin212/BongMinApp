@@ -197,7 +197,7 @@ const Dashboard: React.FC = () => {
           amount: r.amount || 0,
           description: r.description || '',
           date: r.date ? new Date(r.date) : new Date(),
-          createdBy: r.created_by || 'system',
+          createdBy: 'system',
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
         }));
@@ -209,7 +209,7 @@ const Dashboard: React.FC = () => {
           previousExpiryDate: r.previous_expiry_date ? new Date(r.previous_expiry_date) : new Date(),
           newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(),
           note: r.note,
-          createdBy: r.created_by || 'system',
+          createdBy: 'system',
           createdAt: r.created_at ? new Date(r.created_at) : new Date()
         }));
       } else {

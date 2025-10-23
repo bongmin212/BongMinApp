@@ -323,7 +323,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           })
           .eq('id', item.id);
         if (error) throw new Error(error.message || 'Không thể cập nhật kho');
-        // Optimistically update local inventory and propagate to linked orders
+        // Update local inventory and propagate to linked orders
         try {
           const current = Database.getInventory();
           const next = current.map((it) => it.id === item.id
@@ -407,7 +407,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               : `inventoryId=${item.id}; code=${formData.code}`;
               
             await sb2.from('activity_logs').insert({ 
-              employee_id: state.user?.id || 'system', 
+              employee_id: 'system', 
               action: 'Sửa kho', 
               details 
             });
@@ -484,7 +484,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryCode=${ensuredCode}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryCode=${ensuredCode}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
         } catch {}
         onSuccess();
       }
@@ -754,7 +754,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                   Database.setInventory(currentInventory.filter((i: any) => i.id !== item.id));
                   try {
                     const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${item.id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
+                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${item.id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
                   } catch {}
                   notify('Đã xóa khỏi kho', 'success');
                   setConfirmDeleteVisible(false);

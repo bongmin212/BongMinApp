@@ -126,7 +126,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setSelectedProfileIds([(order as any).inventoryProfileId]);
       }
     } else {
-      // Code will be generated server-side, no need to prefill
+      // Code will be generated client-side
       setFormData(prev => ({ ...prev, code: '' }));
     }
   }, [order]);
@@ -135,24 +135,53 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   useEffect(() => {
     if (!order) {
       const today = new Date();
-      setFormData(prev => ({
-        ...prev,
-        code: '', // Will be generated server-side
-        purchaseDate: today,
-        packageId: '',
-        customerId: '',
-        status: 'PROCESSING',
-        paymentStatus: 'UNPAID',
-        orderInfo: '',
-        notes: '',
-        useCustomPrice: false,
-        customPrice: 0,
-        customFieldValues: {},
-        inventoryProfileId: '',
-        useCustomExpiry: false,
-        customExpiryDate: undefined
-      }));
+      // Generate fresh code for new order (from Supabase)
+      (async () => {
+        try {
+          const sb = getSupabase();
+          if (!sb) return;
+          const { data } = await sb.from('orders').select('code').order('created_at', { ascending: false }).limit(2000);
+          const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+          const nextCode = Database.generateNextCodeFromList(codes, 'DH', 3);
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode,
+            purchaseDate: today,
+            packageId: '',
+            customerId: '',
+            status: 'PROCESSING',
+            paymentStatus: 'UNPAID',
+            orderInfo: '',
+            notes: '',
+            useCustomPrice: false,
+            customPrice: 0,
+            customFieldValues: {},
+            useCustomExpiry: false,
+            customExpiryDate: undefined
+          }));
+        } catch {
+          // Fallback to local storage method
+          const nextCode = Database.generateNextOrderCode();
+          setFormData(prev => ({
+            ...prev,
+            code: nextCode,
+            purchaseDate: today,
+            packageId: '',
+            customerId: '',
+            status: 'PROCESSING',
+            paymentStatus: 'UNPAID',
+            orderInfo: '',
+            notes: '',
+            useCustomPrice: false,
+            customPrice: 0,
+            customFieldValues: {},
+            useCustomExpiry: false,
+            customExpiryDate: undefined
+          }));
+        }
+      })();
     }
+    // Note: For editing orders, form data is set in the first useEffect above
   }, []);
 
   const loadData = async () => {
@@ -390,7 +419,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     const existingId = (order as any)?.inventoryProfileId; // backward compatibility
     const validExistingIds = existingIds.filter((id: string) => allowed.some((p: any) => p.id === id));
     const validExistingId = existingId && allowed.some((p: any) => p.id === existingId) ? [existingId] : [];
-    setSelectedProfileIds(validExistingIds.length > 0 ? validExistingIds : validExistingId);
+    const finalIds = validExistingIds.length > 0 ? validExistingIds : validExistingId;
+    setSelectedProfileIds(finalIds);
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
 
   // Reset custom fields and selected slot when package changes (new order flow)
@@ -415,6 +445,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     }
   }, [order, packages]);
 
+  // Set selected product when form data changes (for editing)
+  useEffect(() => {
+    if (formData.packageId && packages.length) {
+      const pkg = packages.find(p => p.id === formData.packageId);
+      if (pkg && pkg.productId !== selectedProduct) {
+        setSelectedProduct(pkg.productId);
+      }
+    }
+  }, [formData.packageId, packages, selectedProduct]);
+
   // Debounce search inputs (300ms)
   useEffect(() => {
     const t = setTimeout(() => setDebouncedProductSearch(productSearch.trim().toLowerCase()), 300);
@@ -431,12 +471,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Code will be generated server-side if empty
+    // Code will be generated client-side if empty
     const code = (formData.code || '').trim();
 
     // Validation
     const newErrors: {[key: string]: string} = {};
-    // Code will be generated server-side, no validation needed
+    // Code will be generated client-side, no validation needed
     if (!formData.packageId) {
       newErrors.packageId = 'Vui lòng chọn gói sản phẩm';
     }
@@ -547,9 +587,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return isCTV ? (selectedPackage.ctvPrice || 0) : (selectedPackage.retailPrice || 0);
       })();
 
-      const orderData = {
+        const orderData = {
         ...formData,
-        code: code, // Will be generated server-side if empty
+        code: code || Database.generateNextOrderCode(), // Use client-side generation
         expiryDate,
         createdBy: state.user?.id || '',
         inventoryItemId: selectedInventoryId || undefined,
@@ -689,7 +729,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               customPrice: updateResult.custom_price,
               salePrice: updateResult.sale_price,
               customFieldValues: updateResult.custom_field_values,
-              createdBy: updateResult.created_by || state.user?.id || 'system',
+              createdBy: 'system',
               createdAt: updateResult.created_at ? new Date(updateResult.created_at) : new Date(),
               updatedAt: updateResult.updated_at ? new Date(updateResult.updated_at) : new Date()
             };
@@ -701,51 +741,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               currentOrders[orderIndex] = updatedOrder;
               Database.setOrders(currentOrders);
             }
-            // Handle inventory changes using atomic functions
+            // Handle inventory changes (client-side only)
             const prevInventoryId = order.inventoryItemId;
             const nextInventoryId = selectedInventoryId || undefined;
-
-            // Release previous inventory if changed
-            if (prevInventoryId && prevInventoryId !== nextInventoryId) {
-              try {
-                const { data: success, error: releaseError } = await sb.rpc('release_inventory_from_order', {
-                  p_order_id: order.id,
-                  p_inventory_id: prevInventoryId
-                });
-                
-                if (releaseError) {
-                  console.error('Error releasing inventory:', releaseError);
-                }
-              } catch (error) {
-                console.error('Error releasing previous inventory:', error);
-              }
-            }
-
-            // Assign new inventory if selected
-            if (nextInventoryId && nextInventoryId !== prevInventoryId) {
-              try {
-                const { data: success, error: assignError } = await sb.rpc('assign_inventory_to_order', {
-                  p_order_id: order.id,
-                  p_inventory_id: nextInventoryId,
-                  p_profile_ids: selectedProfileIds.length > 0 ? selectedProfileIds : null
-                });
-                
-                if (assignError) {
-                  console.error('Error assigning inventory:', assignError);
-                  notify('Lỗi liên kết kho hàng: ' + assignError.message, 'warning');
-                } else if (!success) {
-                  notify('Kho hàng đã được sử dụng bởi người khác', 'warning');
-                }
-              } catch (error) {
-                console.error('Error in atomic inventory assignment:', error);
-                notify('Lỗi liên kết kho hàng', 'warning');
-              }
-            }
             const base = [`orderId=${order.id}; orderCode=${order.code}`];
             const detail = [...base, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật đơn hàng', details: detail });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật đơn hàng', details: detail });
             } catch {}
             notify('Cập nhật đơn hàng thành công', 'success');
             onSuccess();
@@ -760,7 +763,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         if (!sb) throw new Error('Supabase not configured');
         
         const insertData = {
-          code: orderData.code || null, // Let server generate if empty
+          code: orderData.code, // Use client-generated code
           purchase_date: orderData.purchaseDate instanceof Date ? orderData.purchaseDate.toISOString() : orderData.purchaseDate,
           package_id: orderData.packageId,
           customer_id: orderData.customerId,
@@ -774,8 +777,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           use_custom_price: orderData.useCustomPrice || false,
           custom_price: orderData.customPrice || null,
           custom_field_values: orderData.customFieldValues || null,
-          sale_price: (orderData as any).salePrice || null,
-          created_by: state.user?.id || 'system'
+          sale_price: (orderData as any).salePrice || null
         };
         
         const { data: createData, error: createErr } = await sb
@@ -808,7 +810,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           customPrice: createData.custom_price,
           salePrice: createData.sale_price,
           customFieldValues: createData.custom_field_values,
-          createdBy: createData.created_by || state.user?.id || 'system',
+          createdBy: 'system',
           createdAt: createData.created_at ? new Date(createData.created_at) : new Date(),
           updatedAt: createData.updated_at ? new Date(createData.updated_at) : new Date()
         };
@@ -817,32 +819,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const currentOrders = Database.getOrders();
         Database.setOrders([...currentOrders, created]);
         
-        // Use atomic inventory assignment if inventory is selected
-        if (selectedInventoryId) {
-          try {
-            const sb2 = getSupabase();
-            if (sb2) {
-              const { data: success, error: assignError } = await sb2.rpc('assign_inventory_to_order', {
-                p_order_id: created.id,
-                p_inventory_id: selectedInventoryId,
-                p_profile_ids: selectedProfileIds.length > 0 ? selectedProfileIds : null
-              });
-              
-              if (assignError) {
-                console.error('Error assigning inventory:', assignError);
-                notify('Lỗi liên kết kho hàng: ' + assignError.message, 'warning');
-              } else if (!success) {
-                notify('Kho hàng đã được sử dụng bởi người khác', 'warning');
-              }
-            }
-          } catch (error) {
-            console.error('Error in atomic inventory assignment:', error);
-            notify('Lỗi liên kết kho hàng', 'warning');
-          }
-        }
+        // Inventory assignment handled client-side only
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
         } catch {}
         notify('Tạo đơn hàng thành công', 'success');
         onSuccess();
@@ -884,16 +864,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       return;
     }
 
-    // Code will be generated server-side
+    // Code will be generated client-side
     
     try {
       const sb = getSupabase();
       if (!sb) throw new Error('Supabase not configured');
       
-      const { data: createdCustomer, error: insertError } = await sb
+        const { data: createdCustomer, error: insertError } = await sb
         .from('customers')
         .insert({
-          code: null, // Let server generate
+          code: newCustomerData.code, // Use client-generated code
           name: newCustomerData.name,
           type: newCustomerData.type,
           phone: newCustomerData.phone,
@@ -945,7 +925,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ 
-            employee_id: state.user?.id || 'system', 
+            employee_id: 'system', 
             action: 'Tạo khách hàng', 
             details: `customerCode=${createdCustomer.code}; name=${newCustomerData.name}` 
           });
@@ -1029,27 +1009,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Mã đơn hàng - Auto-generated */}
+          {/* Mã đơn hàng - Read-only display */}
           <div className="form-group">
             <label className="form-label">
-              Mã đơn hàng <span className="text-danger">*</span>
+              Mã đơn hàng
             </label>
             <input
               type="text"
-              name="code"
               className="form-control"
-              value={formData.code || 'Sẽ được tạo tự động...'}
-              onChange={handleChange}
-              placeholder="Sẽ được tạo tự động..."
+              value={formData.code || ''}
               readOnly
               disabled
-              aria-disabled
-              title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
-              style={{ opacity: 0.6 } as React.CSSProperties}
+              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
+              placeholder="Sẽ được tạo tự động..."
             />
-            <div className="text-muted small mt-1">
-              Mã đơn hàng được tạo tự động bởi server và không thể chỉnh sửa.
-            </div>
           </div>
 
           {/* 1. Ngày mua */}
@@ -1113,11 +1086,27 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   const newShowState = !showNewCustomerForm;
                   setShowNewCustomerForm(newShowState);
                   if (newShowState) {
-                  // Code will be generated server-side
-                  setNewCustomerData(prev => ({
-                    ...prev,
-                    code: ''
-                  }));
+                  // Generate fresh code for new customer
+                  (async () => {
+                    try {
+                      const sb = getSupabase();
+                      if (!sb) return;
+                      const { data } = await sb.from('customers').select('code').order('created_at', { ascending: false }).limit(2000);
+                      const codes = (data || []).map((r: any) => String(r.code || '')) as string[];
+                      const nextCode = Database.generateNextCodeFromList(codes, 'KH', 3);
+                      setNewCustomerData(prev => ({
+                        ...prev,
+                        code: nextCode
+                      }));
+                    } catch {
+                      // Fallback to local storage method
+                      const nextCode = Database.generateNextCustomerCode();
+                      setNewCustomerData(prev => ({
+                        ...prev,
+                        code: nextCode
+                      }));
+                    }
+                  })();
                   }
                 }}
                 className="btn btn-secondary"
@@ -1126,6 +1115,155 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               </button>
             </div>
           </div>
+
+          {/* New customer form - positioned right after customer selection */}
+          {showNewCustomerForm && (
+            <div className="card mb-3">
+              <div className="card-header">
+                <h5>Tạo khách hàng mới</h5>
+              </div>
+              <div className="card-body">
+                <div className="form-group">
+                  <label className="form-label">
+                    Mã khách hàng <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newCustomerData.code || ''}
+                    placeholder="Sẽ được tạo tự động..."
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Tên khách hàng <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newCustomerData.name}
+                    onChange={(e) => setNewCustomerData(prev => ({
+                      ...prev,
+                      name: e.target.value
+                    }))}
+                    placeholder="Nhập tên khách hàng"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">
+                    Loại khách hàng <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    className="form-control"
+                    value={newCustomerData.type}
+                    onChange={(e) => setNewCustomerData(prev => ({
+                      ...prev,
+                      type: e.target.value as 'CTV' | 'RETAIL'
+                    }))}
+                  >
+                    {CUSTOMER_TYPES.map(type => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="row">
+                  <div className="col-md-6">
+                    <div className="form-group">
+                      <label className="form-label">Số điện thoại</label>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        value={newCustomerData.phone}
+                        onChange={(e) => setNewCustomerData(prev => ({
+                          ...prev,
+                          phone: e.target.value
+                        }))}
+                        placeholder="Nhập số điện thoại"
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="form-group">
+                      <label className="form-label">Email</label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={newCustomerData.email}
+                        onChange={(e) => setNewCustomerData(prev => ({
+                          ...prev,
+                          email: e.target.value
+                        }))}
+                        placeholder="Nhập email"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Nguồn khách hàng</label>
+                  <select
+                    className="form-control"
+                    value={newCustomerData.source || ''}
+                    onChange={(e) => {
+                      const value = e.target.value as CustomerSource | '';
+                      setNewCustomerData(prev => ({
+                        ...prev,
+                        source: value || undefined,
+                        sourceDetail: '' // Reset source detail when source changes
+                      }));
+                    }}
+                  >
+                    <option value="">Chọn nguồn khách hàng</option>
+                    {CUSTOMER_SOURCES.map(source => (
+                      <option key={source.value} value={source.value}>
+                        {source.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {newCustomerData.source && (
+                  <div className="form-group">
+                    <label className="form-label">Chi tiết nguồn</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={newCustomerData.sourceDetail}
+                      onChange={(e) => setNewCustomerData(prev => ({
+                        ...prev,
+                        sourceDetail: e.target.value
+                      }))}
+                      placeholder={`Nhập chi tiết về nguồn ${CUSTOMER_SOURCES.find(s => s.value === newCustomerData.source)?.label}`}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Ghi chú</label>
+                  <textarea
+                    className="form-control"
+                    value={newCustomerData.notes}
+                    onChange={(e) => setNewCustomerData(prev => ({
+                      ...prev,
+                      notes: e.target.value
+                    }))}
+                    placeholder="Nhập ghi chú thêm"
+                    rows={3}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCreateNewCustomer}
+                  className="btn btn-success"
+                >
+                  Tạo khách hàng
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 3. Sản phẩm */}
           <div className="form-group">
@@ -1517,158 +1655,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             return null;
           })()}
 
-          {/* New customer form */}
-          {showNewCustomerForm && (
-            <div className="card mb-3">
-              <div className="card-header">
-                <h5>Tạo khách hàng mới</h5>
-              </div>
-              <div className="card-body">
-                <div className="form-group">
-                  <label className="form-label">
-                    Mã khách hàng <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={newCustomerData.code || 'Sẽ được tạo tự động...'}
-                    readOnly
-                    disabled
-                    aria-disabled
-                    title={'Mã được tạo tự động bởi server - không chỉnh sửa'}
-                    style={{ opacity: 0.6 } as React.CSSProperties}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">
-                    Tên khách hàng <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={newCustomerData.name}
-                    onChange={(e) => setNewCustomerData(prev => ({
-                      ...prev,
-                      name: e.target.value
-                    }))}
-                    placeholder="Nhập tên khách hàng"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">
-                    Loại khách hàng <span className="text-danger">*</span>
-                  </label>
-                  <select
-                    className="form-control"
-                    value={newCustomerData.type}
-                    onChange={(e) => setNewCustomerData(prev => ({
-                      ...prev,
-                      type: e.target.value as 'CTV' | 'RETAIL'
-                    }))}
-                  >
-                    {CUSTOMER_TYPES.map(type => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="row">
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label className="form-label">Số điện thoại</label>
-                      <input
-                        type="tel"
-                        className="form-control"
-                        value={newCustomerData.phone}
-                        onChange={(e) => setNewCustomerData(prev => ({
-                          ...prev,
-                          phone: e.target.value
-                        }))}
-                        placeholder="Nhập số điện thoại"
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="form-group">
-                      <label className="form-label">Email</label>
-                      <input
-                        type="email"
-                        className="form-control"
-                        value={newCustomerData.email}
-                        onChange={(e) => setNewCustomerData(prev => ({
-                          ...prev,
-                          email: e.target.value
-                        }))}
-                        placeholder="Nhập email"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Nguồn khách hàng</label>
-                  <select
-                    className="form-control"
-                    value={newCustomerData.source || ''}
-                    onChange={(e) => {
-                      const value = e.target.value as CustomerSource | '';
-                      setNewCustomerData(prev => ({
-                        ...prev,
-                        source: value || undefined,
-                        sourceDetail: '' // Reset source detail when source changes
-                      }));
-                    }}
-                  >
-                    <option value="">Chọn nguồn khách hàng</option>
-                    {CUSTOMER_SOURCES.map(source => (
-                      <option key={source.value} value={source.value}>
-                        {source.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {newCustomerData.source && (
-                  <div className="form-group">
-                    <label className="form-label">Chi tiết nguồn</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={newCustomerData.sourceDetail}
-                      onChange={(e) => setNewCustomerData(prev => ({
-                        ...prev,
-                        sourceDetail: e.target.value
-                      }))}
-                      placeholder={`Nhập chi tiết về nguồn ${CUSTOMER_SOURCES.find(s => s.value === newCustomerData.source)?.label}`}
-                    />
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label className="form-label">Ghi chú</label>
-                  <textarea
-                    className="form-control"
-                    value={newCustomerData.notes}
-                    onChange={(e) => setNewCustomerData(prev => ({
-                      ...prev,
-                      notes: e.target.value
-                    }))}
-                    placeholder="Nhập ghi chú thêm"
-                    rows={3}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCreateNewCustomer}
-                  className="btn btn-success"
-                >
-                  Tạo khách hàng
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* 5. Thông tin thanh toán */}
           {getSelectedCustomer() && getSelectedPackage() && (
@@ -1792,26 +1778,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   setConfirmState({
                     message: msg,
                     onConfirm: async () => {
-                      // Release inventory using atomic function
-                      try {
-                        const sb = getSupabase();
-                        if (sb) {
-                          const { data: success, error: releaseError } = await sb.rpc('release_inventory_from_order', {
-                            p_order_id: order.id
-                          });
-                          
-                          if (releaseError) {
-                            console.error('Error releasing inventory:', releaseError);
-                          }
-                        }
-                      } catch (error) {
-                        console.error('Error releasing inventory:', error);
-                      }
+                      // Inventory release handled client-side only
                       const success = Database.deleteOrder(order.id);
                       if (success) {
                         try {
                           const sb2 = getSupabase();
-                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}` });
+                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}` });
                         } catch {}
                         onClose();
                         onSuccess();

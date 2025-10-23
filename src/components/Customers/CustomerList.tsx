@@ -26,7 +26,7 @@ const CustomerList: React.FC = () => {
   const [filterType, setFilterType] = useState<CustomerType | ''>('');
   const [filterSource, setFilterSource] = useState<CustomerSource | ''>('');
 
-  // Initialize state from URL first (no localStorage)
+  // Initialize state from URL once
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -36,11 +36,10 @@ const CustomerList: React.FC = () => {
       const p = parseInt(params.get('page') || '1', 10);
       const lsLimit = params.get('limit');
       const savedLimit = parseInt((lsLimit || '10'), 10);
+      
       if (!Number.isNaN(savedLimit) && savedLimit > 0) {
         setLimit(savedLimit);
       }
-      
-      console.log('CustomerList: Reading URL params:', { type: t, source: s, page: p, limit: savedLimit });
       
       // Update all states in a batch to avoid timing issues
       setSearchTerm(q);
@@ -48,62 +47,14 @@ const CustomerList: React.FC = () => {
       setFilterType(t || '');
       setFilterSource(s || '');
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
-      
-      console.log('CustomerList: Set filterType to:', t);
     } catch (e) {
       console.error('CustomerList: Error reading URL params:', e);
     }
   }, []);
 
-  // Re-read URL parameters after a short delay (for lazy loading)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const t = (params.get('type') || '') as CustomerType | '';
-        const s = (params.get('source') || '') as CustomerSource | '';
-        const p = parseInt(params.get('page') || '1', 10);
-        
-        // Only update if values are different to avoid infinite loops
-        if (t !== filterType) setFilterType(t);
-        if (s !== filterSource) setFilterSource(s);
-        if (p !== page) setPage(p);
-      } catch {}
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, []);
-
   useEffect(() => {
     loadCustomers();
   }, []);
-
-  // Re-read URL parameters when data is loaded (for lazy loading)
-  useEffect(() => {
-    if (customers.length > 0) {
-      console.log('CustomerList: Data loaded, re-reading URL params');
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const type = (params.get('type') || '') as CustomerType | '';
-        const source = (params.get('source') || '') as CustomerSource | '';
-        
-        if (type && type !== filterType) {
-          console.log('CustomerList: Re-setting filterType from', filterType, 'to', type);
-          setFilterType(type);
-        }
-        if (source && source !== filterSource) {
-          setFilterSource(source);
-        }
-      } catch (e) {
-        console.error('CustomerList: Error re-reading URL params:', e);
-      }
-    }
-  }, [customers.length, filterType, filterSource]);
-
-  // Debug filterType changes
-  useEffect(() => {
-    console.log('CustomerList: filterType changed to:', filterType);
-  }, [filterType]);
 
   // Debounce search term
   useEffect(() => {
@@ -117,8 +68,6 @@ const CustomerList: React.FC = () => {
   useEffect(() => {
     setPage(1);
   }, [debouncedSearchTerm, filterType, filterSource]);
-
-  // No localStorage persistence
 
   // Sync URL with state
   useEffect(() => {
@@ -207,7 +156,7 @@ const CustomerList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
             } catch {}
             loadCustomers();
             notify('Xóa khách hàng thành công', 'success');
@@ -257,7 +206,7 @@ const CustomerList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt khách hàng', details: `ids=${selectedIds.join(',')}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa hàng loạt khách hàng', details: `ids=${selectedIds.join(',')}` });
             } catch {}
             setSelectedIds([]);
             loadCustomers();
