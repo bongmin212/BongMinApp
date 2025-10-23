@@ -404,6 +404,7 @@ export interface Notification {
   relatedId?: string; // ID of related order, product, etc.
   actionUrl?: string; // URL to navigate when clicked
   employeeId?: string; // ID of employee who should receive this notification
+  archivedAt?: Date; // When notification was archived
 }
 
 export interface NotificationSettings {

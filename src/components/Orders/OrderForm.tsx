@@ -187,11 +187,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const loadData = async () => {
     const sb = getSupabase();
     if (!sb) return;
-    const [customersRes, packagesRes, productsRes] = await Promise.all([
-      sb.from('customers').select('*').order('created_at', { ascending: true }),
-      sb.from('packages').select('*').order('created_at', { ascending: true }),
-      sb.from('products').select('*').order('created_at', { ascending: true })
-    ]);
+    
+    try {
+      const [customersRes, packagesRes, productsRes] = await Promise.all([
+        sb.from('customers').select('*').order('created_at', { ascending: true }),
+        sb.from('packages').select('*').order('created_at', { ascending: true }),
+        sb.from('products').select('*').order('created_at', { ascending: true })
+      ]);
     const allCustomers = (customersRes.data || []).map((r: any) => ({
       ...r,
       sourceDetail: r.source_detail || '',
@@ -223,9 +225,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Product[];
-    setCustomers(allCustomers);
-    setPackages(allPackages);
-    setProducts(allProducts);
+      setCustomers(allCustomers);
+      setPackages(allPackages);
+      setProducts(allProducts);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      notify('Lỗi khi tải dữ liệu. Vui lòng thử lại.', 'error');
+      // Fallback to local storage if available
+      try {
+        setCustomers(Database.getCustomers());
+        setPackages(Database.getPackages());
+        setProducts(Database.getProducts());
+      } catch (fallbackError) {
+        console.error('Fallback data loading failed:', fallbackError);
+      }
+    }
   };
 
   useEffect(() => {
@@ -283,6 +297,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           const hasAvailable = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
           return hasAvailable;
         }
+        // For classic inventory, only show items that are AVAILABLE and not linked to any order
         return i.status === 'AVAILABLE' && !i.linked_order_id;
       });
 
@@ -741,9 +756,103 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               currentOrders[orderIndex] = updatedOrder;
               Database.setOrders(currentOrders);
             }
-            // Handle inventory changes (client-side only)
+            
+            // Handle inventory changes
             const prevInventoryId = order.inventoryItemId;
             const nextInventoryId = selectedInventoryId || undefined;
+            
+            // Release previous inventory if changed
+            if (prevInventoryId && prevInventoryId !== nextInventoryId) {
+              try {
+                const sb2 = getSupabase();
+                if (sb2) {
+                  const { data: prevInventory } = await sb2.from('inventory').select('*').eq('id', prevInventoryId).single();
+                  if (prevInventory) {
+                    if (prevInventory.is_account_based) {
+                      // Release account-based slots
+                      const profiles = prevInventory.profiles || [];
+                      const updatedProfiles = profiles.map((profile: any) => {
+                        if (profile.assignedOrderId === order.id) {
+                          return {
+                            ...profile,
+                            isAssigned: false,
+                            assignedOrderId: null,
+                            assignedAt: null,
+                            expiryAt: null
+                          };
+                        }
+                        return profile;
+                      });
+                      await sb2.from('inventory').update({
+                        profiles: updatedProfiles,
+                        updated_at: new Date().toISOString()
+                      }).eq('id', prevInventoryId);
+                    } else {
+                      // Release classic inventory
+                      await sb2.from('inventory').update({
+                        status: 'AVAILABLE',
+                        linked_order_id: null,
+                        updated_at: new Date().toISOString()
+                      }).eq('id', prevInventoryId);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to release previous inventory:', error);
+              }
+            }
+            
+            // Link new inventory if selected
+            if (nextInventoryId && nextInventoryId !== prevInventoryId) {
+              try {
+                const sb2 = getSupabase();
+                if (sb2) {
+                  const inventoryItem = availableInventory.find(i => i.id === nextInventoryId);
+                  if (inventoryItem) {
+                    if (inventoryItem.isAccountBased && selectedProfileIds.length > 0) {
+                      // Account-based inventory: assign selected slots
+                      const { data: currentInventory } = await sb2.from('inventory').select('*').eq('id', nextInventoryId).single();
+                      if (currentInventory) {
+                        const profiles = currentInventory.profiles || [];
+                        const updatedProfiles = profiles.map((profile: any) => {
+                          if (selectedProfileIds.includes(profile.id)) {
+                            return {
+                              ...profile,
+                              isAssigned: true,
+                              assignedOrderId: order.id,
+                              assignedAt: new Date().toISOString(),
+                              expiryAt: orderData.expiryDate.toISOString()
+                            };
+                          }
+                          return profile;
+                        });
+                        
+                        await sb2.from('inventory').update({
+                          profiles: updatedProfiles,
+                          updated_at: new Date().toISOString()
+                        }).eq('id', nextInventoryId);
+                      }
+                    } else {
+                      // Classic inventory: mark as sold and link to order
+                      await sb2.from('inventory').update({
+                        status: 'SOLD',
+                        linked_order_id: order.id,
+                        updated_at: new Date().toISOString()
+                      }).eq('id', nextInventoryId);
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to link new inventory to order:', error);
+              }
+            }
+            
+            // Refresh available inventory to reflect changes
+            if (prevInventoryId !== nextInventoryId) {
+              // Trigger a refresh of available inventory
+              setFormData(prev => ({ ...prev }));
+            }
+            
             const base = [`orderId=${order.id}; orderCode=${order.code}`];
             const detail = [...base, ...changedEntries].join('; ');
             try {
@@ -819,13 +928,64 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const currentOrders = Database.getOrders();
         Database.setOrders([...currentOrders, created]);
         
-        // Inventory assignment handled client-side only
-        try {
-          const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
-        } catch {}
-        notify('Tạo đơn hàng thành công', 'success');
-        onSuccess();
+        // Handle inventory linking
+        if (selectedInventoryId) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) {
+              const inventoryItem = availableInventory.find(i => i.id === selectedInventoryId);
+              if (inventoryItem) {
+                if (inventoryItem.isAccountBased && selectedProfileIds.length > 0) {
+                  // Account-based inventory: assign selected slots
+                  const { data: currentInventory } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
+                  if (currentInventory) {
+                    const profiles = currentInventory.profiles || [];
+                    const updatedProfiles = profiles.map((profile: any) => {
+                      if (selectedProfileIds.includes(profile.id)) {
+                        return {
+                          ...profile,
+                          isAssigned: true,
+                          assignedOrderId: created.id,
+                          assignedAt: new Date().toISOString(),
+                          expiryAt: orderData.expiryDate.toISOString()
+                        };
+                      }
+                      return profile;
+                    });
+                    
+                    await sb2.from('inventory').update({
+                      profiles: updatedProfiles,
+                      updated_at: new Date().toISOString()
+                    }).eq('id', selectedInventoryId);
+                  }
+                } else {
+                  // Classic inventory: mark as sold and link to order
+                  await sb2.from('inventory').update({
+                    status: 'SOLD',
+                    linked_order_id: created.id,
+                    updated_at: new Date().toISOString()
+                  }).eq('id', selectedInventoryId);
+                }
+              }
+            }
+        } catch (error) {
+          console.error('Failed to link inventory to order:', error);
+        }
+      }
+      
+      // Refresh available inventory to reflect changes
+      if (selectedInventoryId) {
+        // Trigger a refresh of available inventory
+        setFormData(prev => ({ ...prev }));
+      }
+      
+      // Inventory assignment handled client-side only
+      try {
+        const sb2 = getSupabase();
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
+      } catch {}
+      notify('Tạo đơn hàng thành công', 'success');
+      onSuccess();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu đơn hàng';

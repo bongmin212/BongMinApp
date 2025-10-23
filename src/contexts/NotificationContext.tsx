@@ -126,7 +126,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
-  const markAsRead = useCallback((id: string) => {
+  const markAsRead = useCallback(async (id: string) => {
     setNotifications(prev => 
       prev.map(n => n.id === id ? { ...n, isRead: true } : n)
     );
@@ -135,9 +135,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const readIds = getReadNotificationIds();
     readIds.add(id);
     saveReadNotificationIds(readIds);
+
+    // Update in Supabase
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const currentUser = await sb.auth.getUser();
+        if (currentUser.data.user?.id) {
+          await sb
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', id)
+            .eq('employee_id', currentUser.data.user.id);
+        }
+      } catch (error) {
+        console.error('Error updating notification read status:', error);
+      }
+    }
   }, [getReadNotificationIds, saveReadNotificationIds]);
 
-  const markAllAsRead = useCallback(() => {
+  const markAllAsRead = useCallback(async () => {
     setNotifications(prev => 
       prev.map(n => ({ ...n, isRead: true }))
     );
@@ -146,24 +163,62 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const readIds = getReadNotificationIds();
     notifications.forEach(n => readIds.add(n.id));
     saveReadNotificationIds(readIds);
+
+    // Update in Supabase
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const currentUser = await sb.auth.getUser();
+        if (currentUser.data.user?.id) {
+          await sb
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('employee_id', currentUser.data.user.id)
+            .is('archived_at', null);
+        }
+      } catch (error) {
+        console.error('Error updating all notifications read status:', error);
+      }
+    }
   }, [notifications, getReadNotificationIds, saveReadNotificationIds]);
 
   const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
-  const archiveNotification = useCallback((id: string) => {
+  const archiveNotification = useCallback(async (id: string) => {
     setNotifications(prev => {
       const notificationToArchive = prev.find(n => n.id === id);
       if (notificationToArchive) {
+        const archivedNotification = { ...notificationToArchive, archivedAt: new Date() };
         setArchivedNotifications(archived => {
-          const updatedArchived = [...archived, notificationToArchive];
+          const updatedArchived = [...archived, archivedNotification];
           saveArchivedNotificationsToLocalStorage(updatedArchived);
           return updatedArchived;
         });
       }
       return prev.filter(n => n.id !== id);
     });
+
+    // Update in Supabase
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const currentUser = await sb.auth.getUser();
+        if (currentUser.data.user?.id) {
+          await sb
+            .from('notifications')
+            .update({ 
+              is_read: true,
+              archived_at: new Date().toISOString()
+            })
+            .eq('id', id)
+            .eq('employee_id', currentUser.data.user.id);
+        }
+      } catch (error) {
+        console.error('Error archiving notification:', error);
+      }
+    }
   }, [saveArchivedNotificationsToLocalStorage]);
 
   const updateSettings = useCallback((newSettings: Partial<NotificationSettings>) => {
@@ -246,13 +301,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     orders.forEach(order => {
       if (order.paymentStatus === 'UNPAID' && 
-          order.status === 'PROCESSING' && 
+          order.status === 'COMPLETED' && 
           new Date(order.createdAt) <= threeDaysAgo) {
         reminders.push({
           id: `payment-${order.id}`,
           type: 'PAYMENT_REMINDER',
           title: 'Nhắc nhở thanh toán',
-          message: `Đơn hàng ${order.code} chưa thanh toán (${Math.ceil((new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} ngày)`,
+          message: `Đơn hàng ${order.code} đã hoàn thành nhưng chưa thanh toán (${Math.ceil((new Date().getTime() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24))} ngày)`,
           priority: 'high',
           isRead: false,
           createdAt: new Date(),
@@ -384,17 +439,44 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             // Check for existing notifications to avoid duplicates
             const { data: existingNotifications } = await sb
               .from('notifications')
-              .select('id, type, related_id')
+              .select('id, type, related_id, archived_at, message')
               .eq('employee_id', userId);
 
-            const existingIds = new Set(
+            const existingKeys = new Set(
               existingNotifications?.map(n => `${n.type}-${n.related_id}`) || []
             );
 
+            // Separate new notifications from updates
             const newNotifications = notificationsToSave.filter(n => 
-              !existingIds.has(`${n.type}-${n.related_id}`)
+              !existingKeys.has(`${n.type}-${n.related_id}`)
             );
 
+            // Update existing notifications with new content (especially for expiry warnings)
+            const updatePromises = notificationsToSave
+              .filter(n => existingKeys.has(`${n.type}-${n.related_id}`))
+              .map(async (notification) => {
+                const existingNotification = existingNotifications?.find(
+                  n => `${n.type}-${n.related_id}` === `${notification.type}-${notification.related_id}`
+                );
+                
+                // Only update if message content has changed (for expiry warnings, this means days remaining changed)
+                if (existingNotification && existingNotification.message !== notification.message) {
+                  return sb
+                    .from('notifications')
+                    .update({ 
+                      message: notification.message,
+                      priority: notification.priority,
+                      created_at: notification.created_at
+                    })
+                    .eq('id', existingNotification.id);
+                }
+                return Promise.resolve();
+              });
+
+            // Execute updates
+            await Promise.all(updatePromises.filter(p => p !== undefined));
+
+            // Insert new notifications
             if (newNotifications.length > 0) {
               await sb.from('notifications').insert(newNotifications);
             }
@@ -414,31 +496,28 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           existingMap.set(key, n);
         });
 
-        // Merge new notifications with existing ones
-        const mergedNotifications: Notification[] = [];
-        const processedKeys = new Set<string>();
+        // Merge new notifications with existing ones, updating content for existing ones
+        const finalMap = new Map<string, Notification>();
 
         // First, add all existing notifications
         prev.forEach(n => {
           const key = `${n.type}-${n.relatedId}`;
-          processedKeys.add(key);
-          mergedNotifications.push({
+          finalMap.set(key, {
             ...n,
             isRead: readIds.has(n.id) || n.isRead
           });
         });
 
-        // Then add new notifications that don't already exist
+        // Then update/add new notifications (this will update content for existing ones)
         allNotifications.forEach(newNotification => {
           const key = `${newNotification.type}-${newNotification.relatedId}`;
-          if (!processedKeys.has(key)) {
-            mergedNotifications.push({
-              ...newNotification,
-              isRead: readIds.has(newNotification.id) || newNotification.isRead
-            });
-            processedKeys.add(key);
-          }
+          finalMap.set(key, {
+            ...newNotification,
+            isRead: readIds.has(newNotification.id) || newNotification.isRead
+          });
         });
+        
+        const mergedNotifications = Array.from(finalMap.values());
         
         // Save to localStorage as backup
         saveNotificationsToLocalStorage(mergedNotifications);
@@ -572,20 +651,39 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!currentUser.data.user?.id) return;
 
       const userId = currentUser.data.user.id;
-      const { data: notificationsData, error } = await sb
+      
+      // Load active notifications (not archived)
+      const { data: activeNotificationsData, error: activeError } = await sb
         .from('notifications')
         .select('*')
         .eq('employee_id', userId)
+        .is('archived_at', null)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error loading notifications:', error);
+      // Load archived notifications
+      const { data: archivedNotificationsData, error: archivedError } = await sb
+        .from('notifications')
+        .select('*')
+        .eq('employee_id', userId)
+        .not('archived_at', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (activeError || archivedError) {
+        console.error('Error loading notifications:', activeError || archivedError);
         return;
       }
 
-      if (notificationsData) {
+      // Clear localStorage backup if database is empty
+      // This prevents old notifications from reappearing after DB clear
+      if (activeNotificationsData && activeNotificationsData.length === 0) {
+        localStorage.removeItem('notifications-backup');
+        localStorage.removeItem('read-notifications');
+        localStorage.removeItem('archived-notifications-backup');
+      }
+
+      if (activeNotificationsData) {
         const readIds = getReadNotificationIds();
-        const loadedNotifications: Notification[] = notificationsData.map((n: any) => ({
+        const loadedActiveNotifications: Notification[] = activeNotificationsData.map((n: any) => ({
           id: n.id,
           type: n.type,
           title: n.title,
@@ -598,33 +696,56 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           employeeId: n.employee_id
         }));
 
-        // Only set notifications if we don't have any yet (to avoid overwriting)
+        // Merge with existing notifications, updating content for existing ones
         setNotifications(prev => {
-          if (prev.length === 0) {
-            return loadedNotifications;
-          }
-          // If we already have notifications, merge them
+          // Create a map of existing notifications by their unique key
           const existingMap = new Map<string, Notification>();
           prev.forEach(n => {
             const key = `${n.type}-${n.relatedId}`;
             existingMap.set(key, n);
           });
 
-          const mergedNotifications: Notification[] = [...prev];
-          loadedNotifications.forEach(loadedNotification => {
-            const key = `${loadedNotification.type}-${loadedNotification.relatedId}`;
-            if (!existingMap.has(key)) {
-              mergedNotifications.push(loadedNotification);
-            }
+          // Merge loaded notifications with existing ones
+          const finalMap = new Map<string, Notification>();
+          
+          // First, add all existing notifications
+          prev.forEach(n => {
+            const key = `${n.type}-${n.relatedId}`;
+            finalMap.set(key, n);
           });
 
-          return mergedNotifications;
+          // Then update/add loaded notifications (this will update content for existing ones)
+          loadedActiveNotifications.forEach(loadedNotification => {
+            const key = `${loadedNotification.type}-${loadedNotification.relatedId}`;
+            finalMap.set(key, loadedNotification);
+          });
+
+          return Array.from(finalMap.values());
         });
+      }
+
+      if (archivedNotificationsData) {
+        const loadedArchivedNotifications: Notification[] = archivedNotificationsData.map((n: any) => ({
+          id: n.id,
+          type: n.type,
+          title: n.title,
+          message: n.message,
+          priority: n.priority,
+          isRead: true, // Archived notifications are always read
+          createdAt: new Date(n.created_at),
+          relatedId: n.related_id,
+          actionUrl: n.action_url,
+          employeeId: n.employee_id,
+          archivedAt: n.archived_at ? new Date(n.archived_at) : undefined
+        }));
+
+        setArchivedNotifications(loadedArchivedNotifications);
+        saveArchivedNotificationsToLocalStorage(loadedArchivedNotifications);
       }
     } catch (error) {
       console.error('Error loading notifications from Supabase:', error);
     }
-  }, [getReadNotificationIds]);
+  }, [getReadNotificationIds, saveArchivedNotificationsToLocalStorage]);
 
   // Initialize sound and desktop notifications
   useEffect(() => {
@@ -661,22 +782,6 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // First try to load existing notifications from Supabase
       await loadNotificationsFromSupabase();
       
-      // If no notifications loaded from Supabase, try localStorage backup
-      setNotifications(prev => {
-        if (prev.length === 0) {
-          const backupNotifications = loadNotificationsFromLocalStorage();
-          if (backupNotifications.length > 0) {
-            const readIds = getReadNotificationIds();
-            const notificationsWithReadStatus = backupNotifications.map(n => ({
-              ...n,
-              isRead: readIds.has(n.id) || n.isRead
-            }));
-            return notificationsWithReadStatus;
-          }
-        }
-        return prev;
-      });
-      
       // Then generate new notifications (this will merge with existing ones)
       await generateNotifications();
     };
@@ -685,7 +790,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     
     // Set up interval for generating new notifications every 5 minutes
     const interval = setInterval(generateNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    
+    // Listen for realtime notification changes
+    const handleNotificationRefresh = () => {
+      loadNotificationsFromSupabase();
+    };
+    
+    window.addEventListener('notifications:refresh', handleNotificationRefresh);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notifications:refresh', handleNotificationRefresh);
+    };
   }, [loadNotificationsFromSupabase, generateNotifications, loadNotificationsFromLocalStorage, getReadNotificationIds, loadArchivedNotificationsFromLocalStorage]);
 
   const value = useMemo(() => ({

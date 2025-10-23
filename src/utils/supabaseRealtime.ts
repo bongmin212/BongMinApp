@@ -18,7 +18,8 @@ const TABLES = [
   'inventory',
   'warranties',
   'activity_logs',
-  'expenses'
+  'expenses',
+  'notifications'
 ];
 
 export function subscribeRealtime(): Unsubscribe {
@@ -155,6 +156,17 @@ export function subscribeRealtime(): Unsubscribe {
           else if (payload.eventType === 'UPDATE') localStorage.setItem(key, JSON.stringify(items.map(x => x.id === newRow.id ? newRow : x)));
           else if (payload.eventType === 'DELETE') localStorage.setItem(key, JSON.stringify(items.filter(x => x.id !== (oldRow?.id || payload.old?.id))));
         } catch {}
+        break;
+      }
+      case 'notifications': {
+        // Notifications are handled by NotificationContext, but we can trigger a refresh
+        // when notifications change in the database
+        try {
+          // Dispatch a custom event to notify the NotificationContext to refresh
+          window.dispatchEvent(new CustomEvent('notifications:refresh'));
+        } catch (error) {
+          console.error('Error handling notifications change:', error);
+        }
         break;
       }
       default:

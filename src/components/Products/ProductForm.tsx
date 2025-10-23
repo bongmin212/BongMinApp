@@ -166,28 +166,30 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
           notify(errorMessage, 'error');
         }
       } else {
-        // Create new product directly in Supabase
+        // Create new product and get real UUID from Supabase
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        const { error: insertError } = await sb
+        const { data: createdProduct, error: insertError } = await sb
           .from('products')
           .insert({
             code: ensuredCode,
             name: formData.name,
             description: formData.description,
             shared_inventory_pool: !!formData.sharedInventoryPool
-          });
-        if (insertError) throw new Error(insertError.message || 'Không thể tạo sản phẩm');
+          })
+          .select('*')
+          .single();
+        if (insertError || !createdProduct) throw new Error(insertError?.message || 'Không thể tạo sản phẩm');
         
-        // Update local storage immediately to avoid code conflicts
-        const newProduct = {
-          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-          code: ensuredCode,
-          name: formData.name,
-          description: formData.description,
-          sharedInventoryPool: !!formData.sharedInventoryPool,
-          createdAt: new Date(),
-          updatedAt: new Date()
+        // Update local storage with real UUID from Supabase
+        const newProduct: Product = {
+          id: createdProduct.id,
+          code: createdProduct.code,
+          name: createdProduct.name,
+          description: createdProduct.description,
+          sharedInventoryPool: !!createdProduct.shared_inventory_pool,
+          createdAt: createdProduct.created_at ? new Date(createdProduct.created_at) : new Date(),
+          updatedAt: createdProduct.updated_at ? new Date(createdProduct.updated_at) : new Date()
         };
         const currentProducts = Database.getProducts();
         Database.setProducts([...currentProducts, newProduct]);

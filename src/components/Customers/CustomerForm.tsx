@@ -206,10 +206,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
           notify(errorMessage, 'error');
         }
       } else {
-        // Create new customer
+        // Create new customer and get real UUID from Supabase
         const sb = getSupabase();
         if (!sb) throw new Error('Supabase not configured');
-        const { error: insertError } = await sb
+        const { data: createdCustomer, error: insertError } = await sb
           .from('customers')
           .insert({
             code: ensuredCode,
@@ -220,22 +220,25 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             source: formData.source,
             source_detail: formData.sourceDetail,
             notes: formData.notes
-          });
-        if (insertError) throw new Error(insertError.message || 'Không thể tạo khách hàng');
+          })
+          .select('*')
+          .single();
         
-        // Update local storage immediately to avoid code conflicts
-        const newCustomer = {
-          id: Date.now().toString(36) + Math.random().toString(36).substr(2),
-          code: ensuredCode,
-          name: formData.name,
-          type: formData.type,
-          phone: formData.phone,
-          email: formData.email,
-          source: formData.source,
-          sourceDetail: formData.sourceDetail,
-          notes: formData.notes,
-          createdAt: new Date(),
-          updatedAt: new Date()
+        if (insertError || !createdCustomer) throw new Error(insertError?.message || 'Không thể tạo khách hàng');
+        
+        // Update local storage with real UUID from Supabase
+        const newCustomer: Customer = {
+          id: createdCustomer.id,
+          code: createdCustomer.code,
+          name: createdCustomer.name,
+          type: createdCustomer.type,
+          phone: createdCustomer.phone,
+          email: createdCustomer.email,
+          source: createdCustomer.source as CustomerSource | undefined,
+          sourceDetail: createdCustomer.source_detail || '',
+          notes: createdCustomer.notes,
+          createdAt: createdCustomer.created_at ? new Date(createdCustomer.created_at) : new Date(),
+          updatedAt: createdCustomer.updated_at ? new Date(createdCustomer.updated_at) : new Date()
         };
         const currentCustomers = Database.getCustomers();
         Database.setCustomers([...currentCustomers, newCustomer]);
