@@ -20,3 +20,4 @@ CREATE POLICY "Users can delete own notifications" ON notifications
   FOR DELETE USING (employee_id::uuid = auth.uid());
 
 
+

@@ -15,3 +15,4 @@ DELETE FROM notifications;
 SELECT COUNT(*) as remaining_notifications FROM notifications;
 
 
+

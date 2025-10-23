@@ -1292,6 +1292,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     className="form-control"
                     value={newCustomerData.code || ''}
                     placeholder="Sẽ được tạo tự động..."
+                    readOnly
+                    disabled
+                    aria-disabled
+                    title={'Mã tự động tạo - không chỉnh sửa'}
+                    style={{ opacity: 0.6 } as React.CSSProperties}
                   />
                 </div>
 
