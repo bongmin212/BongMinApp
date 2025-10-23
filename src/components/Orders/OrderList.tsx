@@ -10,10 +10,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
-// Debug logging helper: disabled in production builds
-const debugLog = (...args: any[]) => {
-  if (process.env.NODE_ENV !== 'production') console.log(...args);
-};
 
 const OrderList: React.FC = () => {
   const { state } = useAuth();
@@ -104,7 +100,6 @@ const OrderList: React.FC = () => {
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || '10'), 10);
       
-      console.log('OrderList: Reading URL params:', { status, payment, expiry, p, l });
       
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
@@ -238,8 +233,6 @@ const OrderList: React.FC = () => {
       console.error('Auto-expire orders sweep failed', e);
     }
     const allOrders = (ordersRes.data || []).map((r: any) => {
-      debugLog('Raw order from Supabase:', r);
-      debugLog('Order inventory_profile_id:', r.inventory_profile_id);
       return {
         id: r.id,
         code: r.code,
@@ -250,7 +243,7 @@ const OrderList: React.FC = () => {
         orderInfo: r.order_info,
         notes: r.notes,
         inventoryItemId: r.inventory_item_id,
-        inventoryProfileId: r.inventory_profile_id,
+        inventoryProfileIds: r.inventory_profile_ids || undefined,
         cogs: r.cogs,
         useCustomPrice: r.use_custom_price || false,
         customPrice: r.custom_price,
@@ -267,7 +260,6 @@ const OrderList: React.FC = () => {
     setOrders(allOrders);
     
     const allCustomers = (customersRes.data || []).map((r: any) => {
-      debugLog('Raw customer from Supabase:', r);
       return {
         ...r,
         sourceDetail: r.source_detail || '',
@@ -277,7 +269,6 @@ const OrderList: React.FC = () => {
     }) as Customer[];
     
     const allPackages = (packagesRes.data || []).map((r: any) => {
-      debugLog('Raw package from Supabase:', r);
       return {
         ...r,
         productId: r.product_id || r.productId,
@@ -295,7 +286,6 @@ const OrderList: React.FC = () => {
     }) as ProductPackage[];
     
     const allProducts = (productsRes.data || []).map((r: any) => {
-      debugLog('Raw product from Supabase:', r);
       return {
         ...r,
         sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
@@ -693,19 +683,14 @@ const OrderList: React.FC = () => {
   }, [packages]);
 
     const getCustomerName = (customerId: string) => {
-    debugLog('Looking up customer:', customerId, 'in map with keys:', Array.from(customerMap.keys()));
     const customer = customerMap.get(customerId);
-    debugLog('Found customer:', customer);
     return customer ? customer.name : 'Không xác định';
   };
 
   const getPackageInfo = (packageId: string) => {
-    debugLog('Looking up package:', packageId, 'in map with keys:', Array.from(packageMap.keys()));
     const pkg = packageMap.get(packageId);
-    debugLog('Found package:', pkg);
     if (!pkg) return null;
     const product = productMap.get(pkg.productId);
-    debugLog('Found product for package:', product);
     return { package: pkg, product };
   };
 
@@ -812,12 +797,6 @@ const OrderList: React.FC = () => {
     const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
     const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
     
-    console.log('OrderList: Filtering orders with:', { 
-      filterStatus, 
-      filterPayment, 
-      totalOrders: orders.length,
-      searchTerm: debouncedSearchTerm 
-    });
     
     const filtered = orders.filter(order => {
       // Search
@@ -907,12 +886,6 @@ const OrderList: React.FC = () => {
       return true;
     });
     
-    console.log('OrderList: Filtered results:', { 
-      totalOrders: orders.length, 
-      filteredCount: filtered.length,
-      filterStatus,
-      sampleOrders: filtered.slice(0, 3).map(o => ({ id: o.id, code: o.code, status: o.status }))
-    });
     
     return filtered;
   }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);

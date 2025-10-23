@@ -166,7 +166,7 @@ const Dashboard: React.FC = () => {
           orderInfo: r.order_info,
           notes: r.notes,
           inventoryItemId: r.inventory_item_id,
-          inventoryProfileId: r.inventory_profile_id,
+          inventoryProfileIds: r.inventory_profile_ids || undefined,
           cogs: r.cogs,
           salePrice: r.sale_price
         })) as any;

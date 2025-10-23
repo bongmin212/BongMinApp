@@ -73,7 +73,6 @@ export interface Order {
   updatedAt: Date;
   inventoryItemId?: string; // Liên kết tới kho hàng nếu có
   inventoryProfileIds?: string[]; // Array of profile IDs for multi-slot orders
-  inventoryProfileId?: string; // Backward compatibility - deprecated
   cogs?: number; // Giá vốn snapshot từ kho tại thời điểm liên kết
   salePrice?: number; // Giá bán snapshot tại thời điểm tạo/cập nhật
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh

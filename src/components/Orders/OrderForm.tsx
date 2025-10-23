@@ -80,26 +80,38 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         let invLinked = '';
         try {
           const sb = getSupabase();
-          if (sb && order.inventoryItemId) {
-            const { data: inv } = await sb.from('inventory').select('*').eq('id', order.inventoryItemId).single();
-            if (inv) {
-              if (inv.linked_order_id === order.id) {
-                invLinked = order.inventoryItemId;
-              } else if (inv.is_account_based && (inv.profiles || []).some((p: any) => p.assignedOrderId === order.id)) {
-                invLinked = order.inventoryItemId;
+          if (sb) {
+            // First check by inventoryItemId if it exists
+            if (order.inventoryItemId) {
+              const { data: inv } = await sb.from('inventory').select('*').eq('id', order.inventoryItemId).single();
+              if (inv) {
+                // For classic inventory: check linked_order_id
+                if (!inv.is_account_based && inv.linked_order_id === order.id) {
+                  invLinked = order.inventoryItemId;
+                }
+                // For account-based inventory: check if any profile is assigned to this order
+                else if (inv.is_account_based && Array.isArray(inv.profiles) && inv.profiles.some((p: any) => p.assignedOrderId === order.id)) {
+                  invLinked = order.inventoryItemId;
+                }
               }
             }
+            
+            // If not found by inventoryItemId, search by linked_order_id
+            if (!invLinked) {
+              const { data: invByOrder } = await sb.from('inventory').select('id').eq('linked_order_id', order.id).maybeSingle();
+              if (invByOrder?.id) invLinked = invByOrder.id as any;
+            }
+            
+            // If still not found, search account-based inventory by profiles
+            if (!invLinked) {
+              const { data: invList } = await sb.from('inventory').select('*').eq('is_account_based', true);
+              const found = (invList || []).find((i: any) => Array.isArray(i.profiles) && i.profiles.some((p: any) => p.assignedOrderId === order.id));
+              if (found) invLinked = found.id as any;
+            }
           }
-          if (!invLinked && sb) {
-            const { data: invByOrder } = await sb.from('inventory').select('id').eq('linked_order_id', order.id).maybeSingle();
-            if (invByOrder?.id) invLinked = invByOrder.id as any;
-          }
-          if (!invLinked && sb) {
-            const { data: invList } = await sb.from('inventory').select('*').eq('is_account_based', true);
-            const found = (invList || []).find((i: any) => Array.isArray(i.profiles) && i.profiles.some((p: any) => p.assignedOrderId === order.id));
-            if (found) invLinked = found.id as any;
-          }
-        } catch {}
+        } catch (error) {
+          console.error('Error finding linked inventory:', error);
+        }
 
         setSelectedInventoryId(invLinked);
       })();
@@ -414,28 +426,36 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   // For new orders: do NOT auto-select; require explicit user choice
   // For editing: preserve the slots already assigned to this order if present
   useEffect(() => {
-    if (!selectedInventoryId) return;
+    if (!selectedInventoryId) {
+      setSelectedProfileIds([]);
+      return;
+    }
+    
     const inv = availableInventory.find(i => i.id === selectedInventoryId);
-    const pkg = packages.find(p => p.id === formData.packageId);
-    if (!(inv?.isAccountBased || pkg?.isAccountBased)) return;
+    if (!inv?.isAccountBased) {
+      setSelectedProfileIds([]);
+      return;
+    }
+    
     const profiles = Array.isArray(inv?.profiles) ? (inv as any).profiles : [];
     const allowed = profiles.filter((p: any) => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate);
+    
     if (!allowed.length) {
       setSelectedProfileIds([]);
       return;
     }
-    // New order: don't auto-pick slots
+    
+    // New order: don't auto-pick slots, but keep any previously selected valid slots
     if (!order) {
       setSelectedProfileIds(prev => prev.filter(id => allowed.some((p: any) => p.id === id)));
       return;
     }
-    // Editing existing order: keep current/assigned slots
-    const existingIds = (order as any)?.inventoryProfileIds || [];
-    const existingId = (order as any)?.inventoryProfileId; // backward compatibility
-    const validExistingIds = existingIds.filter((id: string) => allowed.some((p: any) => p.id === id));
-    const validExistingId = existingId && allowed.some((p: any) => p.id === existingId) ? [existingId] : [];
-    const finalIds = validExistingIds.length > 0 ? validExistingIds : validExistingId;
-    setSelectedProfileIds(finalIds);
+    
+    // Editing existing order: load assigned slots from inventory profiles
+    const assignedSlots = profiles
+      .filter((p: any) => p.isAssigned && p.assignedOrderId === order.id)
+      .map((p: any) => p.id);
+    setSelectedProfileIds(assignedSlots);
   }, [selectedInventoryId, availableInventory, packages, formData.packageId, order]);
 
   // Reset custom fields and selected slot when package changes (new order flow)
@@ -486,12 +506,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Code will be generated client-side if empty
-    const code = (formData.code || '').trim();
-
+    
     // Validation
     const newErrors: {[key: string]: string} = {};
-    // Code will be generated client-side, no validation needed
+    
     if (!formData.packageId) {
       newErrors.packageId = 'Vui lòng chọn gói sản phẩm';
     }
@@ -518,28 +536,34 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       });
     }
     
-    // If selected inventory is account-based, force selecting a profile/slot
+    // Enhanced inventory validation
     if (selectedInventoryId) {
       const inv = availableInventory.find(i => i.id === selectedInventoryId);
-      const pkg = packages.find(p => p.id === formData.packageId);
-      if ((inv?.isAccountBased || pkg?.isAccountBased) && selectedProfileIds.length === 0) {
-        newErrors["inventoryProfileId"] = 'Vui lòng chọn ít nhất 1 slot để cấp';
-      }
-      // Enforce exclusive linking: prevent selecting an inventory item that already has any assignment/link other than this order
-      if (inv) {
+      if (!inv) {
+        newErrors["inventory"] = 'Kho hàng đã chọn không tồn tại';
+      } else {
         if (inv.isAccountBased) {
-          // Only validate chosen slots availability; ignore other occupied slots
-          if (selectedProfileIds.length > 0) {
+          if (selectedProfileIds.length === 0) {
+            newErrors["inventoryProfileId"] = 'Vui lòng chọn ít nhất 1 slot để cấp';
+          } else {
+            // Validate each selected slot
             const invalidSlots = selectedProfileIds.filter(profileId => {
               const chosen = (inv.profiles || []).find(p => p.id === profileId);
-              return !chosen || (chosen as any).needsUpdate || (chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '');
+              if (!chosen) return true;
+              if ((chosen as any).needsUpdate) return true;
+              if ((chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '')) return true;
+              return false;
             });
             if (invalidSlots.length > 0) {
               newErrors["inventoryProfileId"] = 'Một số slot không hợp lệ, vui lòng chọn slot trống';
             }
           }
         } else {
-          if ((inv as any).linkedOrderId && (inv as any).linkedOrderId !== (order?.id || '')) {
+          // Classic inventory validation
+          if (inv.status !== 'AVAILABLE' && inv.status !== 'SOLD') {
+            newErrors["inventory"] = 'Kho hàng này không khả dụng';
+          }
+          if (inv.linkedOrderId && inv.linkedOrderId !== (order?.id || '')) {
             newErrors["inventory"] = 'Kho này đang liên kết đơn khác';
           }
         }
@@ -586,7 +610,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       // Auto-import info from warehouse
       const autoInfo = (() => {
         if (!pickedInventory) return '';
-        if (pickedInventory.isAccountBased || pkgConfig?.isAccountBased) {
+        if (pickedInventory.isAccountBased) {
           // Rebuild using latest package columns to avoid drift
           return Database.buildOrderInfoFromAccount({ ...pickedInventory, packageId: formData.packageId } as any, selectedProfileIds.length > 0 ? selectedProfileIds : undefined);
         }
@@ -604,11 +628,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
         const orderData = {
         ...formData,
-        code: code || Database.generateNextOrderCode(), // Use client-side generation
+        code: formData.code || Database.generateNextOrderCode(), // Use client-side generation
         expiryDate,
         createdBy: state.user?.id || '',
         inventoryItemId: selectedInventoryId || undefined,
-        inventoryProfileIds: (pickedInventory?.isAccountBased || pkgConfig?.isAccountBased) 
+        inventoryProfileIds: pickedInventory?.isAccountBased 
           ? (selectedProfileIds.length > 0 ? selectedProfileIds : undefined) 
           : undefined,
         useCustomPrice: formData.useCustomPrice || false,
@@ -703,7 +727,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           debugLog('=== ORDER UPDATE DEBUG ===');
           debugLog('Order ID:', order.id);
           debugLog('Update data:', updateData);
-          debugLog('inventory_profile_id being sent:', orderData.inventoryProfileId);
+          debugLog('inventory_profile_ids being sent:', orderData.inventoryProfileIds);
           
           const { data: updateResult, error } = await sb
             .from('orders')
@@ -738,7 +762,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               notes: updateResult.notes,
               inventoryItemId: updateResult.inventory_item_id,
               inventoryProfileIds: updateResult.inventory_profile_ids || undefined,
-              inventoryProfileId: updateResult.inventory_profile_id || undefined, // Backward compatibility
               cogs: updateResult.cogs,
               useCustomPrice: updateResult.use_custom_price,
               customPrice: updateResult.custom_price,
@@ -757,7 +780,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               Database.setOrders(currentOrders);
             }
             
-            // Handle inventory changes
+            // Handle inventory changes with improved error handling
             const prevInventoryId = order.inventoryItemId;
             const nextInventoryId = selectedInventoryId || undefined;
             
@@ -766,7 +789,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               try {
                 const sb2 = getSupabase();
                 if (sb2) {
-                  const { data: prevInventory } = await sb2.from('inventory').select('*').eq('id', prevInventoryId).single();
+                  const { data: prevInventory, error: fetchError } = await sb2.from('inventory').select('*').eq('id', prevInventoryId).single();
+                  
+                  if (fetchError) {
+                    console.error('Error fetching previous inventory:', fetchError);
+                    notify('Lỗi khi truy xuất thông tin kho hàng cũ', 'error');
+                    return;
+                  }
+                  
                   if (prevInventory) {
                     if (prevInventory.is_account_based) {
                       // Release account-based slots
@@ -783,38 +813,91 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         }
                         return profile;
                       });
-                      await sb2.from('inventory').update({
+                      
+                      const { error: updateError } = await sb2.from('inventory').update({
                         profiles: updatedProfiles,
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
+                      
+                      if (updateError) {
+                        console.error('Error releasing account-based inventory:', updateError);
+                        notify('Lỗi khi giải phóng slot kho hàng', 'error');
+                        return;
+                      }
                     } else {
                       // Release classic inventory
-                      await sb2.from('inventory').update({
+                      const { error: updateError } = await sb2.from('inventory').update({
                         status: 'AVAILABLE',
                         linked_order_id: null,
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
+                      
+                      if (updateError) {
+                        console.error('Error releasing classic inventory:', updateError);
+                        notify('Lỗi khi giải phóng kho hàng', 'error');
+                        return;
+                      }
                     }
                   }
                 }
               } catch (error) {
                 console.error('Failed to release previous inventory:', error);
+                notify('Lỗi không mong muốn khi giải phóng kho hàng', 'error');
+                return;
               }
             }
             
-            // Link new inventory if selected
-            if (nextInventoryId && nextInventoryId !== prevInventoryId) {
+            // Link new inventory if selected or update existing inventory slots
+            if (nextInventoryId) {
               try {
                 const sb2 = getSupabase();
                 if (sb2) {
                   const inventoryItem = availableInventory.find(i => i.id === nextInventoryId);
-                  if (inventoryItem) {
-                    if (inventoryItem.isAccountBased && selectedProfileIds.length > 0) {
+                  if (!inventoryItem) {
+                    notify('Không tìm thấy kho hàng đã chọn', 'error');
+                    return;
+                  }
+                  
+                  if (inventoryItem.isAccountBased) {
+                    if (selectedProfileIds.length > 0) {
                       // Account-based inventory: assign selected slots
-                      const { data: currentInventory } = await sb2.from('inventory').select('*').eq('id', nextInventoryId).single();
+                      const { data: currentInventory, error: fetchError } = await sb2.from('inventory').select('*').eq('id', nextInventoryId).single();
+                      
+                      if (fetchError) {
+                        console.error('Error fetching current inventory:', fetchError);
+                        notify('Lỗi khi truy xuất thông tin kho hàng', 'error');
+                        return;
+                      }
+                      
                       if (currentInventory) {
-                        const profiles = currentInventory.profiles || [];
+                        let profiles = currentInventory.profiles || [];
+                        
+                        // Generate missing profiles if empty
+                        if (profiles.length === 0 && currentInventory.total_slots > 0) {
+                          debugLog('Generating missing profiles for inventory:', currentInventory.id);
+                          debugLog('Total slots:', currentInventory.total_slots);
+                          profiles = Array.from({ length: currentInventory.total_slots }, (_, idx) => ({
+                            id: `slot-${idx + 1}`,
+                            label: `Slot ${idx + 1}`,
+                            isAssigned: false
+                          }));
+                          debugLog('Generated profiles:', profiles);
+                        }
+                        
                         const updatedProfiles = profiles.map((profile: any) => {
+                          // First clear any previous assignments for this order
+                          if (profile.assignedOrderId === order.id) {
+                            return {
+                              ...profile,
+                              isAssigned: false,
+                              assignedOrderId: null,
+                              assignedAt: null,
+                              expiryAt: null
+                            };
+                          }
+                          return profile;
+                        }).map((profile: any) => {
+                          // Then assign selected slots
                           if (selectedProfileIds.includes(profile.id)) {
                             return {
                               ...profile,
@@ -827,23 +910,53 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                           return profile;
                         });
                         
-                        await sb2.from('inventory').update({
+                        // Check if there are any free slots remaining
+                        const hasFreeSlots = updatedProfiles.some((p: any) => 
+                          !p.isAssigned && !(p as any).needsUpdate
+                        );
+                        
+                        debugLog('=== UPDATING INVENTORY SLOTS ===');
+                        debugLog('Inventory ID:', nextInventoryId);
+                        debugLog('Selected profile IDs:', selectedProfileIds);
+                        debugLog('Updated profiles:', updatedProfiles);
+                        
+                        const { error: updateError } = await sb2.from('inventory').update({
                           profiles: updatedProfiles,
+                          status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
                           updated_at: new Date().toISOString()
                         }).eq('id', nextInventoryId);
+                        
+                        if (updateError) {
+                          console.error('Error updating account-based inventory:', updateError);
+                          notify('Lỗi khi cập nhật slot kho hàng', 'error');
+                          return;
+                        }
+                        
+                        debugLog('Successfully updated inventory slots');
                       }
                     } else {
-                      // Classic inventory: mark as sold and link to order
-                      await sb2.from('inventory').update({
-                        status: 'SOLD',
-                        linked_order_id: order.id,
-                        updated_at: new Date().toISOString()
-                      }).eq('id', nextInventoryId);
+                      notify('Kho hàng dạng tài khoản cần chọn ít nhất 1 slot', 'error');
+                      return;
+                    }
+                  } else {
+                    // Classic inventory: mark as sold and link to order
+                    const { error: updateError } = await sb2.from('inventory').update({
+                      status: 'SOLD',
+                      linked_order_id: order.id,
+                      updated_at: new Date().toISOString()
+                    }).eq('id', nextInventoryId);
+                    
+                    if (updateError) {
+                      console.error('Error updating classic inventory:', updateError);
+                      notify('Lỗi khi cập nhật kho hàng', 'error');
+                      return;
                     }
                   }
                 }
               } catch (error) {
                 console.error('Failed to link new inventory to order:', error);
+                notify('Lỗi không mong muốn khi liên kết kho hàng', 'error');
+                return;
               }
             }
             
@@ -913,7 +1026,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           notes: createData.notes,
           inventoryItemId: createData.inventory_item_id,
           inventoryProfileIds: createData.inventory_profile_ids || undefined,
-          inventoryProfileId: createData.inventory_profile_id || undefined, // Backward compatibility
           cogs: createData.cogs,
           useCustomPrice: createData.use_custom_price,
           customPrice: createData.custom_price,
@@ -928,19 +1040,42 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const currentOrders = Database.getOrders();
         Database.setOrders([...currentOrders, created]);
         
-        // Handle inventory linking
+        // Handle inventory linking with improved error handling
         if (selectedInventoryId) {
           try {
             const sb2 = getSupabase();
             if (sb2) {
               const inventoryItem = availableInventory.find(i => i.id === selectedInventoryId);
-              if (inventoryItem) {
-                if (inventoryItem.isAccountBased && selectedProfileIds.length > 0) {
+              if (!inventoryItem) {
+                notify('Không tìm thấy kho hàng đã chọn', 'error');
+                return;
+              }
+              
+              if (inventoryItem.isAccountBased) {
+                if (selectedProfileIds.length > 0) {
                   // Account-based inventory: assign selected slots
-                  const { data: currentInventory } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
+                  const { data: currentInventory, error: fetchError } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
+                  
+                  if (fetchError) {
+                    console.error('Error fetching current inventory:', fetchError);
+                    notify('Lỗi khi truy xuất thông tin kho hàng', 'error');
+                    return;
+                  }
+                  
                   if (currentInventory) {
-                    const profiles = currentInventory.profiles || [];
+                    let profiles = currentInventory.profiles || [];
+                    
+                    // Generate missing profiles if empty
+                    if (profiles.length === 0 && currentInventory.total_slots > 0) {
+                      profiles = Array.from({ length: currentInventory.total_slots }, (_, idx) => ({
+                        id: `slot-${idx + 1}`,
+                        label: `Slot ${idx + 1}`,
+                        isAssigned: false
+                      }));
+                    }
+                    
                     const updatedProfiles = profiles.map((profile: any) => {
+                      // Then assign selected slots
                       if (selectedProfileIds.includes(profile.id)) {
                         return {
                           ...profile,
@@ -953,39 +1088,69 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       return profile;
                     });
                     
-                    await sb2.from('inventory').update({
+                    // Check if there are any free slots remaining
+                    const hasFreeSlots = updatedProfiles.some((p: any) => 
+                      !p.isAssigned && !(p as any).needsUpdate
+                    );
+                    
+                    debugLog('=== CREATING ORDER WITH SLOTS ===');
+                    debugLog('Inventory ID:', selectedInventoryId);
+                    debugLog('Selected profile IDs:', selectedProfileIds);
+                    debugLog('Updated profiles:', updatedProfiles);
+                    
+                    const { error: updateError } = await sb2.from('inventory').update({
                       profiles: updatedProfiles,
+                      status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
                       updated_at: new Date().toISOString()
                     }).eq('id', selectedInventoryId);
+                    
+                    if (updateError) {
+                      console.error('Error updating account-based inventory:', updateError);
+                      notify('Lỗi khi cập nhật slot kho hàng', 'error');
+                      return;
+                    }
+                    
+                    debugLog('Successfully created order with slots');
                   }
                 } else {
-                  // Classic inventory: mark as sold and link to order
-                  await sb2.from('inventory').update({
-                    status: 'SOLD',
-                    linked_order_id: created.id,
-                    updated_at: new Date().toISOString()
-                  }).eq('id', selectedInventoryId);
+                  notify('Kho hàng dạng tài khoản cần chọn ít nhất 1 slot', 'error');
+                  return;
+                }
+              } else {
+                // Classic inventory: mark as sold and link to order
+                const { error: updateError } = await sb2.from('inventory').update({
+                  status: 'SOLD',
+                  linked_order_id: created.id,
+                  updated_at: new Date().toISOString()
+                }).eq('id', selectedInventoryId);
+                
+                if (updateError) {
+                  console.error('Error updating classic inventory:', updateError);
+                  notify('Lỗi khi cập nhật kho hàng', 'error');
+                  return;
                 }
               }
             }
           } catch (error) {
             console.error('Failed to link inventory to order:', error);
+            notify('Lỗi không mong muốn khi liên kết kho hàng', 'error');
+            return;
           }
         }
-        
-        // Refresh available inventory to reflect changes
-        if (selectedInventoryId) {
-          // Trigger a refresh of available inventory
-          setFormData(prev => ({ ...prev }));
-        }
-        
-        // Log activity
-        try {
-          const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
-        } catch {}
-        notify('Tạo đơn hàng thành công', 'success');
-        onSuccess();
+      
+      // Refresh available inventory to reflect changes
+      if (selectedInventoryId) {
+        // Trigger a refresh of available inventory
+        setFormData(prev => ({ ...prev }));
+      }
+      
+      // Inventory assignment handled client-side only
+      try {
+        const sb2 = getSupabase();
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
+      } catch {}
+      notify('Tạo đơn hàng thành công', 'success');
+      onSuccess();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu đơn hàng';
@@ -1763,7 +1928,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 </label>
                                 <div className="row">
                                   {(item.profiles || [])
-                                    .filter(p => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate)
+                                    .filter(p => {
+                                      // Show slot if it's not assigned, or if it's assigned to current order, and not needsUpdate
+                                      return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
+                                    })
                                     .map(p => (
                                       <div key={p.id} className="col-md-6 mb-2">
                                         <div className="form-check">

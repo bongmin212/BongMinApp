@@ -49,41 +49,7 @@ const WarehouseList: React.FC = () => {
           let fixedCount = 0;
           const fixedDetails: string[] = [];
           
-          // 1. Fix regular slots: SOLD but no linked_order_id
-          const { data: orphanedSlots, error: fetchError } = await sb
-            .from('inventory')
-            .select('id, code, status, linked_order_id')
-            .eq('status', 'SOLD')
-            .is('linked_order_id', null);
-          
-          if (fetchError) {
-            console.error('Error fetching orphaned slots:', fetchError);
-            notify('Lỗi khi tìm slot bị kẹt', 'error');
-            return;
-          }
-          
-          if (orphanedSlots && orphanedSlots.length > 0) {
-            console.log('Found orphaned slots:', orphanedSlots.map(s => ({ id: s.id, code: s.code, status: s.status, linked_order_id: s.linked_order_id })));
-            const slotIds = orphanedSlots.map(slot => slot.id);
-            const { data: updateResult, error: updateError } = await sb
-              .from('inventory')
-              .update({ status: 'AVAILABLE', linked_order_id: null })
-              .in('id', slotIds)
-              .select('id');
-            
-            if (updateError) {
-              console.error('Error fixing orphaned slots:', updateError);
-              notify('Lỗi khi fix slot thường bị kẹt', 'error');
-            } else if (updateResult && updateResult.length > 0) {
-              console.log('Successfully fixed slots:', updateResult.map(r => r.id));
-              fixedCount += updateResult.length;
-              fixedDetails.push(`${updateResult.length} slot thường`);
-            } else {
-              console.log('No slots were actually updated');
-            }
-          }
-          
-          // 2. Fix account-based slots: profiles with assignedOrderId pointing to non-existent orders
+          // Get all existing order IDs first
           const { data: orders, error: ordersError } = await sb
             .from('orders')
             .select('id');
@@ -95,6 +61,52 @@ const WarehouseList: React.FC = () => {
           }
           
           const existingOrderIds = new Set((orders || []).map(o => o.id));
+          
+          // 1. Fix regular slots: SOLD but no linked_order_id OR linked_order_id points to non-existent order
+          // BUT exclude account-based inventory (they use profiles, not linked_order_id)
+          const { data: allSoldSlots, error: fetchError } = await sb
+            .from('inventory')
+            .select('id, code, status, linked_order_id, is_account_based')
+            .eq('status', 'SOLD');
+          
+          if (fetchError) {
+            console.error('Error fetching orphaned slots:', fetchError);
+            notify('Lỗi khi tìm slot bị kẹt', 'error');
+            return;
+          }
+          
+          // Only fix non-account-based slots for orphaned status
+          const orphanedSlots = (allSoldSlots || []).filter(slot => 
+            !slot.is_account_based && (!slot.linked_order_id || !existingOrderIds.has(slot.linked_order_id))
+          );
+          
+          if (orphanedSlots.length > 0) {
+            console.log('=== FIXING ORPHANED SLOTS ===');
+            console.log('Found orphaned slots:', orphanedSlots.map(s => ({ id: s.id, code: s.code, status: s.status, linked_order_id: s.linked_order_id })));
+            
+            const slotIds = orphanedSlots.map(slot => slot.id);
+            console.log('Slot IDs to fix:', slotIds);
+            
+            const { data: updateResult, error: updateError } = await sb
+              .from('inventory')
+              .update({ status: 'AVAILABLE', linked_order_id: null })
+              .in('id', slotIds)
+              .select('id, code, status, linked_order_id');
+            
+            if (updateError) {
+              console.error('Error fixing orphaned slots:', updateError);
+              notify('Lỗi khi fix slot thường bị kẹt', 'error');
+            } else if (updateResult && updateResult.length > 0) {
+              console.log('Successfully fixed slots:', updateResult.map(r => ({ id: r.id, code: r.code, status: r.status, linked_order_id: r.linked_order_id })));
+              fixedCount += updateResult.length;
+              fixedDetails.push(`${updateResult.length} slot thường`);
+            } else {
+              console.log('No slots were actually updated - this might indicate a database issue');
+              notify('Không có slot nào được cập nhật. Có thể có vấn đề với database.', 'warning');
+            }
+          }
+          
+          // 2. Fix account-based slots: profiles with assignedOrderId pointing to non-existent orders
           
           const { data: accountBasedItems, error: accountError } = await sb
             .from('inventory')
@@ -250,17 +262,34 @@ const WarehouseList: React.FC = () => {
     if (!sb) return;
     
     try {
-      // 1. Check regular slots: SOLD but no linked_order_id
-      const { data: orphanedSlots, error: fetchError } = await sb
+      // Get all existing order IDs first
+      const { data: orders, error: ordersError } = await sb
+        .from('orders')
+        .select('id');
+      
+      if (ordersError) {
+        console.error('Error fetching orders:', ordersError);
+        return;
+      }
+      
+      const existingOrderIds = new Set((orders || []).map(o => o.id));
+      
+      // 1. Check regular slots: SOLD but no linked_order_id OR linked_order_id points to non-existent order
+      // BUT exclude account-based inventory (they use profiles, not linked_order_id)
+      const { data: allSoldSlots, error: fetchError } = await sb
         .from('inventory')
-        .select('id, code, status, linked_order_id')
-        .eq('status', 'SOLD')
-        .is('linked_order_id', null);
+        .select('id, code, status, linked_order_id, is_account_based')
+        .eq('status', 'SOLD');
       
       if (fetchError) {
         console.error('Error checking orphaned slots:', fetchError);
         return;
       }
+      
+      // Only check non-account-based slots for orphaned status
+      const orphanedSlots = (allSoldSlots || []).filter(slot => 
+        !slot.is_account_based && (!slot.linked_order_id || !existingOrderIds.has(slot.linked_order_id))
+      );
       
       // 2. Check account-based slots: profiles with assignedOrderId pointing to non-existent orders
       const { data: accountBasedItems, error: accountError } = await sb
@@ -272,18 +301,6 @@ const WarehouseList: React.FC = () => {
         console.error('Error checking account-based items:', accountError);
         return;
       }
-      
-      // Get all existing order IDs
-      const { data: orders, error: ordersError } = await sb
-        .from('orders')
-        .select('id');
-      
-      if (ordersError) {
-        console.error('Error fetching orders:', ordersError);
-        return;
-      }
-      
-      const existingOrderIds = new Set((orders || []).map(o => o.id));
       
       // Check for stuck account-based profiles
       let hasStuckAccountProfiles = false;
@@ -301,8 +318,18 @@ const WarehouseList: React.FC = () => {
       }
       
       // Set hasStuckSlots based on findings
-      const hasRegularStuckSlots = orphanedSlots && orphanedSlots.length > 0;
+      const hasRegularStuckSlots = orphanedSlots.length > 0;
       setHasStuckSlots(hasRegularStuckSlots || hasStuckAccountProfiles);
+      
+      // Debug logging
+      if (hasRegularStuckSlots) {
+        console.log('Found regular stuck slots:', orphanedSlots.map(s => ({ 
+          id: s.id, 
+          code: s.code, 
+          status: s.status, 
+          linked_order_id: s.linked_order_id 
+        })));
+      }
       
     } catch (error) {
       console.error('Error checking for stuck slots:', error);
@@ -310,6 +337,7 @@ const WarehouseList: React.FC = () => {
   };
 
   const refresh = async () => {
+    console.log('🔄 WarehouseList: Starting refresh...');
     const sb = getSupabase();
     if (!sb) return;
     // Optional sweep on client for local display of expired flags is no longer needed
@@ -319,6 +347,8 @@ const WarehouseList: React.FC = () => {
       sb.from('packages').select('*').order('created_at', { ascending: true }),
       sb.from('customers').select('*').order('created_at', { ascending: true })
     ]);
+    
+    console.log('🔄 WarehouseList: Data loaded, inventory count:', invRes.data?.length);
 
     // Auto-update inventory status based on expiry_date
     try {
@@ -364,7 +394,17 @@ const WarehouseList: React.FC = () => {
 
       for (const r of accountBasedItems) {
         const profiles = Array.isArray(r.profiles) ? r.profiles : [];
-        const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
+        
+        // If no profiles array or empty, consider it as having free slots
+        if (profiles.length === 0) {
+          if (r.status === 'SOLD') {
+            toMarkAvailable.push(r.id);
+          }
+          continue;
+        }
+        
+        // Check if there are any free slots (not assigned and not needsUpdate)
+        const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
         
         if (!hasFreeSlot && r.status !== 'SOLD') {
           toMarkSold.push(r.id);
@@ -431,6 +471,38 @@ const WarehouseList: React.FC = () => {
             isAssigned: false
           }));
         }
+        
+        // UI resilience: if profiles are empty but we can infer links from orders
+        if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
+          // Try to find linked orders by searching through orders table
+          // This is a fallback for display purposes only
+          const linkedOrders = Database.getOrders().filter((order: any) => 
+            order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+            order.inventoryProfileIds.some((profileId: string) => 
+              profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= (r.total_slots || 0)
+            )
+          );
+          
+          if (linkedOrders.length > 0) {
+            // Generate profiles with inferred assignments
+            return Array.from({ length: r.total_slots || 0 }, (_, idx) => {
+              const slotId = `slot-${idx + 1}`;
+              const linkedOrder = linkedOrders.find((order: any) => 
+                order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
+              );
+              
+              return {
+                id: slotId,
+                label: `Slot ${idx + 1}`,
+                isAssigned: !!linkedOrder,
+                assignedOrderId: linkedOrder?.id,
+                assignedAt: linkedOrder?.createdAt,
+                expiryAt: linkedOrder?.expiryDate
+              };
+            });
+          }
+        }
+        
         return profiles;
       })(),
       linkedOrderId: r.linked_order_id || undefined,
@@ -1129,6 +1201,17 @@ const WarehouseList: React.FC = () => {
       // Check if any slot is free (not assigned and not needsUpdate)
       const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
       
+      // If profiles are empty, check if there are any assigned profiles in the database
+      if (profiles.length === 0) {
+        // No profiles means no slots are assigned, so it's AVAILABLE
+        return 'AVAILABLE';
+      }
+      
+      // If we have profiles but none are assigned, it's AVAILABLE
+      if (!profiles.some((p: any) => p.isAssigned)) {
+        return 'AVAILABLE';
+      }
+      
       if (!hasFreeSlot) {
         // All slots are either assigned or needsUpdate
         return 'SOLD';
@@ -1190,7 +1273,7 @@ const WarehouseList: React.FC = () => {
                 orderInfo: r.order_info,
                 notes: r.notes,
                 inventoryItemId: r.inventory_item_id,
-                inventoryProfileId: r.inventory_profile_id,
+                inventoryProfileIds: r.inventory_profile_ids || undefined,
                 useCustomPrice: r.use_custom_price || false,
                 customPrice: r.custom_price,
                 customFieldValues: r.custom_field_values,
@@ -1263,6 +1346,11 @@ const WarehouseList: React.FC = () => {
               }, 'KetQuaLoc');
               exportInventoryXlsx(filteredItems, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
+            {hasStuckSlots && (
+              <button className="btn btn-warning" onClick={fixOrphanedSlots} title="Fix các slot kho hàng bị kẹt">
+                🔧 Fix Slot Bị Kẹt
+              </button>
+            )}
             {selectedIds.length > 0 && (
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
@@ -1443,8 +1531,35 @@ const WarehouseList: React.FC = () => {
                 <div className="warehouse-card-label">Slot</div>
                 <div className="warehouse-card-value">
                   {(item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased) ? (() => {
-                    const used = (item.profiles || []).filter(p => p.isAssigned).length;
+                    const profiles = Array.isArray(item.profiles) ? item.profiles : [];
                     const total = item.totalSlots || 0;
+                    
+                    // Count assigned slots from profiles
+                    let used = profiles.filter(p => p.isAssigned).length;
+                    
+                    // Fallback: if profiles are empty but we have linked orders, count from orders
+                    if (profiles.length === 0 && total > 0) {
+                      const linkedOrders = Database.getOrders().filter((order: any) => 
+                        order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+                        order.inventoryProfileIds.some((profileId: string) => 
+                          profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
+                        )
+                      );
+                      
+                      if (linkedOrders.length > 0) {
+                        // Count unique slot IDs from all linked orders
+                        const allSlotIds = new Set();
+                        linkedOrders.forEach((order: any) => {
+                          order.inventoryProfileIds.forEach((profileId: string) => {
+                            if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
+                              allSlotIds.add(profileId);
+                            }
+                          });
+                        });
+                        used = allSlotIds.size;
+                      }
+                    }
+                    
                     return (
                       <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item })}>
                         {used}/{total}
@@ -1560,15 +1675,42 @@ const WarehouseList: React.FC = () => {
                     </div>
                   </td>
                   <td>
-                    {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
-                      const used = (i.profiles || []).filter(p => p.isAssigned).length;
-                      const total = i.totalSlots || 0;
-                      return (
-                        <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item: i })}>
-                          {used}/{total}
-                        </button>
+                  {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
+                    const profiles = Array.isArray(i.profiles) ? i.profiles : [];
+                    const total = i.totalSlots || 0;
+                    
+                    // Count assigned slots from profiles
+                    let used = profiles.filter(p => p.isAssigned).length;
+                    
+                    // Fallback: if profiles are empty but we have linked orders, count from orders
+                    if (profiles.length === 0 && total > 0) {
+                      const linkedOrders = Database.getOrders().filter((order: any) => 
+                        order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+                        order.inventoryProfileIds.some((profileId: string) => 
+                          profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
+                        )
                       );
-                    })() : '-'}
+                      
+                      if (linkedOrders.length > 0) {
+                        // Count unique slot IDs from all linked orders
+                        const allSlotIds = new Set();
+                        linkedOrders.forEach((order: any) => {
+                          order.inventoryProfileIds.forEach((profileId: string) => {
+                            if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
+                              allSlotIds.add(profileId);
+                            }
+                          });
+                        });
+                        used = allSlotIds.size;
+                      }
+                    }
+                    
+                    return (
+                      <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item: i })}>
+                        {used}/{total}
+                      </button>
+                    );
+                  })() : '-'}
                   </td>
                   <td>
                     <div className="d-flex gap-2">
@@ -1616,7 +1758,45 @@ const WarehouseList: React.FC = () => {
             <div className="mb-3">
               {(() => {
                 const item = items.find(x => x.id === profilesModal.item.id) || profilesModal.item;
-                const profiles = item.profiles || [];
+                let profiles = item.profiles || [];
+                const totalSlots = item.totalSlots || 0;
+                
+                // If profiles are empty but we have totalSlots, generate fallback profiles from orders
+                if (profiles.length === 0 && totalSlots > 0) {
+                  const linkedOrders = Database.getOrders().filter((order: any) => 
+                    order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+                    order.inventoryProfileIds.some((profileId: string) => 
+                      profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= totalSlots
+                    )
+                  );
+                  
+                  if (linkedOrders.length > 0) {
+                    // Generate profiles with inferred assignments
+                    profiles = Array.from({ length: totalSlots }, (_, idx) => {
+                      const slotId = `slot-${idx + 1}`;
+                      const linkedOrder = linkedOrders.find((order: any) => 
+                        order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
+                      );
+                      
+                      return {
+                        id: slotId,
+                        label: `Slot ${idx + 1}`,
+                        isAssigned: !!linkedOrder,
+                        assignedOrderId: linkedOrder?.id,
+                        assignedAt: linkedOrder?.createdAt,
+                        expiryAt: linkedOrder?.expiryDate
+                      };
+                    });
+                  } else {
+                    // Generate empty profiles
+                    profiles = Array.from({ length: totalSlots }, (_, idx) => ({
+                      id: `slot-${idx + 1}`,
+                      label: `Slot ${idx + 1}`,
+                      isAssigned: false
+                    }));
+                  }
+                }
+                
                 if (!profiles.length) return <div className="text-muted">Không có slot</div>;
                 return (
                   <div className="table-responsive">

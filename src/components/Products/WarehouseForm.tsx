@@ -263,20 +263,40 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Enhanced validation
     const newErrors: { [key: string]: string } = {};
     const ensuredCode = (formData.code || '').trim() || Database.generateNextInventoryCode();
-    if (!(formData.code || '').trim()) {
-      setFormData(prev => ({ ...prev, code: ensuredCode }));
+    
+    if (!ensuredCode.trim()) {
+      newErrors.code = 'Mã kho hàng là bắt buộc';
     }
-    if (!ensuredCode.trim()) newErrors.code = 'Mã kho hàng là bắt buộc';
-    if (!selectedProduct) newErrors.productId = 'Chọn sản phẩm';
+    
+    if (!selectedProduct) {
+      newErrors.productId = 'Vui lòng chọn sản phẩm';
+    }
+    
     // Package is required unless product uses shared inventory pool
-    if (!currentProduct?.sharedInventoryPool && !formData.packageId) newErrors.packageId = 'Chọn gói sản phẩm';
-    if (!formData.purchaseDate) newErrors.purchaseDate = 'Chọn ngày nhập kho';
-    if (!formData.sourceNote || !formData.sourceNote.trim()) newErrors.sourceNote = 'Nhập từ nguồn là bắt buộc';
-    if (!formData.productInfo || !formData.productInfo.trim()) newErrors.productInfo = 'Nhập thông tin sản phẩm';
-    if (formData.purchasePrice == null || isNaN(formData.purchasePrice) || formData.purchasePrice < 0) newErrors.purchasePrice = 'Giá mua không được âm';
-    // No custom warranty validation for inventory anymore
+    if (!currentProduct?.sharedInventoryPool && !formData.packageId) {
+      newErrors.packageId = 'Vui lòng chọn gói sản phẩm';
+    }
+    
+    if (!formData.purchaseDate || isNaN(formData.purchaseDate.getTime())) {
+      newErrors.purchaseDate = 'Vui lòng chọn ngày nhập kho hợp lệ';
+    }
+    
+    if (!formData.sourceNote || !formData.sourceNote.trim()) {
+      newErrors.sourceNote = 'Nhập từ nguồn là bắt buộc';
+    }
+    
+    if (!formData.productInfo || !formData.productInfo.trim()) {
+      newErrors.productInfo = 'Nhập thông tin sản phẩm';
+    }
+    
+    if (formData.purchasePrice == null || isNaN(formData.purchasePrice) || formData.purchasePrice < 0) {
+      newErrors.purchasePrice = 'Giá mua không được âm';
+    }
+    
     // Validate required fields for columns that should be displayed in orders
     displayColumns.forEach((col: InventoryAccountColumn) => {
       const val = (formData.accountData || {})[col.id] || '';
@@ -284,7 +304,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         newErrors[`account_${col.id}`] = `Nhập "${col.title}"`;
       }
     });
-    // no account config here; package defines structure
+    
+    // Validate account-based inventory configuration
+    if (selectedPkg?.isAccountBased) {
+      if (!formData.totalSlots || formData.totalSlots < 1) {
+        newErrors.totalSlots = 'Số slot phải lớn hơn 0';
+      }
+    }
+    
     if (Object.keys(newErrors).length) {
       const errorMessages = Object.values(newErrors).join(', ');
       notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
@@ -322,7 +349,11 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null
           })
           .eq('id', item.id);
-        if (error) throw new Error(error.message || 'Không thể cập nhật kho');
+          
+        if (error) {
+          console.error('Error updating inventory:', error);
+          throw new Error(error.message || 'Không thể cập nhật kho hàng');
+        }
         // Update local inventory and propagate to linked orders
         try {
           const current = Database.getInventory();
@@ -446,7 +477,11 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null
             
           });
-        if (insertError) throw new Error(insertError.message || 'Không thể nhập kho');
+          
+        if (insertError) {
+          console.error('Error creating inventory:', insertError);
+          throw new Error(insertError.message || 'Không thể tạo kho hàng');
+        }
         
         // Update local storage immediately to avoid code conflicts
         const purchaseDate = new Date(formData.purchaseDate);
