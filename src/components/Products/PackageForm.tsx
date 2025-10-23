@@ -440,8 +440,63 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                 Database.setInventory(updatedInventory);
               }
             } catch {}
+
+            // Auto-sync other packages if this is the first package of a shared pool product
+            if (!sharedConfigLocked && firstPackageId === pkg.id) {
+              try {
+                const sb4 = getSupabase();
+                if (sb4) {
+                  // Update all other packages for this product
+                  await sb4.from('packages')
+                    .update({
+                      custom_fields: normalizedForm.customFields,
+                      is_account_based: !!normalizedForm.isAccountBased,
+                      account_columns: normalizedForm.accountColumns,
+                      default_slots: normalizedForm.defaultSlots,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('product_id', productUuid)
+                    .neq('id', pkg.id);
+
+                  // Log sync activity
+                  await sb4.from('activity_logs').insert({
+                    employee_id: state.user?.id || 'system',
+                    action: 'Tự động đồng bộ cấu hình gói sản phẩm',
+                    details: `Sync config từ gói ${pkg.code} cho các gói khác của sản phẩm ${productName || productUuid}`
+                  });
+
+                  // Update local storage packages
+                  const currentPackages = Database.getPackages();
+                  const updatedPackages = currentPackages.map(packageItem => {
+                    if (packageItem.productId === productUuid && packageItem.id !== pkg.id) {
+                      return {
+                        ...packageItem,
+                        customFields: normalizedForm.customFields,
+                        isAccountBased: !!normalizedForm.isAccountBased,
+                        accountColumns: normalizedForm.accountColumns,
+                        defaultSlots: normalizedForm.defaultSlots,
+                        updatedAt: new Date()
+                      };
+                    }
+                    return packageItem;
+                  });
+                  Database.setPackages(updatedPackages);
+                }
+              } catch (syncError) {
+                console.warn('Auto-sync failed:', syncError);
+                // Don't show error to user as main update succeeded
+              }
+            }
             
             notify('Cập nhật gói sản phẩm thành công', 'success');
+            
+            // Show sync notification if auto-sync happened
+            if (!sharedConfigLocked && firstPackageId === pkg.id) {
+              setTimeout(() => {
+                notify('Đã tự động đồng bộ cấu hình cho các gói khác của sản phẩm', 'info', 3000);
+              }, 500);
+            }
+            
             onSuccess();
           } else {
             notify('Không thể cập nhật gói sản phẩm', 'error');

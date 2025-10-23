@@ -16,3 +16,4 @@ console.log('Remaining notification data:', {
   archived: localStorage.getItem('archived-notifications-backup'),
   settings: localStorage.getItem('notification-settings')
 });
+

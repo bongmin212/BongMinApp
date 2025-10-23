@@ -29,3 +29,4 @@ FROM notifications
 WHERE archived_at IS NULL
 GROUP BY employee_id, type
 ORDER BY employee_id, type;
+
