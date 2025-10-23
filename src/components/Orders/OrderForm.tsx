@@ -1029,6 +1029,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
+          {/* Mã đơn hàng - Auto-generated */}
           <div className="form-group">
             <label className="form-label">
               Mã đơn hàng <span className="text-danger">*</span>
@@ -1051,6 +1052,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </div>
           </div>
 
+          {/* 1. Ngày mua */}
           <div className="form-group">
             <label className="form-label">
               Ngày mua <span className="text-danger">*</span>
@@ -1077,6 +1079,55 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             />
           </div>
 
+          {/* 2. Khách hàng */}
+          <div className="form-group">
+            <label className="form-label">
+              Khách hàng <span className="text-danger">*</span>
+            </label>
+            <div className="d-flex gap-2">
+              <div style={{ flex: 1 }}>
+                <input
+                  type="text"
+                  className="form-control mb-2"
+                  placeholder="Tìm khách theo tên/SĐT/email/mã..."
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                />
+                <select
+                  name="customerId"
+                  className="form-control"
+                  value={formData.customerId}
+                  onChange={handleChange}
+                >
+                  <option value="">Chọn khách hàng</option>
+                  {getFilteredCustomers().map(customer => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.code} - {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newShowState = !showNewCustomerForm;
+                  setShowNewCustomerForm(newShowState);
+                  if (newShowState) {
+                  // Code will be generated server-side
+                  setNewCustomerData(prev => ({
+                    ...prev,
+                    code: ''
+                  }));
+                  }
+                }}
+                className="btn btn-secondary"
+              >
+                Tạo mới
+              </button>
+            </div>
+          </div>
+
+          {/* 3. Sản phẩm */}
           <div className="form-group">
             <label className="form-label">
               Sản phẩm <span className="text-danger">*</span>
@@ -1103,6 +1154,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </select>
           </div>
 
+          {/* 4. Gói sản phẩm → kiểm tra kho */}
           <div className="form-group">
             <label className="form-label">
               Gói sản phẩm <span className="text-danger">*</span>
@@ -1131,6 +1183,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </select>
           </div>
 
+          {/* Package info and custom expiry settings */}
           {getSelectedPackage() && (
             <div className="form-group">
               <div className="d-flex align-items-center gap-2 mt-2">
@@ -1193,6 +1246,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* Custom fields */}
           {(() => {
             const pkg = getSelectedPackage();
             if (!pkg || !pkg.customFields || pkg.customFields.length === 0) return null;
@@ -1221,6 +1275,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             );
           })()}
 
+          {/* 4. Kiểm tra kho - Inventory selection */}
           {!!availableInventory.length && (
             <div className="card mb-3">
               <div className="card-header">
@@ -1447,55 +1502,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </div>
           )}
 
-          <div className="form-group">
-            <label className="form-label">
-              Khách hàng <span className="text-danger">*</span>
-            </label>
-            <div className="d-flex gap-2">
-              <div style={{ flex: 1 }}>
-                <input
-                  type="text"
-                  className="form-control mb-2"
-                  placeholder="Tìm khách theo tên/SĐT/email/mã..."
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                />
-                <select
-                  name="customerId"
-                  className="form-control"
-                  value={formData.customerId}
-                  onChange={handleChange}
-                >
-                  <option value="">Chọn khách hàng</option>
-                  {getFilteredCustomers().map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.code} - {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const newShowState = !showNewCustomerForm;
-                  setShowNewCustomerForm(newShowState);
-                  if (newShowState) {
-                  // Code will be generated server-side
-                  setNewCustomerData(prev => ({
-                    ...prev,
-                    code: ''
-                  }));
-                  }
-                }}
-                className="btn btn-secondary"
-              >
-                Tạo mới
-              </button>
-            </div>
-          </div>
-
+          {/* Informational message for new orders */}
           {(() => {
-            // Informational message for new orders
             const hasAvailable = (availableInventory || []).length > 0;
             if (!order) {
               return (
@@ -1509,6 +1517,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             return null;
           })()}
 
+          {/* New customer form */}
           {showNewCustomerForm && (
             <div className="card mb-3">
               <div className="card-header">
@@ -1661,6 +1670,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </div>
           )}
 
+          {/* 5. Thông tin thanh toán */}
           {getSelectedCustomer() && getSelectedPackage() && (
             <div className="form-group">
               <div className="d-flex align-items-center gap-2 mb-2">
@@ -1748,7 +1758,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </select>
           </div>
 
-
+          {/* 6. Ghi chú */}
           <div className="form-group">
             <label className="form-label">Ghi chú</label>
             <textarea
@@ -1819,7 +1829,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               type="submit"
               className="btn btn-primary"
             >
-              {order ? 'Cập nhật' : 'Tạo đơn hàng'}
+              {order ? 'Cập nhật đơn hàng' : 'Tạo đơn hàng'}
             </button>
           </div>
         </form>

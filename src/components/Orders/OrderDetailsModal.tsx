@@ -254,8 +254,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Thanh toán:</strong> {getPaymentLabel ? (getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán') : paymentLabel}</div>
 
 					{renderInventoryCard()}
-					{renderCustomFields()}
 					{renderAccountOrderInfo()}
+					{renderCustomFields()}
 					{order.notes && <div><strong>Ghi chú:</strong> {order.notes}</div>}
 					{(() => {
 						// warrantyTick is used only to force recalculation on realtime events
