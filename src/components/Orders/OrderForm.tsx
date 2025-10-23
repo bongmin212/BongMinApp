@@ -968,24 +968,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 }
               }
             }
-        } catch (error) {
-          console.error('Failed to link inventory to order:', error);
+          } catch (error) {
+            console.error('Failed to link inventory to order:', error);
+          }
         }
-      }
-      
-      // Refresh available inventory to reflect changes
-      if (selectedInventoryId) {
-        // Trigger a refresh of available inventory
-        setFormData(prev => ({ ...prev }));
-      }
-      
-      // Inventory assignment handled client-side only
-      try {
-        const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
-      } catch {}
-      notify('Tạo đơn hàng thành công', 'success');
-      onSuccess();
+        
+        // Refresh available inventory to reflect changes
+        if (selectedInventoryId) {
+          // Trigger a refresh of available inventory
+          setFormData(prev => ({ ...prev }));
+        }
+        
+        // Log activity
+        try {
+          const sb2 = getSupabase();
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
+        } catch {}
+        notify('Tạo đơn hàng thành công', 'success');
+        onSuccess();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu đơn hàng';
