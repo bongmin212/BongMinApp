@@ -8,7 +8,7 @@ export function getSupabase(): SupabaseClient | null {
     const anon = (process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) as string | undefined;
     if (!url || !anon) {
       if (typeof window !== 'undefined') {
-        console.warn('[Supabase] Missing env vars REACT_APP_SUPABASE_URL/ANON_KEY');
+        // Supabase: Missing env vars - ignore
       }
       return null;
     }
@@ -22,7 +22,7 @@ export function getSupabase(): SupabaseClient | null {
     });
     return cached;
   } catch (e) {
-    console.error('[Supabase] createClient failed', e);
+    // Supabase: createClient failed - ignore
     return null;
   }
 }
@@ -44,10 +44,10 @@ export async function cleanupOrphanedEmployees() {
   
   try {
     // Function removed - no longer available after rollback
-    console.warn('[Cleanup] cleanup_orphaned_employees function no longer available');
+    // Cleanup: cleanup_orphaned_employees function no longer available - ignore
     return { ok: false, message: 'Function no longer available' };
   } catch (e) {
-    console.error('[Cleanup] Error:', e);
+    // Cleanup: Error - ignore
     return { ok: false, message: 'Cleanup failed' };
   }
 }

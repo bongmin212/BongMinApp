@@ -232,6 +232,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
           </button>
         </div>
 
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
             <div className="d-flex align-items-center gap-2">
               <input
@@ -243,8 +244,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
               <label htmlFor="sharedInventoryPool" className="mb-0">Dùng chung kho hàng cho các gói</label>
             </div>
           </div>
-
-        <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">
               Mã sản phẩm <span className="text-danger">*</span>

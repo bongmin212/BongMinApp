@@ -274,10 +274,10 @@ const PackageList: React.FC = () => {
       const product = products.find(p => p.id === pkg.productId);
       
       // Build custom fields info
-      const customFieldsInfo = pkg.customFields?.map(cf => cf.title).join('; ') || '';
+      const customFieldsInfo = (pkg.customFields || []).filter(cf => cf && cf.title).map(cf => cf.title).join('; ');
       
       // Build account columns info
-      const accountColumnsInfo = pkg.accountColumns?.map(col => col.title).join('; ') || '';
+      const accountColumnsInfo = (pkg.accountColumns || []).filter(col => col && col.title).map(col => col.title).join('; ');
       
       return {
         // Basic info

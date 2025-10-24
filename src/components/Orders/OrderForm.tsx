@@ -1,14 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Order, Customer, ProductPackage, Product, OrderFormData, ORDER_STATUSES, PAYMENT_STATUSES, InventoryItem, OrderStatus, CUSTOMER_TYPES, CUSTOMER_SOURCES, CustomerSource } from '../../types';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 
-// Debug logging helper: disabled in production builds
-const debugLog = (...args: any[]) => {
-  if (process.env.NODE_ENV !== 'production') console.log(...args);
-};
 
 interface OrderFormProps {
   order?: Order | null;
@@ -110,7 +106,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             }
           }
         } catch (error) {
-          console.error('Error finding linked inventory:', error);
+          // Error finding linked inventory - ignore
         }
 
         setSelectedInventoryId(invLinked);
@@ -241,7 +237,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       setPackages(allPackages);
       setProducts(allProducts);
     } catch (error) {
-      console.error('Error loading data:', error);
       notify('Lỗi khi tải dữ liệu. Vui lòng thử lại.', 'error');
       // Fallback to local storage if available
       try {
@@ -249,7 +244,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setPackages(Database.getPackages());
         setProducts(Database.getProducts());
       } catch (fallbackError) {
-        console.error('Fallback data loading failed:', fallbackError);
+        // Fallback data loading failed - ignore
       }
     }
   };
@@ -410,7 +405,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setFormData(prev => ({ ...prev }));
       })
       .subscribe();
-    return () => { try { ch.unsubscribe(); } catch {} };
+    return () => { 
+      try { 
+        ch.unsubscribe(); 
+        } catch (error) {
+          // Error unsubscribing from realtime channel - ignore
+        }
+    };
   }, []);
 
   // Auto-enforce status rules based on inventory selection
@@ -438,7 +439,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     }
     
     const profiles = Array.isArray(inv?.profiles) ? (inv as any).profiles : [];
-    const allowed = profiles.filter((p: any) => (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate);
+    const allowed = profiles.filter((p: any) => {
+      if (!p || typeof p !== 'object') return false;
+      return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
+    });
     
     if (!allowed.length) {
       setSelectedProfileIds([]);
@@ -548,8 +552,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           } else {
             // Validate each selected slot
             const invalidSlots = selectedProfileIds.filter(profileId => {
-              const chosen = (inv.profiles || []).find(p => p.id === profileId);
-              if (!chosen) return true;
+              const chosen = (inv.profiles || []).find(p => p && p.id === profileId);
+              if (!chosen || typeof chosen !== 'object') return true;
               if ((chosen as any).needsUpdate) return true;
               if ((chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '')) return true;
               return false;
@@ -724,10 +728,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             custom_field_values: orderData.customFieldValues || null,
             sale_price: (orderData as any).salePrice || null
           };
-          debugLog('=== ORDER UPDATE DEBUG ===');
-          debugLog('Order ID:', order.id);
-          debugLog('Update data:', updateData);
-          debugLog('inventory_profile_ids being sent:', orderData.inventoryProfileIds);
+          // Order update debug
           
           const { data: updateResult, error } = await sb
             .from('orders')
@@ -736,13 +737,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             .select('*')
             .single();
           
-          debugLog('Update result:', updateResult);
-          debugLog('Update result inventory_profile_id:', updateResult?.inventory_profile_id);
-          debugLog('Update error:', error);
+          // Update result debug
           
           if (error) {
-            console.error('Supabase update error:', error);
-            console.error('Error details:', JSON.stringify(error, null, 2));
+            // Supabase update error - ignore
             notify(`Lỗi cập nhật: ${error.message}`, 'error');
             return;
           }
@@ -792,7 +790,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   const { data: prevInventory, error: fetchError } = await sb2.from('inventory').select('*').eq('id', prevInventoryId).single();
                   
                   if (fetchError) {
-                    console.error('Error fetching previous inventory:', fetchError);
+                    // Error fetching previous inventory - ignore
                     notify('Lỗi khi truy xuất thông tin kho hàng cũ', 'error');
                     return;
                   }
@@ -820,7 +818,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       }).eq('id', prevInventoryId);
                       
                       if (updateError) {
-                        console.error('Error releasing account-based inventory:', updateError);
+                        // Error releasing account-based inventory - ignore
                         notify('Lỗi khi giải phóng slot kho hàng', 'error');
                         return;
                       }
@@ -833,7 +831,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       }).eq('id', prevInventoryId);
                       
                       if (updateError) {
-                        console.error('Error releasing classic inventory:', updateError);
+                        // Error releasing classic inventory - ignore
                         notify('Lỗi khi giải phóng kho hàng', 'error');
                         return;
                       }
@@ -841,7 +839,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   }
                 }
               } catch (error) {
-                console.error('Failed to release previous inventory:', error);
+                // Failed to release previous inventory - ignore
                 notify('Lỗi không mong muốn khi giải phóng kho hàng', 'error');
                 return;
               }
@@ -864,7 +862,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       const { data: currentInventory, error: fetchError } = await sb2.from('inventory').select('*').eq('id', nextInventoryId).single();
                       
                       if (fetchError) {
-                        console.error('Error fetching current inventory:', fetchError);
+                        // Error fetching current inventory - ignore
                         notify('Lỗi khi truy xuất thông tin kho hàng', 'error');
                         return;
                       }
@@ -874,14 +872,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         
                         // Generate missing profiles if empty
                         if (profiles.length === 0 && currentInventory.total_slots > 0) {
-                          debugLog('Generating missing profiles for inventory:', currentInventory.id);
-                          debugLog('Total slots:', currentInventory.total_slots);
+                          // Generating missing profiles for inventory
                           profiles = Array.from({ length: currentInventory.total_slots }, (_, idx) => ({
                             id: `slot-${idx + 1}`,
                             label: `Slot ${idx + 1}`,
                             isAssigned: false
                           }));
-                          debugLog('Generated profiles:', profiles);
+                          // Generated profiles
                         }
                         
                         const updatedProfiles = profiles.map((profile: any) => {
@@ -915,10 +912,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                           !p.isAssigned && !(p as any).needsUpdate
                         );
                         
-                        debugLog('=== UPDATING INVENTORY SLOTS ===');
-                        debugLog('Inventory ID:', nextInventoryId);
-                        debugLog('Selected profile IDs:', selectedProfileIds);
-                        debugLog('Updated profiles:', updatedProfiles);
+                        // Updating inventory slots
                         
                         const { error: updateError } = await sb2.from('inventory').update({
                           profiles: updatedProfiles,
@@ -927,12 +921,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         }).eq('id', nextInventoryId);
                         
                         if (updateError) {
-                          console.error('Error updating account-based inventory:', updateError);
+                          // Error updating account-based inventory - ignore
                           notify('Lỗi khi cập nhật slot kho hàng', 'error');
                           return;
                         }
                         
-                        debugLog('Successfully updated inventory slots');
+                        // Successfully updated inventory slots
                       }
                     } else {
                       notify('Kho hàng dạng tài khoản cần chọn ít nhất 1 slot', 'error');
@@ -947,14 +941,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     }).eq('id', nextInventoryId);
                     
                     if (updateError) {
-                      console.error('Error updating classic inventory:', updateError);
+                      // Error updating classic inventory - ignore
                       notify('Lỗi khi cập nhật kho hàng', 'error');
                       return;
                     }
                   }
                 }
               } catch (error) {
-                console.error('Failed to link new inventory to order:', error);
+                // Failed to link new inventory to order - ignore
                 notify('Lỗi không mong muốn khi liên kết kho hàng', 'error');
                 return;
               }
@@ -1008,7 +1002,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           .select('*')
           .single();
         if (createErr || !createData) {
-          console.error('Supabase create error:', createErr);
+          // Supabase create error - ignore
           throw new Error(createErr?.message || 'Tạo đơn thất bại');
         }
         
@@ -1057,7 +1051,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   const { data: currentInventory, error: fetchError } = await sb2.from('inventory').select('*').eq('id', selectedInventoryId).single();
                   
                   if (fetchError) {
-                    console.error('Error fetching current inventory:', fetchError);
+                    // Error fetching current inventory - ignore
                     notify('Lỗi khi truy xuất thông tin kho hàng', 'error');
                     return;
                   }
@@ -1093,10 +1087,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       !p.isAssigned && !(p as any).needsUpdate
                     );
                     
-                    debugLog('=== CREATING ORDER WITH SLOTS ===');
-                    debugLog('Inventory ID:', selectedInventoryId);
-                    debugLog('Selected profile IDs:', selectedProfileIds);
-                    debugLog('Updated profiles:', updatedProfiles);
+                    // Creating order with slots
                     
                     const { error: updateError } = await sb2.from('inventory').update({
                       profiles: updatedProfiles,
@@ -1105,12 +1096,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     }).eq('id', selectedInventoryId);
                     
                     if (updateError) {
-                      console.error('Error updating account-based inventory:', updateError);
+                      // Error updating account-based inventory - ignore
                       notify('Lỗi khi cập nhật slot kho hàng', 'error');
                       return;
                     }
                     
-                    debugLog('Successfully created order with slots');
+                    // Successfully created order with slots
                   }
                 } else {
                   notify('Kho hàng dạng tài khoản cần chọn ít nhất 1 slot', 'error');
@@ -1125,14 +1116,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 }).eq('id', selectedInventoryId);
                 
                 if (updateError) {
-                  console.error('Error updating classic inventory:', updateError);
+                  // Error updating classic inventory - ignore
                   notify('Lỗi khi cập nhật kho hàng', 'error');
                   return;
                 }
               }
             }
           } catch (error) {
-            console.error('Failed to link inventory to order:', error);
+            // Failed to link inventory to order - ignore
             notify('Lỗi không mong muốn khi liên kết kho hàng', 'error');
             return;
           }
@@ -1297,7 +1288,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     });
   };
 
-  const getFilteredInventory = () => {
+  const getFilteredInventory = useMemo(() => {
     const q = debouncedInventorySearch;
     if (!q) return availableInventory;
     return availableInventory.filter(item => {
@@ -1307,7 +1298,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const packageName = (packages.find(p => p.id === item.packageId)?.name || '').toLowerCase();
       return code.includes(q) || info.includes(q) || productName.includes(q) || packageName.includes(q);
     });
-  };
+  }, [availableInventory, debouncedInventorySearch, products, packages]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -1763,16 +1754,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     className="form-control"
                     value={selectedInventoryId}
                     onChange={(e) => {
-                      debugLog('Inventory selection changed to:', e.target.value);
+                      // Inventory selection changed
                       setSelectedInventoryId(e.target.value);
                     }}
                   >
                     <option value="">Không chọn</option>
-                    {getFilteredInventory().map(item => {
+                    {getFilteredInventory.map((item: InventoryItem) => {
                       const product = products.find(p => p.id === item.productId);
-                      const packageInfo = packages.find(p => p.id === item.packageId);
+                      const packageInfo = item.packageId ? packages.find(p => p.id === item.packageId) : null;
                       const productName = product?.name || 'Không xác định';
-                      const packageName = packageInfo?.name || 'Không xác định';
+                      const packageName = packageInfo?.name || (product?.sharedInventoryPool ? 'Kho chung' : 'Không có gói');
                       const expiryDate = (() => {
                         if (item.expiryDate) {
                           return new Date(item.expiryDate).toISOString().split('T')[0];
@@ -1809,23 +1800,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     if (!item) return null;
                     
                     const product = products.find(p => p.id === item.productId);
-                    const packageInfo = packages.find(p => p.id === item.packageId);
+                    const packageInfo = item.packageId ? packages.find(p => p.id === item.packageId) : null;
                     const productName = product?.name || 'Không xác định';
-                    const packageName = packageInfo?.name || 'Không xác định';
+                    const packageName = packageInfo?.name || (product?.sharedInventoryPool ? 'Kho chung' : 'Không có gói');
                     const isSharedPool = product?.sharedInventoryPool;
                     
                     // Debug logging
-                    debugLog('=== INVENTORY CARD DEBUG ===');
-                    debugLog('Item:', item);
-                    debugLog('Product ID:', item.productId);
-                    debugLog('Package ID:', item.packageId);
-                    debugLog('Found product:', product);
-                    debugLog('Found package:', packageInfo);
-                    debugLog('Product name:', productName);
-                    debugLog('Package name:', packageName);
-                    debugLog('Is shared pool:', isSharedPool);
-                    debugLog('Purchase price:', item.purchasePrice, 'Type:', typeof item.purchasePrice);
-                    debugLog('Source note:', item.sourceNote);
+                    // Inventory card debug
                     
                     return (
                       <div className="mt-3">

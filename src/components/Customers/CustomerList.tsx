@@ -48,13 +48,10 @@ const CustomerList: React.FC = () => {
       setFilterSource(s || '');
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
     } catch (e) {
-      console.error('CustomerList: Error reading URL params:', e);
+      // Error reading URL params - ignore
     }
   }, []);
 
-  useEffect(() => {
-    loadCustomers();
-  }, []);
 
   // Debounce search term
   useEffect(() => {
@@ -108,7 +105,7 @@ const CustomerList: React.FC = () => {
       })
       .subscribe();
     return () => { try { channel.unsubscribe(); } catch {} };
-  }, []);
+  }, [loadCustomers]);
 
   const handleCreate = () => {
     setEditingCustomer(null);
@@ -246,14 +243,6 @@ const CustomerList: React.FC = () => {
     const matchesType = !filterType || customer.type === filterType;
     const matchesSource = !filterSource || customer.source === filterSource;
     
-    console.log('CustomerList: Filtering customer:', { 
-      name: customer.name, 
-      type: customer.type, 
-      filterType, 
-      matchesType,
-      matchesSource,
-      matchesSearch 
-    });
     
     return matchesSearch && matchesType && matchesSource;
   });

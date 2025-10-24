@@ -55,7 +55,7 @@ const WarehouseList: React.FC = () => {
             .select('id');
           
           if (ordersError) {
-            console.error('Error fetching orders:', ordersError);
+            // Error fetching orders - ignore
             notify('Lỗi khi kiểm tra đơn hàng', 'error');
             return;
           }
@@ -70,7 +70,7 @@ const WarehouseList: React.FC = () => {
             .eq('status', 'SOLD');
           
           if (fetchError) {
-            console.error('Error fetching orphaned slots:', fetchError);
+            // Error fetching orphaned slots - ignore
             notify('Lỗi khi tìm slot bị kẹt', 'error');
             return;
           }
@@ -81,11 +81,10 @@ const WarehouseList: React.FC = () => {
           );
           
           if (orphanedSlots.length > 0) {
-            console.log('=== FIXING ORPHANED SLOTS ===');
-            console.log('Found orphaned slots:', orphanedSlots.map(s => ({ id: s.id, code: s.code, status: s.status, linked_order_id: s.linked_order_id })));
+            // Fixing orphaned slots
             
             const slotIds = orphanedSlots.map(slot => slot.id);
-            console.log('Slot IDs to fix:', slotIds);
+            // Slot IDs to fix
             
             const { data: updateResult, error: updateError } = await sb
               .from('inventory')
@@ -94,14 +93,14 @@ const WarehouseList: React.FC = () => {
               .select('id, code, status, linked_order_id');
             
             if (updateError) {
-              console.error('Error fixing orphaned slots:', updateError);
+              // Error fixing orphaned slots - ignore
               notify('Lỗi khi fix slot thường bị kẹt', 'error');
             } else if (updateResult && updateResult.length > 0) {
-              console.log('Successfully fixed slots:', updateResult.map(r => ({ id: r.id, code: r.code, status: r.status, linked_order_id: r.linked_order_id })));
+              // Successfully fixed slots
               fixedCount += updateResult.length;
               fixedDetails.push(`${updateResult.length} slot thường`);
             } else {
-              console.log('No slots were actually updated - this might indicate a database issue');
+              // No slots were actually updated - this might indicate a database issue
               notify('Không có slot nào được cập nhật. Có thể có vấn đề với database.', 'warning');
             }
           }
@@ -114,7 +113,7 @@ const WarehouseList: React.FC = () => {
             .eq('is_account_based', true);
           
           if (accountError) {
-            console.error('Error fetching account-based items:', accountError);
+            // Error fetching account-based items - ignore
             notify('Lỗi khi tìm account-based slot bị kẹt', 'error');
             return;
           }
@@ -173,7 +172,7 @@ const WarehouseList: React.FC = () => {
           }, 1000);
           
         } catch (error) {
-          console.error('Unexpected error fixing orphaned slots:', error);
+          // Unexpected error fixing orphaned slots - ignore
           notify('Lỗi không mong muốn khi fix slot', 'error');
         }
       }
@@ -268,7 +267,7 @@ const WarehouseList: React.FC = () => {
         .select('id');
       
       if (ordersError) {
-        console.error('Error fetching orders:', ordersError);
+        // Error fetching orders - ignore
         return;
       }
       
@@ -282,7 +281,7 @@ const WarehouseList: React.FC = () => {
         .eq('status', 'SOLD');
       
       if (fetchError) {
-        console.error('Error checking orphaned slots:', fetchError);
+        // Error checking orphaned slots - ignore
         return;
       }
       
@@ -298,7 +297,7 @@ const WarehouseList: React.FC = () => {
         .eq('is_account_based', true);
       
       if (accountError) {
-        console.error('Error checking account-based items:', accountError);
+        // Error checking account-based items - ignore
         return;
       }
       
@@ -323,21 +322,16 @@ const WarehouseList: React.FC = () => {
       
       // Debug logging
       if (hasRegularStuckSlots) {
-        console.log('Found regular stuck slots:', orphanedSlots.map(s => ({ 
-          id: s.id, 
-          code: s.code, 
-          status: s.status, 
-          linked_order_id: s.linked_order_id 
-        })));
+        // Found regular stuck slots
       }
       
     } catch (error) {
-      console.error('Error checking for stuck slots:', error);
+      // Error checking for stuck slots - ignore
     }
   };
 
   const refresh = async () => {
-    console.log('🔄 WarehouseList: Starting refresh...');
+    // WarehouseList: Starting refresh
     const sb = getSupabase();
     if (!sb) return;
     // Optional sweep on client for local display of expired flags is no longer needed
@@ -348,7 +342,7 @@ const WarehouseList: React.FC = () => {
       sb.from('customers').select('*').order('created_at', { ascending: true })
     ]);
     
-    console.log('🔄 WarehouseList: Data loaded, inventory count:', invRes.data?.length);
+    // WarehouseList: Data loaded
 
     // Auto-update inventory status based on expiry_date
     try {
@@ -421,7 +415,7 @@ const WarehouseList: React.FC = () => {
       }
     } catch (e) {
       // Best-effort; ignore failures and continue rendering
-      console.error('Auto-expire sweep failed', e);
+      // Auto-expire sweep failed - ignore
     }
     const inv = (invRes.data || []).map((r: any) => {
       const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
@@ -570,7 +564,7 @@ const WarehouseList: React.FC = () => {
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
     } catch (e) {
-      console.error('WarehouseList: Error reading URL params:', e);
+      // WarehouseList: Error reading URL params - ignore
     }
   }, []);
 
@@ -697,12 +691,7 @@ const WarehouseList: React.FC = () => {
   const filteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
     
-    console.log('WarehouseList: Filtering items with:', { 
-      filterStatus, 
-      filterPaymentStatus, 
-      totalItems: items.length,
-      searchTerm: debouncedSearchTerm 
-    });
+    // WarehouseList: Filtering items
     
     const filtered = items.filter(i => {
       // Search in account data fields
@@ -775,12 +764,7 @@ const WarehouseList: React.FC = () => {
       return matchesSearch && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
     });
     
-    console.log('WarehouseList: Filtered results:', { 
-      totalItems: items.length, 
-      filteredCount: filtered.length,
-      filterStatus,
-      sampleItems: filtered.slice(0, 3).map(i => ({ id: i.id, code: i.code, status: i.status }))
-    });
+    // WarehouseList: Filtered results
     
     return filtered;
   }, [items, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);

@@ -91,7 +91,7 @@ const ExpenseList: React.FC = () => {
       const data = await Database.getExpenses();
       setExpenses(data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch (error) {
-      console.error('Error loading expenses:', error);
+      // Error loading expenses - ignore
     } finally {
       setLoading(false);
     }
@@ -201,7 +201,7 @@ const ExpenseList: React.FC = () => {
 
       return matchesSearch && matchesType && matchesDateFrom && matchesDateTo && matchesMin && matchesMax;
     });
-  }, [expenses, searchQuery, filterType, dateFrom, dateTo, minAmount, maxAmount]);
+  }, [expenses, debouncedSearchQuery, filterType, dateFrom, dateTo, minAmount, maxAmount]);
 
   const getTotalExpense = useMemo(() => {
     return filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);

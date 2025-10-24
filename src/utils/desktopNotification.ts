@@ -13,7 +13,7 @@ export class DesktopNotification {
       this.permission = await Notification.requestPermission();
       return this.permission === 'granted';
     } catch (error) {
-      console.warn('Failed to request notification permission:', error);
+      // Failed to request notification permission - ignore
       return false;
     }
   }
@@ -54,7 +54,7 @@ export class DesktopNotification {
         setTimeout(() => notification.close(), 5000);
       }
     } catch (error) {
-      console.warn('Failed to show desktop notification:', error);
+      // Failed to show desktop notification - ignore
     }
   }
 

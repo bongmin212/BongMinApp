@@ -118,7 +118,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             code: nextCode,
             productId: '',
             name: '',
-            warrantyPeriod: 0,
+            warrantyPeriod: 24,
             costPrice: 0,
             ctvPrice: 0,
             retailPrice: 0,
@@ -139,7 +139,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             code: nextCode,
             productId: '',
             name: '',
-            warrantyPeriod: 0,
+            warrantyPeriod: 24,
             costPrice: 0,
             ctvPrice: 0,
             retailPrice: 0,
@@ -285,6 +285,22 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
       newErrors.retailPrice = 'Giá khách lẻ không được âm';
     }
     
+    // Validate custom fields
+    if (formData.customFields && formData.customFields.length > 0) {
+      const emptyCustomFields = formData.customFields.filter(field => !field.title.trim());
+      if (emptyCustomFields.length > 0) {
+        newErrors.customFields = 'Tất cả trường tùy chỉnh phải có tiêu đề';
+      }
+    }
+    
+    // Validate account columns
+    if (formData.accountColumns && formData.accountColumns.length > 0) {
+      const emptyAccountColumns = formData.accountColumns.filter(col => !col.title.trim());
+      if (emptyAccountColumns.length > 0) {
+        newErrors.accountColumns = 'Tất cả cột tài khoản phải có tiêu đề';
+      }
+    }
+    
     if (Object.keys(newErrors).length > 0) {
       const errorMessages = Object.values(newErrors).join(', ');
       notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
@@ -292,29 +308,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     }
 
     try {
-      const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
-      const sbForResolve = getSupabase();
-      // Resolve productId to real UUID if local id was used
-      const resolveProductUuid = async (inputId: string): Promise<string> => {
-        if (looksLikeUuid(inputId)) return inputId;
-        const selected = products.find(p => p.id === inputId);
-        if (!sbForResolve || !selected) return inputId;
-        // Prefer code, fallback to name
-        try {
-          let productUuid: string | undefined;
-          if ((selected as any).code) {
-            const byCode = await sbForResolve.from('products').select('id').eq('code', (selected as any).code).maybeSingle();
-            productUuid = byCode.data?.id as any;
-          }
-          if (!productUuid && selected.name) {
-            const byName = await sbForResolve.from('products').select('id').eq('name', selected.name).maybeSingle();
-            productUuid = byName.data?.id as any;
-          }
-          return productUuid || inputId;
-        } catch {
-          return inputId;
-        }
-      };
 
       if (pkg) {
         // Update existing package with diff logging
@@ -483,7 +476,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                   Database.setPackages(updatedPackages);
                 }
               } catch (syncError) {
-                console.warn('Auto-sync failed:', syncError);
+                // Auto-sync failed - ignore
                 // Don't show error to user as main update succeeded
               }
             }
@@ -612,7 +605,11 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     const value = e.target.value;
     if (value === 'permanent') {
       setFormData(prev => ({ ...prev, warrantyPeriod: 24 }));
+    } else if (value === 'custom') {
+      // When switching to custom, preserve current value or default to 12
+      setFormData(prev => ({ ...prev, warrantyPeriod: prev.warrantyPeriod === 24 ? 12 : prev.warrantyPeriod }));
     } else {
+      // Handle direct number input
       setFormData(prev => ({ ...prev, warrantyPeriod: Number(value) }));
     }
   };
@@ -771,7 +768,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             <div className="col-md-4">
               <div className="form-group">
                 <label className="form-label">
-                  Giá tham chiếu (không dùng tính lãi) <span className="text-danger">*</span>
+                  Giá gốc (giá vốn) <span className="text-danger">*</span>
                 </label>
                 <div className="currency-input">
                   <input

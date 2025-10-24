@@ -2,10 +2,6 @@ import { getSupabase } from './supabaseClient';
 import { Database } from './database';
 import { ActivityLog, Customer, Employee, Expense, InventoryItem, Order, Product, ProductPackage, Warranty } from '../types';
 
-// Debug logging helper: disabled in production builds
-const debugLog = (...args: any[]) => {
-  if (process.env.NODE_ENV !== 'production') console.log(...args);
-};
 
 // snake_case <-> camelCase mapping helpers
 export function toCamel<T = any>(row: any): T {
@@ -78,10 +74,10 @@ export async function hydrateAllFromSupabase(): Promise<void> {
       const { data, error } = await sb.from(t.name).select('*');
       if (error) throw error;
       const rows = (data || []).map((d: any) => reviveDates(toCamel(d)));
-      debugLog(`[SupabaseSync] hydrating ${t.name}:`, rows.length, 'items');
+      // SupabaseSync: hydrating table
       (t.setter as any)(rows);
     } catch (e) {
-      console.warn('[SupabaseSync] hydrate table failed:', t.name, e);
+      // SupabaseSync: hydrate table failed - ignore
     }
   }
 
@@ -92,7 +88,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
     const rows = (data || []).map((d: any) => reviveDates(toCamel<ActivityLog>(d)));
     Database.setActivityLogs(rows);
   } catch (e) {
-    console.warn('[SupabaseSync] hydrate activity_logs failed', e);
+    // SupabaseSync: hydrate activity_logs failed - ignore
   }
 }
 
@@ -140,16 +136,16 @@ export async function mirrorInsert(table: string, payload: any): Promise<void> {
     })();
 
     const snake = table === 'expenses' ? toSnakeExpense(normalized) : toSnake(normalized);
-    debugLog(`[SupabaseSync] mirrorInsert ${table}:`, snake);
+    // SupabaseSync: mirrorInsert
     const { data, error } = await sb.from(table).insert(snake);
     if (error) {
-      console.error(`[SupabaseSync] mirrorInsert ${table} error:`, error);
+      // SupabaseSync: mirrorInsert error - ignore
       throw error;
     }
-    debugLog(`[SupabaseSync] mirrorInsert ${table} success:`, data);
+    // SupabaseSync: mirrorInsert success
   } catch (e: any) {
     const message = e?.message || e?.error || String(e);
-    console.warn('[SupabaseSync] mirrorInsert failed', { table, message, payloadKeys: Object.keys(payload || {}) });
+    // SupabaseSync: mirrorInsert failed - ignore
     throw e; // Re-throw to let caller handle the error
   }
 }
@@ -161,7 +157,7 @@ export async function mirrorUpdate(table: string, id: string, updates: any): Pro
     const snake = toSnake(updates);
     await sb.from(table).update(snake).eq('id', id);
   } catch (e) {
-    console.warn('[SupabaseSync] mirrorUpdate failed', table, e);
+    // SupabaseSync: mirrorUpdate failed - ignore
   }
 }
 
@@ -171,7 +167,7 @@ export async function mirrorDelete(table: string, id: string): Promise<void> {
   try {
     await sb.from(table).delete().eq('id', id);
   } catch (e) {
-    console.warn('[SupabaseSync] mirrorDelete failed', table, e);
+    // SupabaseSync: mirrorDelete failed - ignore
   }
 }
 
@@ -183,7 +179,7 @@ export async function mirrorActivityLog(payload: Omit<ActivityLog, 'id' | 'times
     if (toSend.timestamp instanceof Date) toSend.timestamp = toSend.timestamp.toISOString();
     await sb.from('activity_logs').insert(toSnake(toSend));
   } catch (e) {
-    console.warn('[SupabaseSync] mirrorActivityLog failed', e);
+    // SupabaseSync: mirrorActivityLog failed - ignore
   }
 }
 

@@ -18,10 +18,6 @@ import { InventoryRenewal } from '../types';
 import { Warranty, WarrantyFormData } from '../types';
 import { mirrorDelete, mirrorInsert, mirrorUpdate, mirrorActivityLog } from './supabaseSync';
 
-// Debug logging helper: disabled in production builds
-const debugLog = (...args: any[]) => {
-  if (process.env.NODE_ENV !== 'production') console.log(...args);
-};
 
 // In-memory backing store (clears on refresh; authoritative source is Supabase)
 const MEM: Record<string, any[]> = {
@@ -69,7 +65,7 @@ const saveToStorage = <T>(key: string, data: T[]): void => {
   try {
     MEM[key] = Array.isArray(data) ? [...data] : [];
   } catch (error) {
-    console.error(`[Database] Failed to save ${key}:`, error);
+    // Database: Failed to save - ignore
     // Fallback: try to save at least empty array
     MEM[key] = [];
   }
@@ -1194,7 +1190,7 @@ export class Database {
   // Expense methods
   static async getExpenses(): Promise<Expense[]> {
     const expenses = getFromStorage(STORAGE_KEYS.EXPENSES, []);
-    debugLog('Loading expenses from storage:', expenses.length, 'items');
+    // Loading expenses from storage
     return expenses;
   }
 
@@ -1213,16 +1209,16 @@ export class Database {
       updatedAt: new Date(),
     };
     
-    debugLog('Creating expense:', newExpense);
+    // Creating expense
     expenses.push(newExpense);
     saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
-    debugLog('Saved to storage, expenses count:', expenses.length);
+    // Saved to storage
     
     try {
       await mirrorInsert('expenses', newExpense);
-      debugLog('Synced to Supabase successfully');
+      // Synced to Supabase successfully
     } catch (error) {
-      console.error('Failed to sync to Supabase:', error);
+      // Failed to sync to Supabase - ignore
       // Don't throw - data is saved locally and will sync later
     }
     
@@ -1249,7 +1245,7 @@ export class Database {
     try {
       await mirrorUpdate('expenses', id, expenses[index]);
     } catch (error) {
-      console.error('Failed to sync update to Supabase:', error);
+      // Failed to sync update to Supabase - ignore
     }
     return expenses[index];
   }
@@ -1261,7 +1257,7 @@ export class Database {
     try {
       await mirrorDelete('expenses', id);
     } catch (error) {
-      console.error('Failed to sync delete to Supabase:', error);
+      // Failed to sync delete to Supabase - ignore
     }
   }
 

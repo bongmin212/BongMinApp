@@ -291,7 +291,6 @@ export interface Warranty {
   updatedAt: Date;
   createdBy: string;
   replacementInventoryId?: string; // ID sản phẩm thay thế từ kho hàng
-  newOrderInfo?: string; // Thông tin đơn hàng mới
 }
 
 export interface WarrantyFormData {
@@ -300,7 +299,6 @@ export interface WarrantyFormData {
   reason: string;
   status: WarrantyStatus;
   replacementInventoryId?: string; // ID sản phẩm thay thế từ kho hàng
-  newOrderInfo?: string; // Thông tin đơn hàng mới
 }
 
 // UI State types

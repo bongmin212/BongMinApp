@@ -64,13 +64,13 @@ async function provisionEmployeeRow(
 export async function signInWithEmailPassword(email: string, password: string): Promise<SupabaseSignInResult> {
   const sb = getSupabase();
   if (!sb) {
-    console.error('[SupabaseAuth] Supabase not configured');
+    // SupabaseAuth: Supabase not configured - ignore
     return { ok: false, message: 'Supabase not configured' };
   }
 
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error || !data.session) {
-    console.error('[SupabaseAuth] signInWithPassword failed', { error });
+    // SupabaseAuth: signInWithPassword failed - ignore
     return { ok: false, message: error?.message ?? 'Sign-in failed' };
   }
 
@@ -94,7 +94,7 @@ export async function signInWithEmailPassword(email: string, password: string): 
       return { ok: true, sessionToken: data.session.access_token, user: mapRowToEmployee(provision.row) };
     }
   } catch (e) {
-    console.warn('[SupabaseAuth] employees lookup/provision failed, using fallback', e);
+    // SupabaseAuth: employees lookup/provision failed, using fallback - ignore
   }
 
   // Fallback to Supabase identity (prefer role from user/app metadata if present)
@@ -115,7 +115,7 @@ export async function signInWithEmailPassword(email: string, password: string): 
 export async function getSessionUser(): Promise<{ ok: true; token: string; user: Employee } | { ok: false }>{
   const sb = getSupabase();
   if (!sb) {
-    console.error('[SupabaseAuth] getSessionUser: Supabase not configured');
+    // SupabaseAuth: getSessionUser: Supabase not configured - ignore
     return { ok: false };
   }
   const { data } = await sb.auth.getSession();
@@ -141,7 +141,7 @@ export async function getSessionUser(): Promise<{ ok: true; token: string; user:
       return { ok: true, token: data.session.access_token, user: mapRowToEmployee(provision.row) };
     }
   } catch (e) {
-    console.warn('[SupabaseAuth] getSessionUser lookup/provision failed, using fallback', e);
+    // SupabaseAuth: getSessionUser lookup/provision failed, using fallback - ignore
   }
 
   // Fallback (prefer role from user/app metadata if present)

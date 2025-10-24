@@ -40,6 +40,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
       paymentStatus: r.payment_status,
       orderInfo: r.order_info,
       notes: r.notes,
+      createdBy: r.created_by || 'system',
       inventoryItemId: r.inventory_item_id,
       inventoryProfileIds: r.inventory_profile_ids || undefined,
       useCustomPrice: r.use_custom_price || false,

@@ -78,6 +78,7 @@ const Dashboard: React.FC = () => {
   const [selectedMonthOffset, setSelectedMonthOffset] = useState<number>(0); // 0 = current, -1..-11 = previous months
   const [trends, setTrends] = useState<TrendsPoint[]>([]);
   const [topPackages, setTopPackages] = useState<PackageAggRow[]>([]);
+  const [packagesById, setPackagesById] = useState<Record<string, ProductPackage>>({});
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const onDateRangeChange = (f: string, t: string) => { setDateFrom(f); setDateTo(t); };
@@ -363,13 +364,6 @@ const Dashboard: React.FC = () => {
         return t >= nowOrder && t <= in7 && o.status !== 'CANCELLED';
       }).length;
 
-      // Expiring soon (30 days)
-      const nowTs = Date.now();
-      const in30dTs = nowTs + 30 * 24 * 3600 * 1000;
-      const expiringSoonCount = inventoryItems.filter(i => {
-        const x = i.expiryDate ? new Date(i.expiryDate).getTime() : 0;
-        return x > nowTs && x <= in30dTs;
-      }).length;
 
       // Trends 12 months
       const months = rangeMonths(addMonths(new Date(new Date().getFullYear(), new Date().getMonth(), 1), -11), new Date());
@@ -407,6 +401,7 @@ const Dashboard: React.FC = () => {
       });
       const pkgAggMap: Record<string, PackageAggRow> = {};
       const productById: Record<string, Product> = Object.fromEntries(products.map(p => [p.id, p]));
+      const packagesById: Record<string, ProductPackage> = Object.fromEntries(packages.map(p => [p.id, p]));
       for (const o of monthFiltered) {
         const pid = o.packageId;
         const price = getOrderSnapshotPrice(o);
@@ -456,6 +451,7 @@ const Dashboard: React.FC = () => {
 
       setTrends(initial);
       setTopPackages(pkgAggRows);
+      setPackagesById(packagesById);
 
       // Get recent orders
       const sortedOrders = orders
@@ -464,7 +460,6 @@ const Dashboard: React.FC = () => {
       setRecentOrders(sortedOrders);
 
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
       setError('Không tải được dữ liệu dashboard. Vui lòng thử lại.');
     } finally {
       setLoading(false);
@@ -737,7 +732,7 @@ const Dashboard: React.FC = () => {
                 <TrendsChart data={trends} />
               </div>
             </div>
-            <TopPackagesTable rows={topPackages} packagesById={{}} />
+            <TopPackagesTable rows={topPackages} packagesById={packagesById} />
           </div>
         )}
 

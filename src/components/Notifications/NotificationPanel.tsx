@@ -12,8 +12,7 @@ import {
   IconShield,
   IconSettings,
   IconChevronDown,
-  IconChevronUp,
-  IconFilter
+  IconChevronUp
 } from '../Icons';
 
 const NotificationPanel: React.FC = () => {
@@ -23,7 +22,6 @@ const NotificationPanel: React.FC = () => {
     unreadCount, 
     markAsRead, 
     markAllAsRead, 
-    removeNotification,
     archiveNotification,
     navigateToNotification
   } = useNotifications();
@@ -127,7 +125,7 @@ const NotificationPanel: React.FC = () => {
       if (filterType !== 'all' && notification.type !== filterType) return false;
       if (filterPriority !== 'all' && notification.priority !== filterPriority) return false;
       return true;
-    }).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()); // Sort by time (earliest to latest)
+    }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort by time (latest to earliest)
   }, [currentNotifications, filterType, filterPriority]);
 
   // Group notifications by type (only for active notifications)

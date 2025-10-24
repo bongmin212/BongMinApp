@@ -52,7 +52,13 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				setWarrantyTick((v) => v + 1);
 			})
 			.subscribe();
-		return () => { try { ch.unsubscribe(); } catch {} };
+		return () => { 
+			try { 
+				ch.unsubscribe(); 
+		} catch (error) {
+			// Error unsubscribing from realtime channel - ignore
+		}
+		};
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [order.id]);
 	const pkgInfo = getPackageInfo(order.packageId);

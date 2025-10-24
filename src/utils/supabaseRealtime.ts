@@ -5,10 +5,6 @@
 
 type Unsubscribe = () => void;
 
-// Debug logging helper: disabled in production builds
-const debugLog = (...args: any[]) => {
-  if (process.env.NODE_ENV !== 'production') console.log(...args);
-};
 
 const TABLES = [
   'products',
@@ -25,6 +21,6 @@ const TABLES = [
 
 export function subscribeRealtime(): Unsubscribe {
   // REALTIME IS DISABLED - return empty unsubscribe function
-  console.log('[Realtime] Realtime is disabled to reduce console noise');
+  // Realtime is disabled to reduce console noise
   return () => {};
 }

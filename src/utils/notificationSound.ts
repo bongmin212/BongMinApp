@@ -9,7 +9,7 @@ export class NotificationSound {
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     } catch (error) {
-      console.warn('AudioContext not supported:', error);
+      // AudioContext not supported - ignore
     }
   }
 
@@ -57,7 +57,7 @@ export class NotificationSound {
         osc.stop(now + index * 0.1 + duration);
       });
     } catch (error) {
-      console.warn('Failed to play notification sound:', error);
+      // Failed to play notification sound - ignore
     }
   }
 }

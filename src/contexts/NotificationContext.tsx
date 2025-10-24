@@ -68,7 +68,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }));
       localStorage.setItem('notifications-backup', JSON.stringify(notificationsToSave));
     } catch (error) {
-      console.error('Error saving notifications to localStorage:', error);
+      // Error saving notifications to localStorage - ignore
     }
   }, []);
 
@@ -81,7 +81,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }));
       localStorage.setItem('archived-notifications-backup', JSON.stringify(archivedToSave));
     } catch (error) {
-      console.error('Error saving archived notifications to localStorage:', error);
+      // Error saving archived notifications to localStorage - ignore
     }
   }, []);
 
@@ -122,7 +122,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       localStorage.setItem('read-notifications', JSON.stringify(Array.from(readIds)));
     } catch (error) {
-      console.error('Error saving read notifications:', error);
+      // Error saving read notifications - ignore
     }
   }, []);
 
@@ -149,7 +149,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             .eq('employee_id', currentUser.data.user.id);
         }
       } catch (error) {
-        console.error('Error updating notification read status:', error);
+        // Error updating notification read status - ignore
       }
     }
   }, [getReadNotificationIds, saveReadNotificationIds]);
@@ -177,7 +177,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             .is('archived_at', null);
         }
       } catch (error) {
-        console.error('Error updating all notifications read status:', error);
+        // Error updating all notifications read status - ignore
       }
     }
   }, [notifications, getReadNotificationIds, saveReadNotificationIds]);
@@ -216,7 +216,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             .eq('employee_id', currentUser.data.user.id);
         }
       } catch (error) {
-        console.error('Error archiving notification:', error);
+        // Error archiving notification - ignore
       }
     }
   }, [saveArchivedNotificationsToLocalStorage]);
@@ -228,7 +228,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       try {
         localStorage.setItem('notification-settings', JSON.stringify(updatedSettings));
       } catch (error) {
-        console.error('Error saving notification settings:', error);
+        // Error saving notification settings - ignore
       }
       return updatedSettings;
     });
@@ -482,7 +482,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             }
           }
         } catch (error) {
-          console.error('Error saving notifications to Supabase:', error);
+          // Error saving notifications to Supabase - ignore
         }
       }
 
@@ -525,7 +525,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return mergedNotifications;
       });
     } catch (error) {
-      console.error('Error generating notifications:', error);
+      // Error generating notifications - ignore
     }
   }, [checkExpiryWarnings, checkNewOrders, checkPaymentReminders, checkProcessingOrders, checkProfileNeedsUpdate, checkNewWarranties, getReadNotificationIds, saveNotificationsToLocalStorage]);
 
@@ -669,7 +669,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .order('created_at', { ascending: false });
 
       if (activeError || archivedError) {
-        console.error('Error loading notifications:', activeError || archivedError);
+        // Error loading notifications - ignore
         return;
       }
 
@@ -743,7 +743,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         saveArchivedNotificationsToLocalStorage(loadedArchivedNotifications);
       }
     } catch (error) {
-      console.error('Error loading notifications from Supabase:', error);
+      // Error loading notifications from Supabase - ignore
     }
   }, [getReadNotificationIds, saveArchivedNotificationsToLocalStorage]);
 

@@ -195,8 +195,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         orderId: warranty.orderId, 
         reason: warranty.reason, 
         status: isViewOnly ? warranty.status : '' as any, // Empty for editing, actual status for viewing
-        replacementInventoryId: warranty.replacementInventoryId,
-        newOrderInfo: warranty.newOrderInfo
+        replacementInventoryId: warranty.replacementInventoryId
       });
       setReplacementProfileId('');
     }
@@ -337,17 +336,16 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           .from('warranties')
           .update({
             status: form.status,
-            replacement_inventory_id: form.replacementInventoryId || null,
-            new_order_info: form.newOrderInfo || null
+            replacement_inventory_id: form.replacementInventoryId || null
           })
           .eq('id', warranty.id);
         
         if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
         if (form.status === 'FIXED') {
-          // FIXED: Re-link original inventory
+          // FIXED: Re-link original inventory using direct Supabase approach
           try {
-            // Find and re-link classic inventory
+            // Find and re-link classic inventory - direct Supabase update
             const { data: classicItems } = await sb
               .from('inventory')
               .select('id, status, previous_linked_order_id')
@@ -356,17 +354,22 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
               .is('linked_order_id', null);
             
             if (classicItems && classicItems.length > 0) {
-              await sb
+              const { error: classicRelinkError } = await sb
                 .from('inventory')
                 .update({ 
                   status: 'SOLD', 
                   linked_order_id: resolvedOrderId, 
-                  previous_linked_order_id: null 
+                  previous_linked_order_id: null,
+                  updated_at: new Date().toISOString()
                 })
                 .in('id', classicItems.map(item => item.id));
+              
+              if (classicRelinkError) {
+                // Error re-linking classic inventory - ignore
+              }
             }
 
-            // Find and re-link account-based inventory
+            // Find and re-link account-based inventory - direct Supabase approach
             const { data: accountItems } = await sb
               .from('inventory')
               .select('*')
@@ -383,23 +386,27 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                     : p
                 );
                 
-                await sb
+                // Check if there are any free slots remaining
+                const hasFreeSlots = updatedProfiles.some((p: any) => 
+                  !p.isAssigned && !(p as any).needsUpdate
+                );
+                
+                const { error: accountRelinkError } = await sb
                   .from('inventory')
-                  .update({ profiles: updatedProfiles })
+                  .update({ 
+                    profiles: updatedProfiles,
+                    status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                    updated_at: new Date().toISOString()
+                  })
                   .eq('id', item.id);
                 
-                // Update item status if all profiles are assigned
-                const allAssigned = updatedProfiles.every((p: any) => p.isAssigned);
-                if (allAssigned) {
-                  await sb
-                    .from('inventory')
-                    .update({ status: 'SOLD' })
-                    .eq('id', item.id);
+                if (accountRelinkError) {
+                  // Error re-linking account-based inventory - ignore
                 }
               }
             }
           } catch (err) {
-            console.error('Error re-linking original inventory:', err);
+            // Error re-linking original inventory - ignore
           }
         } else if (form.status === 'REPLACED') {
           // REPLACED: Link replacement inventory
@@ -419,7 +426,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             }
           }
 
-          // Link replacement inventory
+          // Link replacement inventory using direct Supabase approach
           const { data: replacementItem } = await sb
             .from('inventory')
             .select('*')
@@ -442,25 +449,41 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                   : p
               );
 
-              await sb
+              // Check if there are any free slots remaining
+              const hasFreeSlots = updatedProfiles.some((p: any) => 
+                !p.isAssigned && !(p as any).needsUpdate
+              );
+
+              const { error: replacementUpdateError } = await sb
                 .from('inventory')
                 .update({ 
                   profiles: updatedProfiles, 
-                  status: 'SOLD' 
+                  status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                  updated_at: new Date().toISOString()
                 })
                 .eq('id', resolvedReplacementId);
+              
+              if (replacementUpdateError) {
+                throw new Error('Lỗi khi cập nhật slot kho hàng thay thế');
+              }
             } else {
-              // Classic inventory
+              // Classic inventory - direct Supabase update
               if (replacementItem.linked_order_id && replacementItem.linked_order_id !== resolvedOrderId) {
                 throw new Error('Kho này đang liên kết đơn khác');
               }
-              await sb
+              
+              const { error: classicReplacementError } = await sb
                 .from('inventory')
                 .update({ 
                   status: 'SOLD', 
-                  linked_order_id: resolvedOrderId 
+                  linked_order_id: resolvedOrderId,
+                  updated_at: new Date().toISOString()
                 })
                 .eq('id', resolvedReplacementId);
+              
+              if (classicReplacementError) {
+                throw new Error('Lỗi khi cập nhật kho hàng thay thế');
+              }
             }
           }
 
@@ -507,28 +530,31 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         
         if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 
-        // Unlink original inventory from order
+        // Unlink original inventory from order using direct Supabase approach
         try {
-          // Unlink classic inventory
+          // Unlink classic inventory - direct Supabase update
           const { data: classicLinked } = await sb
             .from('inventory')
             .select('id, linked_order_id')
             .eq('linked_order_id', resolvedOrderId);
           
           if (classicLinked && classicLinked.length > 0) {
-            for (const item of classicLinked) {
-              await sb
-                .from('inventory')
-                .update({ 
-                  status: 'NEEDS_UPDATE', 
-                  previous_linked_order_id: item.linked_order_id,
-                  linked_order_id: null
-                })
-                .eq('id', item.id);
+            const { error: classicUpdateError } = await sb
+              .from('inventory')
+              .update({ 
+                status: 'NEEDS_UPDATE', 
+                previous_linked_order_id: resolvedOrderId,
+                linked_order_id: null,
+                updated_at: new Date().toISOString()
+              })
+              .in('id', classicLinked.map(item => item.id));
+            
+            if (classicUpdateError) {
+              // Error updating classic inventory - ignore
             }
           }
 
-          // Unlink account-based inventory
+          // Unlink account-based inventory - direct Supabase approach
           const { data: accountItems } = await sb
             .from('inventory')
             .select('*')
@@ -553,23 +579,27 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                   : p
               );
               
-              await sb
+              // Check if there are any free slots remaining
+              const hasFreeSlots = updatedProfiles.some((p: any) => 
+                !p.isAssigned && !(p as any).needsUpdate
+              );
+              
+              const { error: accountUpdateError } = await sb
                 .from('inventory')
-                .update({ profiles: updatedProfiles })
+                .update({ 
+                  profiles: updatedProfiles,
+                  status: hasFreeSlots ? 'AVAILABLE' : 'NEEDS_UPDATE',
+                  updated_at: new Date().toISOString()
+                })
                 .eq('id', item.id);
               
-              // Update item status if no profiles are assigned
-              const stillAssigned = updatedProfiles.some((p: any) => p.isAssigned);
-              if (!stillAssigned) {
-                await sb
-                  .from('inventory')
-                  .update({ status: 'NEEDS_UPDATE' })
-                  .eq('id', item.id);
+              if (accountUpdateError) {
+                // Error updating account-based inventory - ignore
               }
             }
           }
         } catch (err) {
-          console.error('Error unlinking inventory:', err);
+          // Error unlinking inventory - ignore
         }
 
         // Log activity
@@ -594,167 +624,169 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
   };
 
   return (
-    <div className="modal">
-      <div className="modal-content" style={{ maxWidth: '560px' }}>
-        <div className="modal-header">
-			<h3 className="modal-title">
-        {warranty ? (isViewOnly ? 'Xem đơn bảo hành' : 'Sửa đơn bảo hành') : 'Tạo đơn bảo hành'}
-      </h3>
-          <button type="button" className="close" onClick={onClose}>×</button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <label className="form-label">Mã bảo hành *</label>
-            <input 
-              className="form-control" 
-              value={form.code} 
-              readOnly 
-              disabled 
-              style={{ opacity: 0.6, cursor: 'not-allowed' }} 
-            />
+    <>
+      <div className="modal">
+        <div className="modal-content" style={{ maxWidth: '560px' }}>
+          <div className="modal-header">
+            <h3 className="modal-title">
+              {warranty ? (isViewOnly ? 'Xem đơn bảo hành' : 'Sửa đơn bảo hành') : 'Tạo đơn bảo hành'}
+            </h3>
+            <button type="button" className="close" onClick={onClose}>×</button>
           </div>
-          <div className="mb-3">
-			<label className="form-label">Ngày tạo</label>
-			<input 
-        className="form-control" 
-        value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} 
-        disabled 
-        style={{ opacity: 0.6, cursor: 'not-allowed' }}
-      />
-          </div>
-          <div className="mb-3">
-            <label className="form-label">Chọn đơn hàng *</label>
-            {!warranty ? (
-              <>
-                <input
-                  type="text"
-                  className="form-control mb-2"
-                  placeholder="Tìm theo mã/khách/sản phẩm/gói..."
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                />
-                <select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
-                  <option value="">-- Chọn đơn hàng --</option>
-                  {filteredOrders.map(o => (
-                    <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <input 
-                className="form-control" 
-                value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)} 
-                disabled 
-                style={{ opacity: 0.6, cursor: 'not-allowed' }}
-              />
-            )}
-          </div>
-          <div className="mb-3">
-            <label className="form-label">Lý do bảo hành *</label>
-            {!warranty ? (
-              <textarea className="form-control" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} required />
-            ) : (
-              <textarea 
-                className="form-control" 
-                value={form.reason} 
-                disabled 
-                style={{ opacity: 0.6, cursor: 'not-allowed' }}
-              />
-            )}
-          </div>
-          <div className="mb-3">
-            <label className="form-label">Trạng thái</label>
-            {!warranty ? (
-              <input 
-                className="form-control" 
-                value="Chưa xong" 
-                disabled 
-                style={{ opacity: 0.6, cursor: 'not-allowed' }}
-              />
-            ) : (
-              isViewOnly ? (
-                <input 
-                  className="form-control" 
-                  value={WARRANTY_STATUSES.find(s => s.value === form.status)?.label || form.status} 
-                  disabled 
-                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
-                />
-              ) : (
-                <select className="form-control" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
-                  <option value="">-- Chọn trạng thái --</option>
-                  <option value="FIXED">Đã fix</option>
-                  <option value="REPLACED">Đã đổi bảo hành</option>
-                </select>
-              )
-            )}
-          </div>
-          
-          {/* Only show replacement inventory selection when editing and status is REPLACED */}
-          {warranty && form.status === 'REPLACED' && (
+          <form onSubmit={handleSubmit}>
             <div className="mb-3">
-              <label className="form-label">Sản phẩm thay thế *</label>
-              {isViewOnly ? (
-                <input 
-                  className="form-control" 
-                  value={form.replacementInventoryId ? `#${inventoryItems.find(i => i.id === form.replacementInventoryId)?.code || ''} | ${inventoryItems.find(i => i.id === form.replacementInventoryId) ? getInventoryLabel(inventoryItems.find(i => i.id === form.replacementInventoryId)!) : ''}` : '-'} 
-                  disabled 
-                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
-                />
-              ) : (
+              <label className="form-label">Mã bảo hành *</label>
+              <input 
+                className="form-control" 
+                value={form.code} 
+                readOnly 
+                disabled 
+                style={{ opacity: 0.6, cursor: 'not-allowed' }} 
+              />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Ngày tạo</label>
+              <input 
+                className="form-control" 
+                value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} 
+                disabled 
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
+              />
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Chọn đơn hàng *</label>
+              {!warranty ? (
                 <>
                   <input
                     type="text"
                     className="form-control mb-2"
-                    placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
-                    value={inventorySearch}
-                    onChange={(e) => setInventorySearch(e.target.value)}
+                    placeholder="Tìm theo mã/khách/sản phẩm/gói..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
                   />
-                  <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
-                    <option value="">-- Chọn sản phẩm từ kho hàng --</option>
-                    {filteredInventory.map(item => (
-                      <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
+                  <select className="form-control" value={form.orderId} onChange={e => setForm({ ...form, orderId: e.target.value })} required>
+                    <option value="">-- Chọn đơn hàng --</option>
+                    {filteredOrders.map(o => (
+                      <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
                     ))}
                   </select>
-                  <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
-                  {!!form.replacementInventoryId && (() => {
-                    const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
-                    if (!item) return null;
-                    if (item.isAccountBased) {
-                      return (
-                        <div className="mt-2">
-                          <label className="form-label"><strong>Chọn slot thay thế</strong></label>
-                          <select
-                            className="form-control"
-                            value={replacementProfileId}
-                            onChange={(e) => setReplacementProfileId(e.target.value)}
-                          >
-                            <option value="">-- Chọn slot --</option>
-                            {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
-                              <option key={p.id} value={p.id}>{p.label}</option>
-                            ))}
-                          </select>
-                          <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
                 </>
+              ) : (
+                <input 
+                  className="form-control" 
+                  value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)} 
+                  disabled 
+                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                />
               )}
             </div>
-          )}
-          
-          <div className="d-flex justify-content-end gap-2">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
-            {!isViewOnly && <button type="submit" className="btn btn-primary">Lưu</button>}
-          </div>
-        </form>
+            <div className="mb-3">
+              <label className="form-label">Lý do bảo hành *</label>
+              {!warranty ? (
+                <textarea className="form-control" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} required />
+              ) : (
+                <textarea 
+                  className="form-control" 
+                  value={form.reason} 
+                  disabled 
+                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                />
+              )}
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Trạng thái</label>
+              {!warranty ? (
+                <input 
+                  className="form-control" 
+                  value="Chưa xong" 
+                  disabled 
+                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                />
+              ) : (
+                isViewOnly ? (
+                  <input 
+                    className="form-control" 
+                    value={WARRANTY_STATUSES.find(s => s.value === form.status)?.label || form.status} 
+                    disabled 
+                    style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                  />
+                ) : (
+                  <select className="form-control" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+                    <option value="">-- Chọn trạng thái --</option>
+                    <option value="FIXED">Đã fix</option>
+                    <option value="REPLACED">Đã đổi bảo hành</option>
+                  </select>
+                )
+              )}
+            </div>
+            
+            {/* Only show replacement inventory selection when editing and status is REPLACED */}
+            {warranty && form.status === 'REPLACED' && (
+              <div className="mb-3">
+                <label className="form-label">Sản phẩm thay thế *</label>
+                {isViewOnly ? (
+                  <input 
+                    className="form-control" 
+                    value={form.replacementInventoryId ? `#${inventoryItems.find(i => i.id === form.replacementInventoryId)?.code || ''} | ${inventoryItems.find(i => i.id === form.replacementInventoryId) ? getInventoryLabel(inventoryItems.find(i => i.id === form.replacementInventoryId)!) : ''}` : '-'} 
+                    disabled 
+                    style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                  />
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      className="form-control mb-2"
+                      placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
+                      value={inventorySearch}
+                      onChange={(e) => setInventorySearch(e.target.value)}
+                    />
+                    <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
+                      <option value="">-- Chọn sản phẩm từ kho hàng --</option>
+                      {filteredInventory.map(item => (
+                        <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
+                      ))}
+                    </select>
+                    <small className="form-text text-muted">Chọn sản phẩm từ kho hàng để thay thế sản phẩm cũ</small>
+                    {!!form.replacementInventoryId && (() => {
+                      const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
+                      if (!item) return null;
+                      if (item.isAccountBased) {
+                        return (
+                          <div className="mt-2">
+                            <label className="form-label"><strong>Chọn slot thay thế</strong></label>
+                            <select
+                              className="form-control"
+                              value={replacementProfileId}
+                              onChange={(e) => setReplacementProfileId(e.target.value)}
+                            >
+                              <option value="">-- Chọn slot --</option>
+                              {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
+                                <option key={p.id} value={p.id}>{p.label}</option>
+                              ))}
+                            </select>
+                            <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
+                )}
+              </div>
+            )}
+            
+            <div className="d-flex justify-content-end gap-2">
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
+              {!isViewOnly && <button type="submit" className="btn btn-primary">Lưu</button>}
+            </div>
+          </form>
+        </div>
       </div>
       
-      {/* Confirmation Dialog */}
+      {/* Confirmation Dialog - moved outside and with higher z-index */}
       {showConfirmDialog && (
-        <div className="modal" role="dialog" aria-modal>
-          <div className="modal-content" style={{ maxWidth: 420 }}>
+        <div className="modal" role="dialog" aria-modal style={{ zIndex: 10000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <div className="modal-content" style={{ maxWidth: 420, zIndex: 10001 }}>
             <div className="modal-header">
               <h3 className="modal-title">Xác nhận</h3>
               <button className="close" onClick={() => setShowConfirmDialog(false)}>×</button>
@@ -769,7 +801,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
@@ -887,7 +919,6 @@ const WarrantyList: React.FC = () => {
       reason: r.reason,
       status: r.status,
       replacementInventoryId: r.replacement_inventory_id || undefined,
-      newOrderInfo: r.new_order_info || undefined,
       createdBy: 'system',
       customerId: r.customer_id || undefined,
       productId: r.product_id || undefined,
@@ -932,7 +963,13 @@ const WarrantyList: React.FC = () => {
         load();
       })
       .subscribe();
-    return () => { try { ch.unsubscribe(); } catch {} };
+    return () => { 
+      try { 
+        ch.unsubscribe(); 
+      } catch (error) {
+        // Error unsubscribing from warranties realtime channel - ignore
+      }
+    };
   }, []);
 
   // Initialize from URL/localStorage
@@ -1025,6 +1062,16 @@ const WarrantyList: React.FC = () => {
       const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
       const inRange = createdTs >= fromTs && createdTs <= toTs;
       return (codeMatch || nameMatch) && matchesStatus && inRange;
+    }).sort((a, b) => {
+      const getCodeNumber = (code: string | undefined | null) => {
+        if (!code) return Number.POSITIVE_INFINITY;
+        const m = String(code).match(/\d+/);
+        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+      };
+      const na = getCodeNumber(a.code);
+      const nb = getCodeNumber(b.code);
+      if (na !== nb) return na - nb;
+      return (a.code || '').localeCompare(b.code || '');
     });
   }, [warranties, debouncedSearchTerm, searchStatus, orders, customers, packages, products, dateFrom, dateTo]);
 
@@ -1066,11 +1113,6 @@ const WarrantyList: React.FC = () => {
         status: WARRANTY_STATUSES.find(s => s.value === w.status)?.label || w.status,
         statusValue: w.status,
         
-        // Replacement info
-        replacementInventoryCode: replacementInventory?.code || '',
-        replacementProductName: replacementInventory ? products.find(p => p.id === replacementInventory.productId)?.name || 'Không xác định' : '',
-        replacementProductInfo: replacementInventory?.productInfo || '',
-        newOrderInfo: w.newOrderInfo || '',
         
         // System info
         createdBy: w.createdBy || '',
@@ -1103,11 +1145,6 @@ const WarrantyList: React.FC = () => {
       { header: 'Trạng thái', key: 'status', width: 16 },
       { header: 'Trạng thái (giá trị)', key: 'statusValue', width: 14 },
       
-      // Replacement info
-      { header: 'Mã kho thay thế', key: 'replacementInventoryCode', width: 16 },
-      { header: 'Tên sản phẩm thay thế', key: 'replacementProductName', width: 24 },
-      { header: 'Thông tin sản phẩm thay thế', key: 'replacementProductInfo', width: 30 },
-      { header: 'Thông tin đơn hàng mới', key: 'newOrderInfo', width: 30 },
       
       // System info
       { header: 'Người tạo', key: 'createdBy', width: 16 },
@@ -1126,17 +1163,33 @@ const WarrantyList: React.FC = () => {
     if (selectedIds.length === 0) return;
     setConfirmState({
       message: `Xóa ${selectedIds.length} đơn bảo hành đã chọn?`,
-      onConfirm: () => {
-        selectedIds.forEach(id => Database.deleteWarranty(id));
-        (async () => {
+      onConfirm: async () => {
+        try {
+          const sb = getSupabase();
+          if (sb) {
+            // Delete from Supabase first
+            const { error } = await sb.from('warranties').delete().in('id', selectedIds);
+            if (error) {
+              notify('Lỗi khi xóa bảo hành từ server', 'error');
+              return;
+            }
+          }
+          
+          // Update local storage
+          selectedIds.forEach(id => Database.deleteWarranty(id));
+          
+          // Log activity
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt bảo hành', details: `ids=${selectedIds.join(',')}` });
           } catch {}
-        })();
-        setSelectedIds([]);
-        load();
-        notify('Đã xóa đơn bảo hành đã chọn', 'success');
+          
+          setSelectedIds([]);
+          load();
+          notify('Đã xóa đơn bảo hành đã chọn', 'success');
+        } catch (error) {
+          notify('Lỗi khi xóa bảo hành', 'error');
+        }
       }
     });
   };
@@ -1268,7 +1321,6 @@ const handleDelete = (id: string) => {
           </div>
         ) : (
           pageItems
-            .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
             .map((w, index) => (
             <div key={w.id} className="warranty-card">
               <div className="warranty-card-header">
@@ -1299,10 +1351,6 @@ const handleDelete = (id: string) => {
                   </span>
                 </div>
               </div>
-              <div className="warranty-card-row">
-                <div className="warranty-card-label">Sản phẩm thay</div>
-                <div className="warranty-card-value">{getReplacementProductText(w.replacementInventoryId)}</div>
-              </div>
               
               {w.reason && (
                 <div className="warranty-card-description">
@@ -1310,11 +1358,6 @@ const handleDelete = (id: string) => {
                 </div>
               )}
               
-              {w.newOrderInfo && (
-                <div className="warranty-card-description">
-                  <strong>Thông tin đơn mới:</strong> {w.newOrderInfo}
-                </div>
-              )}
 
               <div className="warranty-card-actions">
                 <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
@@ -1341,12 +1384,11 @@ const handleDelete = (id: string) => {
               </th>
               <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã bảo hành</th>
               <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
+              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã đơn hàng</th>
               <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Khách hàng</th>
               <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm/Gói</th>
               <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Lý do</th>
               <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
-              <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm thay thế</th>
-              <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Thông tin đơn mới</th>
               <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Hành động</th>
             </tr>
           </thead>
@@ -1357,7 +1399,6 @@ const handleDelete = (id: string) => {
               </td></tr>
             ) : (
               pageItems
-                .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt))
                 .map((w, index) => (
                 <tr key={w.id}>
                   <td>
@@ -1365,6 +1406,12 @@ const handleDelete = (id: string) => {
                   </td>
                   <td>{w.code || `BH${index + 1}`}</td>
                   <td>{new Date(w.createdAt).toLocaleDateString('vi-VN')}</td>
+                  <td>
+                    {(() => {
+                      const order = orders.find(o => o.id === w.orderId);
+                      return order?.code || '-';
+                    })()}
+                  </td>
                   <td>{getCustomerName(w.orderId)}</td>
                   <td>{getProductText(w.orderId)}</td>
                   <td>
@@ -1374,10 +1421,6 @@ const handleDelete = (id: string) => {
                     <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
                       {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
                     </span>
-                  </td>
-                  <td>{getReplacementProductText(w.replacementInventoryId)}</td>
-                  <td style={{ maxWidth: 260 }}>
-                    <div className="line-clamp-3" title={w.newOrderInfo || ''}>{w.newOrderInfo || '-'}</div>
                   </td>
 									<td>
 										<div className="d-flex gap-2">

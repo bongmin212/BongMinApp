@@ -122,7 +122,7 @@ const OrderList: React.FC = () => {
         }, 300);
       }
     } catch (e) {
-      console.error('OrderList: Error reading URL params:', e);
+      // Error reading URL params - ignore
     }
   }, []);
 
@@ -230,7 +230,6 @@ const OrderList: React.FC = () => {
       }
     } catch (e) {
       // Best-effort; ignore failures and continue rendering
-      console.error('Auto-expire orders sweep failed', e);
     }
     const allOrders = (ordersRes.data || []).map((r: any) => {
       return {
@@ -366,7 +365,13 @@ const OrderList: React.FC = () => {
         loadData();
       })
       .subscribe();
-    return () => { try { channel.unsubscribe(); } catch {} };
+    return () => { 
+      try { 
+        channel.unsubscribe(); 
+      } catch (error) {
+        // Error unsubscribing from realtime channel - ignore
+      }
+    };
   }, []);
 
   // Listen for view order events from notifications
@@ -410,7 +415,8 @@ const OrderList: React.FC = () => {
 
   const handleDelete = (id: string) => {
     const order = orders.find(o => o.id === id);
-    const invLinked: any = null; // inventory unlink handled if needed
+    // Find linked inventory properly
+    const invLinked = inventory.find((i: any) => i.linked_order_id === id);
     const now = new Date();
     const isExpired = order ? new Date(order.expiryDate) < now : false;
 
@@ -435,7 +441,6 @@ const OrderList: React.FC = () => {
               .eq('linked_order_id', id);
             
             if (classicError) {
-              console.error('Error fetching linked inventory:', classicError);
               notify('Lỗi khi giải phóng kho hàng liên kết', 'error');
               return;
             }
@@ -448,7 +453,6 @@ const OrderList: React.FC = () => {
                 .in('id', classicIds);
               
               if (updateError) {
-                console.error('Error updating inventory status:', updateError);
                 notify('Lỗi khi cập nhật trạng thái kho hàng', 'error');
                 return;
               }
@@ -461,7 +465,6 @@ const OrderList: React.FC = () => {
               .eq('is_account_based', true);
               
             if (accountError) {
-              console.error('Error fetching account-based inventory:', accountError);
               notify('Lỗi khi giải phóng kho hàng dạng tài khoản', 'error');
               return;
             }
@@ -476,13 +479,11 @@ const OrderList: React.FC = () => {
               const { error: profileError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
               
               if (profileError) {
-                console.error('Error updating account profiles:', profileError);
                 notify('Lỗi khi cập nhật profile tài khoản', 'error');
                 return;
               }
             }
           } catch (error) {
-            console.error('Unexpected error during inventory release:', error);
             notify('Lỗi không mong muốn khi giải phóng kho hàng', 'error');
             return;
           }
@@ -539,24 +540,53 @@ const OrderList: React.FC = () => {
     setConfirmState({
       message: 'Trả slot về kho? (Đơn vẫn được giữ nguyên)',
       onConfirm: async () => {
-        // Release link in Supabase
         const sb = getSupabase();
-        if (sb) {
-          if (invLinked.is_account_based) {
-            const nextProfiles = (Array.isArray(invLinked.profiles) ? invLinked.profiles : []).map((p: any) => (
-              p.assignedOrderId === order.id ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
-            ));
-            await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', invLinked.id);
-          } else {
-            await sb.from('inventory').update({ status: 'AVAILABLE', linked_order_id: null }).eq('id', invLinked.id);
-          }
+        if (!sb) {
+          notify('Không thể kết nối database', 'error');
+          return;
         }
+        
         try {
-          const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Trả slot về kho', details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked!.id}; inventoryCode=${invLinked!.code}` });
-        } catch {}
-        loadData();
-        notify('Đã trả slot về kho', 'success');
+          if (invLinked.is_account_based) {
+            // Release account-based slots (same as OrderForm line 800-823)
+            const nextProfiles = (Array.isArray(invLinked.profiles) ? invLinked.profiles : []).map((p: any) => (
+              p.assignedOrderId === order.id 
+                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } 
+                : p
+            ));
+            await sb.from('inventory').update({ 
+              profiles: nextProfiles,
+              updated_at: new Date().toISOString()
+            }).eq('id', invLinked.id);
+          } else {
+            // Release classic inventory (same as OrderForm line 827-831)
+            await sb.from('inventory').update({ 
+              status: 'AVAILABLE', 
+              linked_order_id: null,
+              updated_at: new Date().toISOString()
+            }).eq('id', invLinked.id);
+          }
+          
+          // Clear order's inventory link (same as OrderForm line 724-725)
+          await sb.from('orders').update({ 
+            inventory_item_id: null,
+            inventory_profile_ids: null 
+          }).eq('id', order.id);
+          
+          // Log activity
+          try {
+            await sb.from('activity_logs').insert({ 
+              employee_id: 'system', 
+              action: 'Trả slot về kho', 
+              details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked.id}; inventoryCode=${invLinked.code}` 
+            });
+          } catch {}
+          
+          loadData();
+          notify('Đã trả slot về kho', 'success');
+        } catch (error) {
+          notify('Lỗi khi trả slot về kho', 'error');
+        }
       }
     });
   };
@@ -607,6 +637,7 @@ const OrderList: React.FC = () => {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật trạng thái hàng loạt', details: `status=${status}; orderCodes=${codes.join(',')}` });
       } catch {}
+      setSelectedIds([]);
       loadData();
       notify('Đã cập nhật trạng thái', 'success');
     })();
@@ -624,6 +655,7 @@ const OrderList: React.FC = () => {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
       } catch {}
+      setSelectedIds([]);
       loadData();
       notify('Đã cập nhật thanh toán', 'success');
     })();
@@ -2125,32 +2157,81 @@ const OrderList: React.FC = () => {
                 onClick={async () => {
                   if (!returnConfirmState) return;
                   const { order, inventoryId, mode } = returnConfirmState;
-                  // Return slot first
-                  Database.releaseInventoryItem(inventoryId);
-                  // Preserve latest orderInfo after unlinking inventory
-                  Database.updateOrder(order.id, { orderInfo: String((order as any).orderInfo || '') } as any);
-                  try {
-                    const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho', details: `orderId=${order.id}; inventoryId=${inventoryId}` });
-                  } catch {}
-                  if (mode === 'RETURN_ONLY') {
-                    setReturnConfirmState(null);
-                    loadData();
-                    notify('Đã trả slot về kho', 'success');
+                  
+                  const sb = getSupabase();
+                  if (!sb) {
+                    notify('Không thể kết nối database', 'error');
                     return;
                   }
-                  // DELETE_AND_RETURN
-                  const success = Database.deleteOrder(order.id);
-                  if (success) {
+                  
                   try {
-                    const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}; orderCode=${order.code}` });
-                  } catch {}
+                    const invItem = inventory.find((i: any) => i.id === inventoryId);
+                    if (!invItem) {
+                      notify('Không tìm thấy kho hàng', 'error');
+                      return;
+                    }
+                    
+                    // Release inventory (same pattern as OrderForm)
+                    if (invItem.is_account_based) {
+                      const nextProfiles = (invItem.profiles || []).map((p: any) => 
+                        p.assignedOrderId === order.id 
+                          ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } 
+                          : p
+                      );
+                      await sb.from('inventory').update({ 
+                        profiles: nextProfiles,
+                        updated_at: new Date().toISOString()
+                      }).eq('id', inventoryId);
+                    } else {
+                      await sb.from('inventory').update({ 
+                        status: 'AVAILABLE', 
+                        linked_order_id: null,
+                        updated_at: new Date().toISOString()
+                      }).eq('id', inventoryId);
+                    }
+                    
+                    // Clear order's inventory link (same as OrderForm)
+                    await sb.from('orders').update({ 
+                      inventory_item_id: null,
+                      inventory_profile_ids: null 
+                    }).eq('id', order.id);
+                    
+                    // Log activity
+                    try {
+                      await sb.from('activity_logs').insert({ 
+                        employee_id: 'system', 
+                        action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho', 
+                        details: `orderId=${order.id}; inventoryId=${inventoryId}` 
+                      });
+                    } catch {}
+                    
+                    if (mode === 'RETURN_ONLY') {
+                      setReturnConfirmState(null);
+                      loadData();
+                      notify('Đã trả slot về kho', 'success');
+                      return;
+                    }
+                    
+                    // DELETE_AND_RETURN mode: also delete the order
+                    const { error: deleteError } = await sb.from('orders').delete().eq('id', order.id);
+                    if (deleteError) {
+                      notify('Không thể xóa đơn hàng', 'error');
+                      return;
+                    }
+                    
+                    try {
+                      await sb.from('activity_logs').insert({ 
+                        employee_id: 'system', 
+                        action: 'Xóa đơn hàng', 
+                        details: `orderId=${order.id}; orderCode=${order.code}` 
+                      });
+                    } catch {}
+                    
                     setReturnConfirmState(null);
                     loadData();
                     notify('Đã trả slot về kho và xóa đơn', 'success');
-                  } else {
-                    notify('Không thể xóa đơn hàng', 'error');
+                  } catch (error) {
+                    notify('Lỗi khi xử lý', 'error');
                   }
                 }}
               >

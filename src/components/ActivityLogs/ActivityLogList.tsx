@@ -19,9 +19,14 @@ const ActivityLogList: React.FC = () => {
   const [limit, setLimit] = useState(20);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [warranties, setWarranties] = useState<Warranty[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
+    setMounted(true);
     loadData();
+    return () => setMounted(false);
   }, []);
 
   // Initialize from URL (no localStorage)
@@ -68,23 +73,31 @@ const ActivityLogList: React.FC = () => {
   }, [debouncedSearchTerm, selectedEmployee, page, limit]);
 
   const loadData = async () => {
-    const sb = getSupabase();
-    if (!sb) return;
-    const [logsRes, empRes, ordersRes, customersRes, productsRes, packagesRes, invRes, warrantiesRes] = await Promise.all([
-      sb.from('activity_logs').select('*'),
-      sb.from('employees').select('*'),
-      sb.from('orders').select('*'),
-      sb.from('customers').select('*'),
-      sb.from('products').select('*'),
-      sb.from('packages').select('*'),
-      sb.from('inventory').select('*'),
-      sb.from('warranties').select('*')
-    ]);
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const sb = getSupabase();
+      if (!sb) {
+        setError('Không thể kết nối đến cơ sở dữ liệu');
+        return;
+      }
+      
+      const [logsRes, empRes, ordersRes, customersRes, productsRes, packagesRes, invRes, warrantiesRes] = await Promise.all([
+        sb.from('activity_logs').select('*'),
+        sb.from('employees').select('*'),
+        sb.from('orders').select('*'),
+        sb.from('customers').select('*'),
+        sb.from('products').select('*'),
+        sb.from('packages').select('*'),
+        sb.from('inventory').select('*'),
+        sb.from('warranties').select('*')
+      ]);
 
     const allLogs = (logsRes.data || []).map((r: any) => ({
       id: r.id,
-      employeeId: r.employee_id || r.employeeId,
-      action: r.action,
+      employeeId: r.employee_id || r.employeeId || 'system',
+      action: r.action || 'Không xác định',
       details: r.details || undefined,
       timestamp: r.timestamp ? new Date(r.timestamp) : new Date()
     })) as ActivityLog[];
@@ -128,12 +141,13 @@ const ActivityLogList: React.FC = () => {
       reason: w.reason,
       status: (w.status || 'PENDING').toUpperCase(),
       createdBy: 'system',
-      replacementInventoryId: w.replacement_inventory_id || w.replacementInventoryId,
-      newOrderInfo: w.new_order_info || w.newOrderInfo
+      replacementInventoryId: w.replacement_inventory_id || w.replacementInventoryId
     })) as Warranty[];
 
     const sortedLogs = allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+    if (!mounted) return;
+    
     setLogs(sortedLogs);
     try {
       if (state?.user && !allEmployees.some(e => e.id === state.user!.id)) {
@@ -147,6 +161,13 @@ const ActivityLogList: React.FC = () => {
     setPackages(allPackages);
     setInventory(allInventory);
     setWarranties(allWarranties);
+    setLoading(false);
+    } catch (err) {
+      if (mounted) {
+        setError('Không thể tải dữ liệu. Vui lòng thử lại.');
+        setLoading(false);
+      }
+    }
   };
 
   // Realtime updates for activity logs
@@ -156,17 +177,21 @@ const ActivityLogList: React.FC = () => {
     const channel = sb
       .channel('realtime:activity_logs')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
-        loadData();
+        if (mounted) {
+          loadData();
+        }
       })
       .subscribe();
     return () => { try { channel.unsubscribe(); } catch {} };
-  }, []);
+  }, [mounted]);
 
   const getEmployeeName = (employeeId: string) => {
+    if (!employeeId || employeeId === 'system') return 'Hệ thống';
+    
     const employee = employees.find(e => e.id === employeeId);
     if (employee) return employee.username;
     if (state?.user && state.user.id === employeeId) return state.user.username;
-    return 'Không xác định';
+    return 'Nhân viên đã xóa';
   };
 
   const formatDateTime = (date: Date) => {
@@ -387,10 +412,12 @@ const ActivityLogList: React.FC = () => {
   };
 
   const filteredLogs = logs.filter(log => {
+    if (!log || !log.employeeId) return false;
+    
     const employeeName = getEmployeeName(log.employeeId).toLowerCase();
     const matchesSearch = 
       employeeName.includes(debouncedSearchTerm.toLowerCase()) ||
-      log.action.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      (log.action && log.action.toLowerCase().includes(debouncedSearchTerm.toLowerCase())) ||
       (log.details && log.details.toLowerCase().includes(debouncedSearchTerm.toLowerCase()));
     
     const matchesEmployee = !selectedEmployee || log.employeeId === selectedEmployee;
@@ -462,6 +489,39 @@ const ActivityLogList: React.FC = () => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Lịch sử hoạt động</h2>
+        </div>
+        <div className="text-center py-4">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Đang tải...</span>
+          </div>
+          <p className="mt-2">Đang tải dữ liệu...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Lịch sử hoạt động</h2>
+        </div>
+        <div className="alert alert-danger">
+          <h4>Lỗi tải dữ liệu</h4>
+          <p>{error}</p>
+          <button className="btn btn-primary" onClick={loadData}>
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <div className="card-header">
@@ -525,6 +585,11 @@ const ActivityLogList: React.FC = () => {
       {pageItems.length === 0 ? (
         <div className="text-center py-4">
           <p>Không có hoạt động nào</p>
+          {debouncedSearchTerm || selectedEmployee ? (
+            <button className="btn btn-light mt-2" onClick={resetFilters}>
+              Xóa bộ lọc
+            </button>
+          ) : null}
         </div>
       ) : (
         <>

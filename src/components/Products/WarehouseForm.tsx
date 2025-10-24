@@ -351,7 +351,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           .eq('id', item.id);
           
         if (error) {
-          console.error('Error updating inventory:', error);
+          // Error updating inventory - ignore
           throw new Error(error.message || 'Không thể cập nhật kho hàng');
         }
         // Update local inventory and propagate to linked orders
@@ -479,7 +479,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           });
           
         if (insertError) {
-          console.error('Error creating inventory:', insertError);
+          // Error creating inventory - ignore
           throw new Error(insertError.message || 'Không thể tạo kho hàng');
         }
         
