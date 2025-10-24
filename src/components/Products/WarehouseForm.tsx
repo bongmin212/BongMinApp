@@ -444,6 +444,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             });
           }
         } catch {}
+        notify('Cập nhật kho hàng thành công', 'success');
         onSuccess();
       } else {
         // Create inventory row
@@ -521,6 +522,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Nhập kho', details: `productId=${selectedProduct}; packageId=${formData.packageId}; inventoryCode=${ensuredCode}; price=${formData.purchasePrice ?? '-'}; source=${formData.sourceNote || '-'}; notes=${(formData.notes || '-').toString().slice(0,80)}` });
         } catch {}
+        notify('Nhập kho thành công', 'success');
         onSuccess();
       }
     } catch (error) {
