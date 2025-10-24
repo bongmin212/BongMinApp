@@ -518,15 +518,35 @@ const OrderList: React.FC = () => {
   const handleReturnSlot = (id: string) => {
     const order = orders.find(o => o.id === id);
     if (!order) return;
-    // Try classic link first
-    let invLinked = inventory.find((i: any) => i.linked_order_id === id);
-    // Optionally try by inventoryItemId if present on order
-    if (!invLinked && (order as any).inventoryItemId) {
+    
+    // Find linked inventory using same logic as OrderForm
+    let invLinked: any = null;
+    
+    // Method 1: Try by inventoryItemId (same as OrderForm line 84-92)
+    if ((order as any).inventoryItemId) {
       const found = inventory.find((i: any) => i.id === (order as any).inventoryItemId);
-      if (found && (found.linked_order_id === id || (found.is_account_based && (found.profiles || []).some((p: any) => p.assignedOrderId === id)))) {
-        invLinked = found;
+      if (found) {
+        // Check if any profile is assigned to this order (works for both account-based and slot-based)
+        if (Array.isArray(found.profiles) && found.profiles.some((p: any) => p.assignedOrderId === id)) {
+          invLinked = found;
+        }
+        // For classic inventory: check linked_order_id as fallback
+        else if (!found.is_account_based && found.linked_order_id === id) {
+          invLinked = found;
+        }
       }
     }
+    
+    // Method 2: If still not found, search ALL inventory by profiles (not just account-based)
+    if (!invLinked) {
+      invLinked = inventory.find((i: any) => Array.isArray(i.profiles) && i.profiles.length > 0 && i.profiles.some((p: any) => p.assignedOrderId === id));
+    }
+    
+    // Method 3: Fallback to classic linked_order_id
+    if (!invLinked) {
+      invLinked = inventory.find((i: any) => i.linked_order_id === id);
+    }
+    
     if (!invLinked) {
       notify('Đơn này không có slot liên kết để trả', 'warning');
       return;
@@ -547,31 +567,59 @@ const OrderList: React.FC = () => {
         }
         
         try {
-          if (invLinked.is_account_based) {
-            // Release account-based slots (same as OrderForm line 800-823)
-            const nextProfiles = (Array.isArray(invLinked.profiles) ? invLinked.profiles : []).map((p: any) => (
-              p.assignedOrderId === order.id 
-                ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } 
-                : p
-            ));
-            await sb.from('inventory').update({ 
-              profiles: nextProfiles,
+          // Release inventory using direct Supabase query with error handling (same as OrderForm)
+          if (invLinked.is_account_based || (Array.isArray(invLinked.profiles) && invLinked.profiles.length > 0)) {
+            // Release account-based slots or slot-based inventory
+            const profiles = invLinked.profiles || [];
+            const updatedProfiles = profiles.map((profile: any) => {
+              if (profile.assignedOrderId === order.id) {
+                return {
+                  ...profile,
+                  isAssigned: false,
+                  assignedOrderId: null,
+                  assignedAt: null,
+                  expiryAt: null
+                };
+              }
+              return profile;
+            });
+            
+            const { error: updateError } = await sb.from('inventory').update({
+              profiles: updatedProfiles,
               updated_at: new Date().toISOString()
             }).eq('id', invLinked.id);
+            
+            if (updateError) {
+              notify('Lỗi khi giải phóng slot kho hàng', 'error');
+              console.error('Inventory update error:', updateError);
+              return;
+            }
           } else {
-            // Release classic inventory (same as OrderForm line 827-831)
-            await sb.from('inventory').update({ 
-              status: 'AVAILABLE', 
+            // Release classic inventory
+            const { error: updateError } = await sb.from('inventory').update({
+              status: 'AVAILABLE',
               linked_order_id: null,
               updated_at: new Date().toISOString()
             }).eq('id', invLinked.id);
+            
+            if (updateError) {
+              notify('Lỗi khi giải phóng kho hàng', 'error');
+              console.error('Inventory update error:', updateError);
+              return;
+            }
           }
           
-          // Clear order's inventory link (same as OrderForm line 724-725)
-          await sb.from('orders').update({ 
+          // Clear order's inventory link
+          const { error: orderUpdateError } = await sb.from('orders').update({ 
             inventory_item_id: null,
             inventory_profile_ids: null 
           }).eq('id', order.id);
+          
+          if (orderUpdateError) {
+            notify('Lỗi khi cập nhật đơn hàng', 'error');
+            console.error('Order update error:', orderUpdateError);
+            return;
+          }
           
           // Log activity
           try {
@@ -586,6 +634,7 @@ const OrderList: React.FC = () => {
           notify('Đã trả slot về kho', 'success');
         } catch (error) {
           notify('Lỗi khi trả slot về kho', 'error');
+          console.error('Unexpected error:', error);
         }
       }
     });
@@ -2171,30 +2220,59 @@ const OrderList: React.FC = () => {
                       return;
                     }
                     
-                    // Release inventory (same pattern as OrderForm)
-                    if (invItem.is_account_based) {
-                      const nextProfiles = (invItem.profiles || []).map((p: any) => 
-                        p.assignedOrderId === order.id 
-                          ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } 
-                          : p
-                      );
-                      await sb.from('inventory').update({ 
-                        profiles: nextProfiles,
+                    // Release inventory using direct Supabase query with error handling (same as OrderForm)
+                    if (invItem.is_account_based || (Array.isArray(invItem.profiles) && invItem.profiles.length > 0)) {
+                      // Release account-based slots or slot-based inventory
+                      const profiles = invItem.profiles || [];
+                      const updatedProfiles = profiles.map((profile: any) => {
+                        if (profile.assignedOrderId === order.id) {
+                          return {
+                            ...profile,
+                            isAssigned: false,
+                            assignedOrderId: null,
+                            assignedAt: null,
+                            expiryAt: null
+                          };
+                        }
+                        return profile;
+                      });
+                      
+                      const { error: updateError } = await sb.from('inventory').update({
+                        profiles: updatedProfiles,
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
+                      
+                      if (updateError) {
+                        notify('Lỗi khi giải phóng slot kho hàng', 'error');
+                        console.error('Inventory update error:', updateError);
+                        return;
+                      }
                     } else {
-                      await sb.from('inventory').update({ 
-                        status: 'AVAILABLE', 
+                      // Release classic inventory
+                      const { error: updateError } = await sb.from('inventory').update({
+                        status: 'AVAILABLE',
                         linked_order_id: null,
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
+                      
+                      if (updateError) {
+                        notify('Lỗi khi giải phóng kho hàng', 'error');
+                        console.error('Inventory update error:', updateError);
+                        return;
+                      }
                     }
                     
-                    // Clear order's inventory link (same as OrderForm)
-                    await sb.from('orders').update({ 
+                    // Clear order's inventory link
+                    const { error: orderUpdateError } = await sb.from('orders').update({ 
                       inventory_item_id: null,
                       inventory_profile_ids: null 
                     }).eq('id', order.id);
+                    
+                    if (orderUpdateError) {
+                      notify('Lỗi khi cập nhật đơn hàng', 'error');
+                      console.error('Order update error:', orderUpdateError);
+                      return;
+                    }
                     
                     // Log activity
                     try {
