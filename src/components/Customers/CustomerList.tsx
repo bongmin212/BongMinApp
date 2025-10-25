@@ -94,8 +94,10 @@ const CustomerList: React.FC = () => {
     setCustomers(allCustomers);
   };
 
-  // Realtime subscribe
+  // Load customers on mount and subscribe to realtime updates
   useEffect(() => {
+    loadCustomers();
+    
     const sb = getSupabase();
     if (!sb) return;
     const channel = sb
@@ -105,7 +107,7 @@ const CustomerList: React.FC = () => {
       })
       .subscribe();
     return () => { try { channel.unsubscribe(); } catch {} };
-  }, [loadCustomers]);
+  }, []);
 
   const handleCreate = () => {
     setEditingCustomer(null);

@@ -31,6 +31,7 @@ const WarehouseList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [profilesModal, setProfilesModal] = useState<null | { item: InventoryItem }>(null);
+  const [previousProfilesModal, setPreviousProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [viewingOrder, setViewingOrder] = useState<null | Order>(null);
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
@@ -1814,7 +1815,7 @@ const WarehouseList: React.FC = () => {
                               <td>
                                 <div className="d-flex gap-2">
                                   {order && (
-                                    <button className="btn btn-sm btn-light" onClick={() => { setProfilesModal(null); setViewingOrder(order); }}>
+                                    <button className="btn btn-sm btn-light" onClick={() => { setPreviousProfilesModal(profilesModal); setProfilesModal(null); setViewingOrder(order); }}>
                                       Xem đơn hàng
                                     </button>
                                   )}
@@ -2050,7 +2051,13 @@ const WarehouseList: React.FC = () => {
       {viewingOrder && (
         <OrderDetailsModal
           order={viewingOrder}
-          onClose={() => setViewingOrder(null)}
+          onClose={() => {
+            if (previousProfilesModal) {
+              setProfilesModal(previousProfilesModal);
+              setPreviousProfilesModal(null);
+            }
+            setViewingOrder(null);
+          }}
           inventory={items as any}
           products={products as any}
           packages={packages as any}
@@ -2065,9 +2072,67 @@ const WarehouseList: React.FC = () => {
           formatPrice={formatPrice}
           onCopyInfo={async () => {
             const o = viewingOrder;
-            const info = buildFullOrderInfo(o);
-            const linesForCopy = info.lines.flatMap((line, idx) => idx < info.lines.length - 1 ? [line, ''] : [line]);
-            const text = linesForCopy.join('\n');
+            const customerName = customerMap.get(o.customerId) || 'Không xác định';
+            const pkgInfo = getPackageInfo(o.packageId);
+            const productName = pkgInfo?.product?.name || 'Không xác định';
+            const packageName = pkgInfo?.pkg?.name || 'Không xác định';
+            const statusLabel = getStatusLabel(o.status);
+            const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
+            const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
+            const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
+            const price = (() => {
+              if (o.useCustomPrice && o.customPrice) return o.customPrice;
+              const customer = customers.find(c => c.id === o.customerId);
+              const isCTV = (customer?.type || 'RETAIL') === 'CTV';
+              return isCTV ? (pkgInfo?.pkg?.ctvPrice || 0) : (pkgInfo?.pkg?.retailPrice || 0);
+            })();
+            const out: string[] = [];
+            out.push(`Mã đơn hàng: ${o.code || '-'}`);
+            out.push(`Khách hàng: ${customerName}`);
+            out.push(`Sản phẩm: ${productName}`);
+            out.push(`Gói: ${packageName}`);
+            out.push(`Ngày mua: ${purchaseDate}`);
+            out.push(`Ngày hết hạn: ${expiryDate}`);
+            out.push(`Trạng thái: ${statusLabel}`);
+            out.push(`Thanh toán: ${paymentLabel}`);
+            out.push(`Giá: ${formatPrice(price)}`);
+            const inv = (() => {
+              if (o.inventoryItemId) {
+                const found = items.find((i: any) => i.id === o.inventoryItemId);
+                if (found) return found;
+              }
+              const byLinked = items.find((i: any) => i.linkedOrderId === o.id);
+              if (byLinked) return byLinked;
+              return items.find((i: any) => i.isAccountBased && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+            })();
+            if (inv) {
+              const packageInfo = packages.find(p => p.id === inv.packageId);
+              const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
+              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              if (displayColumns.length > 0) {
+                out.push('Thông tin đơn hàng:');
+                displayColumns.forEach((col: any) => {
+                  const value = (inv.accountData || {})[col.id] || '';
+                  if (String(value).trim()) {
+                    out.push(`${col.title}:`);
+                    out.push(value);
+                    out.push('');
+                  }
+                });
+              }
+            }
+            const customFieldValues = (o as any).customFieldValues || {};
+            if (pkgInfo?.pkg?.customFields && Object.keys(customFieldValues).length > 0) {
+              pkgInfo.pkg.customFields.forEach((cf: any) => {
+                const value = customFieldValues[cf.id];
+                if (value && String(value).trim()) {
+                  out.push(`${cf.title}:`);
+                  out.push(String(value).trim());
+                  out.push('');
+                }
+              });
+            }
+            const text = out.join('\n');
             try {
               await navigator.clipboard.writeText(text);
               notify('Đã copy thông tin đơn hàng', 'success');
