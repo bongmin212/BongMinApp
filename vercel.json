@@ -1,17 +1,17 @@
 {
   "version": 2,
-  "build": {
-    "env": {
-      "CI": "false",
-      "DISABLE_ESLINT_PLUGIN": "true"
-    }
-  },
   "regions": ["hkg1"],
   "builds": [
     {
       "src": "package.json",
       "use": "@vercel/static-build",
-      "config": { "distDir": "build" }
+      "config": { 
+        "distDir": "build",
+        "env": {
+          "CI": "false",
+          "DISABLE_ESLINT_PLUGIN": "true"
+        }
+      }
     }
   ],
   "rewrites": [
