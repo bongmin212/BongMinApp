@@ -1350,21 +1350,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               type="date"
               name="purchaseDate"
               className="form-control"
-              value={(() => {
-                const date = formData.purchaseDate instanceof Date ? formData.purchaseDate : new Date(formData.purchaseDate);
-                if (isNaN(date.getTime())) {
-                  return new Date().toISOString().split('T')[0];
+              value={formData.purchaseDate && !isNaN(formData.purchaseDate.getTime()) ? formData.purchaseDate.toISOString().split('T')[0] : ''}
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                if (dateValue) {
+                  const newDate = new Date(dateValue);
+                  if (!isNaN(newDate.getTime())) {
+                    setFormData(prev => ({ ...prev, purchaseDate: newDate }));
+                  }
                 }
-                // Ensure we get the local date without timezone conversion
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-              })()}
-              onChange={(e) => setFormData(prev => ({
-                ...prev,
-                purchaseDate: new Date(e.target.value)
-              }))}
+              }}
             />
           </div>
 
