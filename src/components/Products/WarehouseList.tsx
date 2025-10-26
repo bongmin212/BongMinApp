@@ -573,6 +573,16 @@ const WarehouseList: React.FC = () => {
     refresh();
   }, []);
 
+  // Listen for packages updates from PackageForm
+  useEffect(() => {
+    const handlePackagesUpdate = () => {
+      refresh();
+    };
+    
+    window.addEventListener('packagesUpdated', handlePackagesUpdate);
+    return () => window.removeEventListener('packagesUpdated', handlePackagesUpdate);
+  }, []);
+
   // Listen for view warehouse events from notifications
   useEffect(() => {
     const handleViewWarehouse = (e: any) => {

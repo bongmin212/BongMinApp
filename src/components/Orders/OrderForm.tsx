@@ -192,6 +192,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     // Note: For editing orders, form data is set in the first useEffect above
   }, []);
 
+  // Listen for packages updates from PackageForm
+  useEffect(() => {
+    const handlePackagesUpdate = () => {
+      loadData();
+    };
+    
+    window.addEventListener('packagesUpdated', handlePackagesUpdate);
+    return () => window.removeEventListener('packagesUpdated', handlePackagesUpdate);
+  }, []);
+
   const loadData = async () => {
     const sb = getSupabase();
     if (!sb) return;

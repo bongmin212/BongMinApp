@@ -153,6 +153,16 @@ const OrderList: React.FC = () => {
     loadData();
   }, []);
 
+  // Listen for packages updates from PackageForm
+  useEffect(() => {
+    const handlePackagesUpdate = () => {
+      loadData();
+    };
+    
+    window.addEventListener('packagesUpdated', handlePackagesUpdate);
+    return () => window.removeEventListener('packagesUpdated', handlePackagesUpdate);
+  }, []);
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);

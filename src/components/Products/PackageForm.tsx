@@ -483,6 +483,9 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             
             notify('Cập nhật gói sản phẩm thành công', 'success');
             
+            // Dispatch custom event to notify other components to refresh packages data
+            window.dispatchEvent(new CustomEvent('packagesUpdated'));
+            
             // Show sync notification if auto-sync happened
             if (!sharedConfigLocked && firstPackageId === pkg.id) {
               setTimeout(() => {
@@ -569,6 +572,10 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
           });
         } catch {}
         notify('Thêm gói sản phẩm thành công', 'success');
+        
+        // Dispatch custom event to notify other components to refresh packages data
+        window.dispatchEvent(new CustomEvent('packagesUpdated'));
+        
         onSuccess();
       }
     } catch (error) {
