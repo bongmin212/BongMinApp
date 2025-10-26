@@ -29,6 +29,7 @@ const OrderList: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
+  const [slotReturnedFilter, setSlotReturnedFilter] = useState<'NOT_RETURNED' | ''>('');
   const [onlyExpiringNotSent, setOnlyExpiringNotSent] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -175,7 +176,7 @@ const OrderList: React.FC = () => {
   // Reset page on filter/search changes (debounced)
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
 
   // No localStorage persistence
 
@@ -196,7 +197,7 @@ const OrderList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, page, limit, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
 
   const loadData = async () => {
     const sb = getSupabase();
@@ -536,6 +537,49 @@ const OrderList: React.FC = () => {
         })();
       }
     });
+  };
+
+  // Helper function to check if slot is already returned to inventory
+  const isSlotReturned = (order: any) => {
+    // Find linked inventory using same logic as handleReturnSlot
+    let invLinked: any = null;
+    
+    // Method 1: Try by inventoryItemId
+    if (order.inventoryItemId) {
+      const found = inventory.find((i: any) => i.id === order.inventoryItemId);
+      if (found) {
+        // Check if any profile is assigned to this order
+        if (Array.isArray(found.profiles) && found.profiles.some((p: any) => p.assignedOrderId === order.id)) {
+          invLinked = found;
+        }
+        // For classic inventory: check linked_order_id as fallback
+        else if (!found.is_account_based && found.linked_order_id === order.id) {
+          invLinked = found;
+        }
+      }
+    }
+    
+    // Method 2: If still not found, search ALL inventory by profiles
+    if (!invLinked) {
+      invLinked = inventory.find((i: any) => Array.isArray(i.profiles) && i.profiles.length > 0 && i.profiles.some((p: any) => p.assignedOrderId === order.id));
+    }
+    
+    // Method 3: Fallback to classic linked_order_id
+    if (!invLinked) {
+      invLinked = inventory.find((i: any) => i.linked_order_id === order.id);
+    }
+    
+    // If no linked inventory found, consider slot as returned (no slot to return)
+    if (!invLinked) return true;
+    
+    // Check if slot is still assigned to this order
+    if (invLinked.is_account_based || (Array.isArray(invLinked.profiles) && invLinked.profiles.length > 0)) {
+      // For account-based or slot-based inventory, check if any profile is still assigned
+      return !invLinked.profiles.some((p: any) => p.assignedOrderId === order.id && p.isAssigned);
+    } else {
+      // For classic inventory, check linked_order_id
+      return invLinked.linked_order_id !== order.id;
+    }
   };
 
   const handleReturnSlot = (id: string) => {
@@ -1015,12 +1059,20 @@ const OrderList: React.FC = () => {
         if (!(isExpiring && !((order as any).renewalMessageSent))) return false;
       }
 
+      // Slot returned filter
+      if (slotReturnedFilter) {
+        const isReturned = isSlotReturned(order);
+        if (slotReturnedFilter === 'NOT_RETURNED' && isReturned) {
+          return false;
+        }
+      }
+
       return true;
     });
     
     
     return filtered;
-  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
+  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
@@ -1395,7 +1447,7 @@ const OrderList: React.FC = () => {
                 Tính tiền hoàn
               </button>
               <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
-              {new Date(order.expiryDate) < new Date() && (
+              {new Date(order.expiryDate) < new Date() && !isSlotReturned(order) && (
                 <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot về kho</button>
               )}
             </div>
@@ -1413,6 +1465,7 @@ const OrderList: React.FC = () => {
     setDateFrom('');
     setDateTo('');
     setExpiryFilter('');
+    setSlotReturnedFilter('');
     setOnlyExpiringNotSent(false);
     setPage(1);
   };
@@ -1524,6 +1577,16 @@ const OrderList: React.FC = () => {
           <div>
             <select
               className="form-control"
+              value={slotReturnedFilter}
+              onChange={(e) => setSlotReturnedFilter(e.target.value as 'NOT_RETURNED' | '')}
+            >
+              <option value="">Tất cả slot</option>
+              <option value="NOT_RETURNED">Chưa trả slot về kho</option>
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
               value={filterPayment}
               onChange={(e) => setFilterPayment(e.target.value as PaymentStatus | '')}
             >
@@ -1607,7 +1670,7 @@ const OrderList: React.FC = () => {
                   className="btn btn-warning"
                 >Tính tiền hoàn</button>
                 <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
-                {new Date(order.expiryDate) < new Date() && (
+                {new Date(order.expiryDate) < new Date() && !isSlotReturned(order) && (
                   <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot</button>
                 )}
               </div>
