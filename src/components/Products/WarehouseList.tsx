@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, InventoryPaymentStatus, INVENTORY_PAYMENT_STATUSES } from '../../types';
+import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, InventoryPaymentStatus, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { Database } from '../../utils/database';
 import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
@@ -1387,7 +1387,7 @@ const WarehouseList: React.FC = () => {
           <div>
             <select className="form-control" value={filterPaymentStatus} onChange={(e) => setFilterPaymentStatus(e.target.value)}>
               <option value="">Thanh toán</option>
-              {INVENTORY_PAYMENT_STATUSES.map(status => (
+              {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
                 <option key={status.value} value={status.value}>{status.label}</option>
               ))}
             </select>
