@@ -842,7 +842,7 @@ const WarehouseList: React.FC = () => {
         
         // Pricing
         purchasePrice: i.purchasePrice || 0,
-        paymentStatus: i.paymentStatus ? INVENTORY_PAYMENT_STATUSES.find(p => p.value === i.paymentStatus)?.label || i.paymentStatus : '',
+        paymentStatus: i.paymentStatus ? INVENTORY_PAYMENT_STATUSES_FULL.find(p => p.value === i.paymentStatus)?.label || i.paymentStatus : '',
         paymentStatusValue: i.paymentStatus || '',
         
         // Product info
@@ -1477,7 +1477,7 @@ const WarehouseList: React.FC = () => {
                 <div className="warehouse-card-label">Thanh toán</div>
                 <div className="warehouse-card-value">
                   <span className={`status-badge ${item.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
-                    {INVENTORY_PAYMENT_STATUSES.find(s => s.value === item.paymentStatus)?.label || 'Chưa TT'}
+                    {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === item.paymentStatus)?.label || 'Chưa thanh toán'}
                   </span>
                 </div>
               </div>
@@ -1628,7 +1628,7 @@ const WarehouseList: React.FC = () => {
                   <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td>
                     <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
-                      {INVENTORY_PAYMENT_STATUSES.find(s => s.value === i.paymentStatus)?.label || 'Chưa TT'}
+                      {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === i.paymentStatus)?.label || 'Chưa thanh toán'}
                     </span>
                   </td>
                   <td>
@@ -1962,7 +1962,7 @@ const WarehouseList: React.FC = () => {
                 <div><strong>Hết hạn:</strong> {formatDate(inv.expiryDate)}</div>
                 <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
                 <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
-                <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES.find(s => s.value === inv.paymentStatus)?.label || 'Chưa TT'}</div>
+                <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === inv.paymentStatus)?.label || 'Chưa thanh toán'}</div>
                 {inv.status === 'NEEDS_UPDATE' && inv.previousLinkedOrderId && (() => {
                   const prevOrder = Database.getOrders().find(o => o.id === inv.previousLinkedOrderId);
                   return prevOrder ? (
@@ -2169,7 +2169,7 @@ const WarehouseList: React.FC = () => {
                     value={selectedPaymentStatus} 
                     onChange={(e) => setSelectedPaymentStatus(e.target.value as InventoryPaymentStatus)}
                   >
-                    {INVENTORY_PAYMENT_STATUSES.map(status => (
+                    {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
                       <option key={status.value} value={status.value}>{status.label}</option>
                     ))}
                   </select>
