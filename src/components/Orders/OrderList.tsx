@@ -679,9 +679,21 @@ const OrderList: React.FC = () => {
     (async () => {
       const sb = getSupabase();
       if (!sb) return notify('Không thể cập nhật trạng thái', 'error');
-      const { error } = await sb.from('orders').update({ status }).in('id', selectedIds);
-      if (error) return notify('Không thể cập nhật trạng thái', 'error');
-      const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
+      
+      // Validate that all selected IDs exist
+      const validIds = selectedIds.filter(id => orders.some(o => o.id === id));
+      if (validIds.length === 0) {
+        notify('Không tìm thấy đơn hàng hợp lệ', 'error');
+        return;
+      }
+      
+      const { error } = await sb.from('orders').update({ status }).in('id', validIds);
+      if (error) {
+        console.error('Bulk status update error:', error);
+        return notify(`Không thể cập nhật trạng thái: ${error.message}`, 'error');
+      }
+      
+      const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
       try {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật trạng thái hàng loạt', details: `status=${status}; orderCodes=${codes.join(',')}` });
@@ -697,9 +709,21 @@ const OrderList: React.FC = () => {
     (async () => {
       const sb = getSupabase();
       if (!sb) return notify('Không thể cập nhật thanh toán', 'error');
-      const { error } = await sb.from('orders').update({ payment_status: paymentStatus }).in('id', selectedIds);
-      if (error) return notify('Không thể cập nhật thanh toán', 'error');
-      const codes = selectedIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
+      
+      // Validate that all selected IDs exist
+      const validIds = selectedIds.filter(id => orders.some(o => o.id === id));
+      if (validIds.length === 0) {
+        notify('Không tìm thấy đơn hàng hợp lệ', 'error');
+        return;
+      }
+      
+      const { error } = await sb.from('orders').update({ payment_status: paymentStatus }).in('id', validIds);
+      if (error) {
+        console.error('Bulk payment update error:', error);
+        return notify(`Không thể cập nhật thanh toán: ${error.message}`, 'error');
+      }
+      
+      const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
       try {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
