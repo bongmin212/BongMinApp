@@ -1321,7 +1321,7 @@ const OrderList: React.FC = () => {
               style={{ padding: '2px 6px', fontSize: 12, lineHeight: 1 }}
               title={getStatusLabel(order.status)}
             >
-              {getStatusShortLabel(order.status)}
+              {getStatusLabel(order.status)}
             </span>
           </td>
           <td>
@@ -1330,7 +1330,7 @@ const OrderList: React.FC = () => {
               style={{ padding: '2px 6px', fontSize: 12, lineHeight: 1 }}
               title={getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán'}
             >
-              {getPaymentShortLabel(order.paymentStatus)}
+              {getPaymentLabel(order.paymentStatus)}
             </span>
           </td>
           <td>{formatPrice(getOrderPrice(order))}</td>
