@@ -100,7 +100,7 @@ export interface Employee {
 
 export interface ActivityLog {
   id: string;
-  employeeId: string;
+  employeeId: string | null;
   action: string; // Mô tả hành động
   details?: string; // Chi tiết thêm
   timestamp: Date;

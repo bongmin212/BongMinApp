@@ -154,7 +154,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
             const detail = [`productId=${product.id}; productCode=${product.code}`, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật sản phẩm', details: detail });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật sản phẩm', details: detail });
             } catch {}
             notify('Cập nhật sản phẩm thành công', 'success');
             onSuccess();
@@ -196,7 +196,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onClose, onSuccess }
         
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo sản phẩm', details: `productCode=${ensuredCode}; name=${formData.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Tạo sản phẩm', details: `productCode=${ensuredCode}; name=${formData.name}` });
         } catch {}
         notify('Thêm sản phẩm thành công', 'success');
         onSuccess();

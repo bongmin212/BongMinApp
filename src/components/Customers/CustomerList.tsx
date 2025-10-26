@@ -155,7 +155,7 @@ const CustomerList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
             } catch {}
             loadCustomers();
             notify('Xóa khách hàng thành công', 'success');
@@ -205,7 +205,9 @@ const CustomerList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa hàng loạt khách hàng', details: `ids=${selectedIds.join(',')}` });
+              const codes = selectedIds.map(id => customers.find(c => c.id === id)?.code).filter(Boolean);
+              const names = selectedIds.map(id => customers.find(c => c.id === id)?.name).filter(Boolean);
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt khách hàng', details: `codes=${codes.join(',')}; names=${names.join(',')}` });
             } catch {}
             setSelectedIds([]);
             loadCustomers();

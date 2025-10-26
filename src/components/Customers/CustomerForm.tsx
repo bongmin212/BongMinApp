@@ -169,7 +169,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
             const detail = [`customerId=${customer.id}; customerCode=${customer.code}`, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật khách hàng', details: detail });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật khách hàng', details: detail });
             } catch {}
             notify('Cập nhật khách hàng thành công', 'success');
             onSuccess();
@@ -220,7 +220,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({ customer, onClose, onSucces
         
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo khách hàng', details: `customerCode=${ensuredCode}; name=${formData.name}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Tạo khách hàng', details: `customerCode=${ensuredCode}; name=${formData.name}` });
         } catch {}
         notify('Thêm khách hàng thành công', 'success');
         onSuccess();

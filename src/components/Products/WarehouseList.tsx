@@ -160,7 +160,7 @@ const WarehouseList: React.FC = () => {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: 'system', 
+              employee_id: null, 
               action: 'Fix slot bị kẹt', 
               details: `Fixed ${fixedCount} slots: ${fixedDetails.join(', ')}` 
             });
@@ -202,7 +202,7 @@ const WarehouseList: React.FC = () => {
         await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Giải phóng slot kẹt', details: `inventoryId=${inventoryId}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Giải phóng slot kẹt', details: `inventoryId=${inventoryId}; inventoryCode=${items.find(i => i.id === inventoryId)?.code || ''}` });
         } catch {}
         notify('Đã quét và giải phóng slot kẹt', 'success');
         refresh();
@@ -984,7 +984,8 @@ const WarehouseList: React.FC = () => {
           
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt kho', details: `ids=${deletable.join(',')}` });
+            const codes = deletable.map(id => pageItems.find(i => i.id === id)?.code).filter(Boolean);
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt kho', details: `codes=${codes.join(',')}` });
           } catch {}
           setSelectedIds([]);
           refresh();
@@ -1017,7 +1018,7 @@ const WarehouseList: React.FC = () => {
         }
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho hàng loạt', details: `ids=${unlinkables.join(',')}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gỡ liên kết kho hàng loạt', details: `codes=${unlinkables.map(id => items.find(i => i.id === id)?.code).filter(Boolean).join(',')}` });
         } catch {}
         setSelectedIds([]);
         refresh();
@@ -1056,7 +1057,7 @@ const WarehouseList: React.FC = () => {
           
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa khỏi kho', details: `inventoryItemId=${id}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa khỏi kho', details: `inventoryId=${id}; inventoryCode=${snapshot?.code || ''}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
           } catch {}
           notify('Đã xóa khỏi kho', 'success');
         } else {
@@ -1085,7 +1086,7 @@ const WarehouseList: React.FC = () => {
         }
         try {
           const sb2 = getSupabase();
-          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gỡ liên kết kho khỏi đơn', details: `inventoryId=${id}; orderId=${inv.linkedOrderId}` });
+          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gỡ liên kết kho khỏi đơn', details: `inventoryId=${id}; inventoryCode=${inv.code || ''}; orderId=${inv.linkedOrderId}` });
         } catch {}
         notify('Đã gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có', 'success');
         refresh();
@@ -1154,7 +1155,7 @@ const WarehouseList: React.FC = () => {
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: 'system', 
+              employee_id: null, 
               action: 'Gia hạn hàng loạt kho hàng', 
               details: `count=${successCount}; ids=${renewables.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}` 
             });
@@ -1508,7 +1509,7 @@ const WarehouseList: React.FC = () => {
                             if (error) return notify('Không thể cập nhật trạng thái', 'error');
                             try {
                               const sb2 = getSupabase();
-                              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; code=${item.code}` });
+                              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; inventoryCode=${item.code}` });
                             } catch {}
                             notify('Đã chuyển về Sẵn có', 'success');
                             refresh();
@@ -1656,7 +1657,7 @@ const WarehouseList: React.FC = () => {
                               if (error) return notify('Không thể cập nhật trạng thái', 'error');
                               try {
                                 const sb2 = getSupabase();
-                                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; code=${i.code}` });
+                                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; inventoryCode=${i.code}` });
                               } catch {}
                               notify('Đã chuyển về Sẵn có', 'success');
                               refresh();
@@ -1933,7 +1934,7 @@ const WarehouseList: React.FC = () => {
                     
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}` });
+                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; inventoryCode=${inv.code || ''}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}` });
                     } catch {}
                     notify('Gia hạn thành công', 'success');
                     setRenewalDialog(null);
@@ -2204,7 +2205,7 @@ const WarehouseList: React.FC = () => {
                   try {
                     const sb2 = getSupabase();
                     if (sb2) await sb2.from('activity_logs').insert({ 
-                      employee_id: 'system', 
+                      employee_id: null, 
                       action: 'Cập nhật trạng thái thanh toán hàng loạt', 
                       details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}` 
                     });

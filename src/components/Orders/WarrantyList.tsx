@@ -510,7 +510,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         // Log activity
         try {
           await sb.from('activity_logs').insert({ 
-            employee_id: 'system', 
+            employee_id: null, 
             action: 'Cập nhật đơn bảo hành', 
             details: `warrantyId=${warranty.id}; warrantyCode=${warranty.code}; newStatus=${form.status}` 
           });
@@ -605,7 +605,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         // Log activity
         try {
           await sb.from('activity_logs').insert({ 
-            employee_id: 'system', 
+            employee_id: null, 
             action: 'Tạo đơn bảo hành', 
             details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}` 
           });
@@ -1181,7 +1181,8 @@ const WarrantyList: React.FC = () => {
           // Log activity
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa hàng loạt bảo hành', details: `ids=${selectedIds.join(',')}` });
+            const codes = selectedIds.map(id => warranties.find(w => w.id === id)?.code).filter(Boolean);
+            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt bảo hành', details: `codes=${codes.join(',')}` });
           } catch {}
           
           setSelectedIds([]);
@@ -1227,7 +1228,7 @@ const handleDelete = (id: string) => {
 						
                         try {
                             const sb2 = getSupabase();
-                            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Xóa đơn bảo hành', details: `warrantyId=${id}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
+                            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa đơn bảo hành', details: `warrantyCode=${w?.code || ''}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
                         } catch {}
 						notify('Đã xóa đơn bảo hành', 'success');
 						load();

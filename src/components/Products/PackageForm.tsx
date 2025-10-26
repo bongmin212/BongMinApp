@@ -401,7 +401,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             const detail = [...base, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || 'system', action: 'Cập nhật gói sản phẩm', details: detail });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật gói sản phẩm', details: detail });
             } catch {}
             
             // Update related inventory items to reflect package changes
@@ -453,7 +453,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
 
                   // Log sync activity
                   await sb4.from('activity_logs').insert({
-                    employee_id: state.user?.id || 'system',
+                    employee_id: state.user?.id || null,
                     action: 'Tự động đồng bộ cấu hình gói sản phẩm',
                     details: `Sync config từ gói ${pkg.code} cho các gói khác của sản phẩm ${productName || productUuid}`
                   });
@@ -562,7 +562,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
             }
           } catch {}
           if (sb2) await sb2.from('activity_logs').insert({
-            employee_id: 'system',
+            employee_id: state.user?.id || null,
             action: 'Tạo gói sản phẩm',
             details: [
               `packageId=${createdId || newPackage.id}; packageCode=${normalizedForm.code}; packageName=${normalizedForm.name}`,

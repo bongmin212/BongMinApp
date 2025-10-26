@@ -138,17 +138,17 @@ const PackageList: React.FC = () => {
           
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({
-              employee_id: 'system',
-              action: 'Xóa gói sản phẩm',
-              details: [
-                `packageId=${id}`,
-                target?.code ? `packageCode=${target.code}` : '',
-                target?.name ? `packageName=${target.name}` : '',
-                target?.productId ? `productId=${target.productId}` : '',
-                target?.productId ? `productName=${getProductName(target.productId)}` : ''
-              ].filter(Boolean).join('; ')
-            });
+        if (sb2) await sb2.from('activity_logs').insert({
+          employee_id: state.user?.id || null,
+          action: 'Xóa gói sản phẩm',
+          details: [
+            `packageId=${id}`,
+            target?.code ? `packageCode=${target.code}` : '',
+            target?.name ? `packageName=${target.name}` : '',
+            target?.productId ? `productId=${target.productId}` : '',
+            target?.productId ? `productName=${getProductName(target.productId)}` : ''
+          ].filter(Boolean).join('; ')
+        });
           } catch {}
           loadData();
           notify('Xóa gói sản phẩm thành công', 'success');
@@ -226,15 +226,15 @@ const PackageList: React.FC = () => {
           
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({
-              employee_id: 'system',
-              action: 'Xóa hàng loạt gói',
-              details: [
-                `ids=${selectedIds.join(',')}`,
-                `codes=${targets.map(t => t.code).filter(Boolean).join(',')}`,
-                `names=${targets.map(t => t.name).filter(Boolean).join(',')}`
-              ].filter(Boolean).join('; ')
-            });
+        if (sb2) await sb2.from('activity_logs').insert({
+          employee_id: state.user?.id || null,
+          action: 'Xóa hàng loạt gói',
+          details: [
+            `ids=${selectedIds.join(',')}`,
+            `codes=${targets.map(t => t.code).filter(Boolean).join(',')}`,
+            `names=${targets.map(t => t.name).filter(Boolean).join(',')}`
+          ].filter(Boolean).join('; ')
+        });
           } catch {}
           setSelectedIds([]);
           loadData();

@@ -974,7 +974,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             const detail = [...base, ...changedEntries].join('; ');
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Cập nhật đơn hàng', details: detail });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật đơn hàng', details: detail });
             } catch {}
             notify('Cập nhật đơn hàng thành công', 'success');
             onSuccess();
@@ -1148,7 +1148,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       // Inventory assignment handled client-side only
       try {
         const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
+        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; inventoryCode=${availableInventory.find(i => i.id === selectedInventoryId)?.code || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
       } catch {}
       notify('Tạo đơn hàng thành công', 'success');
       onSuccess();
@@ -1251,7 +1251,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ 
-            employee_id: 'system', 
+            employee_id: state.user?.id || null, 
             action: 'Tạo khách hàng', 
             details: `customerCode=${createdCustomer.code}; name=${newCustomerData.name}` 
           });
@@ -2102,7 +2102,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       if (success) {
                         try {
                           const sb2 = getSupabase();
-                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: 'system', action: 'Xóa đơn hàng', details: `orderId=${order.id}` });
+                          if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa đơn hàng', details: `orderId=${order.id}; orderCode=${order.code}` });
                         } catch {}
                         onClose();
                         onSuccess();

@@ -96,7 +96,7 @@ const ActivityLogList: React.FC = () => {
 
     const allLogs = (logsRes.data || []).map((r: any) => ({
       id: r.id,
-      employeeId: r.employee_id || r.employeeId || 'system',
+      employeeId: r.employee_id || r.employeeId || null,
       action: r.action || 'Không xác định',
       details: r.details || undefined,
       timestamp: r.timestamp ? new Date(r.timestamp) : new Date()
@@ -185,13 +185,13 @@ const ActivityLogList: React.FC = () => {
     return () => { try { channel.unsubscribe(); } catch {} };
   }, [mounted]);
 
-  const getEmployeeName = (employeeId: string) => {
+  const getEmployeeName = (employeeId?: string | null) => {
     if (!employeeId || employeeId === 'system') return 'Hệ thống';
     
     const employee = employees.find(e => e.id === employeeId);
     if (employee) return employee.username;
     if (state?.user && state.user.id === employeeId) return state.user.username;
-    return 'Nhân viên đã xóa';
+    return 'Hệ thống';
   };
 
   const formatDateTime = (date: Date) => {
@@ -257,7 +257,8 @@ const ActivityLogList: React.FC = () => {
         parts.push(`Sản phẩm ${product.name}`);
       }
     }
-    // Some actions only include ids (e.g., delete employee/product/package)
+    // Some actions only include ids (e.g., delete employee/product/package/inventory)
+    // Also handle case where inventory item is deleted but we have productId/packageId
     if (!order && !pkg && !product) {
       if (kv.packageId) {
         const p2 = getPackageById(kv.packageId);
@@ -266,6 +267,19 @@ const ActivityLogList: React.FC = () => {
       if (kv.productId) {
         const pr2 = getProductById(kv.productId);
         if (pr2) parts.push(`Sản phẩm ${pr2.name}`);
+      }
+    }
+    
+    // If inventoryCode exists but no inventoryItem found, check for product/package info
+    // This handles deleted inventory items
+    if (kv.inventoryCode && !inventoryItem && (kv.productId || kv.packageId)) {
+      const deletedProduct = getProductById(kv.productId);
+      const deletedPackage = kv.packageId ? getPackageById(kv.packageId) : null;
+      if (deletedPackage && !parts.some(p => p.includes(`Gói ${deletedPackage.name}`))) {
+        parts.push(`Gói ${deletedPackage.name}`);
+      }
+      if (deletedProduct && !parts.some(p => p.includes(`Sản phẩm ${deletedProduct.name}`))) {
+        parts.push(`Sản phẩm ${deletedProduct.name}`);
       }
     }
     // prefer embedded name if provided to keep showing after deletion
@@ -288,12 +302,11 @@ const ActivityLogList: React.FC = () => {
     if (employee) {
       parts.push(`Nhân viên ${employee.username}`);
     }
-    if (inventoryItem) {
-      parts.push(`Kho ${inventoryItem.code}`);
-    }
-    // Explicit inventory code (for cases where we don't have inventoryId yet, e.g. immediate "Nhập kho")
-    if (!inventoryItem && kv.inventoryCode) {
+    // Check inventory code first (from details) before checking inventoryItem (which might not exist after deletion)
+    if (kv.inventoryCode) {
       parts.push(`Kho ${kv.inventoryCode}`);
+    } else if (inventoryItem) {
+      parts.push(`Kho ${inventoryItem.code}`);
     }
     if (kv.status) {
       parts.push(`Trạng thái: ${statusLabelMap[kv.status] || kv.status}`);
@@ -412,7 +425,7 @@ const ActivityLogList: React.FC = () => {
   };
 
   const filteredLogs = logs.filter(log => {
-    if (!log || !log.employeeId) return false;
+    if (!log) return false;
     
     const employeeName = getEmployeeName(log.employeeId).toLowerCase();
     const matchesSearch = 
