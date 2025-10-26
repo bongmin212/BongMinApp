@@ -51,7 +51,7 @@ export interface Customer {
   updatedAt: Date;
 }
 
-export type OrderStatus = 'PROCESSING' | 'COMPLETED' | 'CANCELLED';
+export type OrderStatus = 'PROCESSING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
 
 export type PaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
@@ -357,7 +357,8 @@ export const CUSTOMER_SOURCES: { value: CustomerSource; label: string }[] = [
 export const ORDER_STATUSES: { value: OrderStatus; label: string }[] = [
   { value: 'PROCESSING', label: 'Đang xử lý' },
   { value: 'COMPLETED', label: 'Hoàn thành' },
-  { value: 'CANCELLED', label: 'Đã hủy' }
+  { value: 'CANCELLED', label: 'Đã hủy' },
+  { value: 'EXPIRED', label: 'Đã hết hạn' }
 ];
 
 export const WARRANTY_STATUSES: { value: WarrantyStatus; label: string }[] = [
