@@ -223,10 +223,20 @@ const OrderList: React.FC = () => {
       }
 
       if (toExpireIds.length > 0) {
-        await sb.from('orders').update({ status: 'EXPIRED' }).in('id', toExpireIds);
+        for (const orderId of toExpireIds) {
+          const { error: expireError } = await sb.from('orders').update({ status: 'EXPIRED' }).eq('id', orderId);
+          if (expireError) {
+            console.error('Auto-expire error for order', orderId, ':', expireError);
+          }
+        }
       }
       if (toUnexpireIds.length > 0) {
-        await sb.from('orders').update({ status: 'COMPLETED' }).in('id', toUnexpireIds);
+        for (const orderId of toUnexpireIds) {
+          const { error: unexpireError } = await sb.from('orders').update({ status: 'COMPLETED' }).eq('id', orderId);
+          if (unexpireError) {
+            console.error('Auto-unexpire error for order', orderId, ':', unexpireError);
+          }
+        }
       }
     } catch (e) {
       // Best-effort; ignore failures and continue rendering
@@ -687,10 +697,12 @@ const OrderList: React.FC = () => {
         return;
       }
       
-      const { error } = await sb.from('orders').update({ status }).in('id', validIds);
-      if (error) {
-        console.error('Bulk status update error:', error);
-        return notify(`Không thể cập nhật trạng thái: ${error.message}`, 'error');
+      for (const orderId of validIds) {
+        const { error: singleError } = await sb.from('orders').update({ status }).eq('id', orderId);
+        if (singleError) {
+          console.error('Single order update error for ID', orderId, ':', singleError);
+          return notify(`Không thể cập nhật đơn hàng ${orderId}: ${singleError.message}`, 'error');
+        }
       }
       
       const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
@@ -717,10 +729,12 @@ const OrderList: React.FC = () => {
         return;
       }
       
-      const { error } = await sb.from('orders').update({ payment_status: paymentStatus }).in('id', validIds);
-      if (error) {
-        console.error('Bulk payment update error:', error);
-        return notify(`Không thể cập nhật thanh toán: ${error.message}`, 'error');
+      for (const orderId of validIds) {
+        const { error: singleError } = await sb.from('orders').update({ payment_status: paymentStatus }).eq('id', orderId);
+        if (singleError) {
+          console.error('Single order payment update error for ID', orderId, ':', singleError);
+          return notify(`Không thể cập nhật thanh toán đơn hàng ${orderId}: ${singleError.message}`, 'error');
+        }
       }
       
       const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
