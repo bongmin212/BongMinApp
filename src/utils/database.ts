@@ -912,6 +912,8 @@ export class Database {
       createdBy?: string;
       useCustomPrice?: boolean;
       customPrice?: number;
+      useCustomExpiry?: boolean;
+      customExpiryDate?: Date;
     }
   ): Order | null {
     const orders = this.getOrders();
@@ -923,7 +925,11 @@ export class Database {
     const now = new Date();
     const base = current.expiryDate > now ? new Date(current.expiryDate) : now;
     const safeMonths = Math.max(1, Math.floor(pkg?.warrantyPeriod || 1));
-    const nextExpiry = this.addMonths(base, safeMonths);
+    
+    // Use custom expiry if provided, otherwise calculate from warranty period
+    const nextExpiry = opts?.useCustomExpiry && opts?.customExpiryDate
+      ? new Date(opts.customExpiryDate)
+      : this.addMonths(base, safeMonths);
 
     const customer = this.getCustomers().find(c => c.id === current.customerId);
     const defaultPrice = customer?.type === 'CTV' ? (pkg?.ctvPrice || 0) : (pkg?.retailPrice || 0);
