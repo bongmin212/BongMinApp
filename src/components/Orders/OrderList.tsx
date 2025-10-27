@@ -26,6 +26,7 @@ const OrderList: React.FC = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<OrderStatus | ''>('');
   const [filterPayment, setFilterPayment] = useState<PaymentStatus | ''>('');
+  const [filterCustomerType, setFilterCustomerType] = useState<'CTV' | 'RETAIL' | ''>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
@@ -97,6 +98,7 @@ const OrderList: React.FC = () => {
       const q = params.get('q') || '';
       const status = (params.get('status') || '') as OrderStatus | '';
       const payment = (params.get('payment') || '') as PaymentStatus | '';
+      const customerType = (params.get('customerType') || '') as 'CTV' | 'RETAIL' | '';
       const from = params.get('from') || '';
       const to = params.get('to') || '';
       const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
@@ -109,6 +111,7 @@ const OrderList: React.FC = () => {
       setDebouncedSearchTerm(q);
       setFilterStatus(status);
       setFilterPayment(payment);
+      setFilterCustomerType(customerType);
       setDateFrom(from);
       setDateTo(to);
       setExpiryFilter(expiry);
@@ -137,6 +140,7 @@ const OrderList: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const status = (params.get('status') || '') as OrderStatus | '';
         const payment = (params.get('payment') || '') as PaymentStatus | '';
+        const customerType = (params.get('customerType') || '') as 'CTV' | 'RETAIL' | '';
         const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
         const notSent = params.get('onlyExpiringNotSent') === '1';
         const p = parseInt(params.get('page') || '1', 10);
@@ -144,6 +148,7 @@ const OrderList: React.FC = () => {
         // Only update if values are different to avoid infinite loops
         if (status !== filterStatus) setFilterStatus(status);
         if (payment !== filterPayment) setFilterPayment(payment);
+        if (customerType !== filterCustomerType) setFilterCustomerType(customerType);
         if (expiry !== expiryFilter) setExpiryFilter(expiry);
         if (notSent !== onlyExpiringNotSent) setOnlyExpiringNotSent(notSent);
         if (p !== page) setPage(p);
@@ -176,7 +181,7 @@ const OrderList: React.FC = () => {
   // Reset page on filter/search changes (debounced)
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, filterCustomerType, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
 
   // No localStorage persistence
 
@@ -187,6 +192,7 @@ const OrderList: React.FC = () => {
       if (debouncedSearchTerm) params.set('q', debouncedSearchTerm); else params.delete('q');
       if (filterStatus) params.set('status', filterStatus as string); else params.delete('status');
       if (filterPayment) params.set('payment', filterPayment as string); else params.delete('payment');
+      if (filterCustomerType) params.set('customerType', filterCustomerType as string); else params.delete('customerType');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
       if (expiryFilter) params.set('expiry', expiryFilter); else params.delete('expiry');
@@ -197,7 +203,7 @@ const OrderList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, filterCustomerType, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
 
   const loadData = async () => {
     const sb = getSupabase();
@@ -1040,6 +1046,12 @@ const OrderList: React.FC = () => {
       if (filterStatus && order.status !== filterStatus) return false;
       if (filterPayment && order.paymentStatus !== filterPayment) return false;
 
+      // Customer type
+      if (filterCustomerType) {
+        const customer = customers.find(c => c.id === order.customerId);
+        if (!customer || customer.type !== filterCustomerType) return false;
+      }
+
       // Date range
       const purchaseTs = new Date(order.purchaseDate).getTime();
       if (purchaseTs < fromTs || purchaseTs > toTs) return false;
@@ -1082,7 +1094,7 @@ const OrderList: React.FC = () => {
     
     
     return filtered;
-  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
+  }, [orders, customers, debouncedSearchTerm, filterStatus, filterPayment, filterCustomerType, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
@@ -1472,6 +1484,7 @@ const OrderList: React.FC = () => {
     setDebouncedSearchTerm('');
     setFilterStatus('');
     setFilterPayment('');
+    setFilterCustomerType('');
     setDateFrom('');
     setDateTo('');
     setExpiryFilter('');
@@ -1495,6 +1508,7 @@ const OrderList: React.FC = () => {
                 debouncedSearchTerm,
                 filterStatus,
                 filterPayment,
+                filterCustomerType,
                 dateFrom,
                 dateTo,
                 expiryFilter,
@@ -1507,6 +1521,7 @@ const OrderList: React.FC = () => {
                 debouncedSearchTerm,
                 filterStatus,
                 filterPayment,
+                filterCustomerType,
                 dateFrom,
                 dateTo,
                 expiryFilter,
@@ -1606,6 +1621,17 @@ const OrderList: React.FC = () => {
                   {p.label}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterCustomerType}
+              onChange={(e) => setFilterCustomerType(e.target.value as 'CTV' | 'RETAIL' | '')}
+            >
+              <option value="">Tất cả loại khách</option>
+              <option value="CTV">Cộng Tác Viên</option>
+              <option value="RETAIL">Khách Lẻ</option>
             </select>
           </div>
           <div style={{ gridColumn: 'span 2' }}>
