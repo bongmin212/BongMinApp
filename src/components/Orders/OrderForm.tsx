@@ -9,7 +9,7 @@ import { useToast } from '../../contexts/ToastContext';
 interface OrderFormProps {
   order?: Order | null;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (createdOrder?: Order) => void;
 }
 
 const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
@@ -977,7 +977,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật đơn hàng', details: detail });
             } catch {}
             notify('Cập nhật đơn hàng thành công', 'success');
-            onSuccess();
+            onSuccess(undefined);
           }
         } catch (updateError) {
           const errorMessage = updateError instanceof Error ? updateError.message : 'Có lỗi xảy ra khi cập nhật đơn hàng';
@@ -1136,8 +1136,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             // Failed to link inventory to order - ignore
             notify('Lỗi không mong muốn khi liên kết kho hàng', 'error');
             return;
-          }
         }
+      }
       
       // Refresh available inventory to reflect changes
       if (selectedInventoryId) {
@@ -1151,7 +1151,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Tạo đơn hàng', details: `orderId=${created.id}; orderCode=${created.code}; packageId=${orderData.packageId}; customerId=${orderData.customerId}; inventoryId=${selectedInventoryId || '-'}; inventoryCode=${availableInventory.find(i => i.id === selectedInventoryId)?.code || '-'}; profileIds=${selectedProfileIds.join(',') || '-'}` });
       } catch {}
       notify('Tạo đơn hàng thành công', 'success');
-      onSuccess();
+      onSuccess(created);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu đơn hàng';

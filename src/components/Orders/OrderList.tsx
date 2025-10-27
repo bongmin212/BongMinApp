@@ -805,13 +805,23 @@ const OrderList: React.FC = () => {
     })();
   };
 
-  const handleFormSubmit = () => {
+  const handleFormSubmit = async (createdOrder?: Order) => {
     setShowForm(false);
     setEditingOrder(null);
-    // Add small delay to ensure Supabase has committed the transaction
-    setTimeout(() => {
-      loadData();
-    }, 500);
+    // If a new order was created, open it in detail modal
+    if (createdOrder) {
+      // Add small delay to ensure Supabase has committed the transaction
+      setTimeout(async () => {
+        await loadData();
+        // Use the created order directly - it already has all the data we need
+        setViewingOrder(createdOrder);
+      }, 500);
+    } else {
+      // For updates or other operations, just reload
+      setTimeout(() => {
+        loadData();
+      }, 500);
+    }
   };
 
   // Memoized lookup maps to avoid O(n) array scans for each row
