@@ -52,6 +52,24 @@ const CustomerList: React.FC = () => {
     }
   }, []);
 
+  // Re-read URL parameters after a short delay (for lazy loading and app:search events)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const t = (params.get('type') || '') as CustomerType | '';
+        const s = (params.get('source') || '') as CustomerSource | '';
+        const p = parseInt(params.get('page') || '1', 10);
+        
+        // Only update if values are different to avoid infinite loops
+        if (t !== filterType) setFilterType(t);
+        if (s !== filterSource) setFilterSource(s);
+        if (p !== page) setPage(p);
+      } catch {}
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Debounce search term
   useEffect(() => {

@@ -569,6 +569,33 @@ const WarehouseList: React.FC = () => {
     }
   }, []);
 
+  // Re-read URL parameters after a short delay (for lazy loading and app:search events)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get('status') || '';
+        const paymentStatus = params.get('paymentStatus') || '';
+        const from = params.get('from') || '';
+        const to = params.get('to') || '';
+        const accounts = params.get('accounts') === '1';
+        const free = params.get('free') === '1';
+        const p = parseInt(params.get('page') || '1', 10);
+        
+        // Only update if values are different to avoid infinite loops
+        if (status !== filterStatus) setFilterStatus(status);
+        if (paymentStatus !== filterPaymentStatus) setFilterPaymentStatus(paymentStatus);
+        if (from !== dateFrom) setDateFrom(from);
+        if (to !== dateTo) setDateTo(to);
+        if (accounts !== onlyAccounts) setOnlyAccounts(accounts);
+        if (free !== onlyFreeSlots) setOnlyFreeSlots(free);
+        if (p !== page) setPage(p);
+      } catch {}
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     refresh();
   }, []);
