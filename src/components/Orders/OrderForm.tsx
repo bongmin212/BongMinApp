@@ -1907,18 +1907,31 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                               </div>
                             )}
                             
-                            {item.isAccountBased && (
-                              <div className="mt-3">
-                                <label className="form-label">
-                                  <strong>Chọn các slot để cấp (có thể chọn nhiều)</strong>
-                                </label>
-                                <div className="row">
-                                  {(item.profiles || [])
-                                    .filter(p => {
-                                      // Show slot if it's not assigned, or if it's assigned to current order, and not needsUpdate
-                                      return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
-                                    })
-                                    .map(p => (
+                            {item.isAccountBased && (() => {
+                              // Filter available slots
+                              const availableSlots = (item.profiles || [])
+                                .filter(p => {
+                                  // Show slot if it's not assigned, or if it's assigned to current order, and not needsUpdate
+                                  return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
+                                })
+                                // Sort by slot number (extract number from label/id)
+                                .sort((a, b) => {
+                                  const aNum = parseInt((a.label?.match(/\d+/)?.[0] || a.id?.match(/\d+/)?.[0] || '0')) || 0;
+                                  const bNum = parseInt((b.label?.match(/\d+/)?.[0] || b.id?.match(/\d+/)?.[0] || '0')) || 0;
+                                  return aNum - bNum;
+                                });
+                              
+                              // Show only first 5 slots
+                              const visibleSlots = availableSlots.slice(0, 5);
+                              const totalSlots = availableSlots.length;
+                              
+                              return (
+                                <div className="mt-3">
+                                  <label className="form-label">
+                                    <strong>Chọn các slot để cấp (có thể chọn nhiều)</strong>
+                                  </label>
+                                  <div className="row">
+                                    {visibleSlots.map(p => (
                                       <div key={p.id} className="col-md-6 mb-2">
                                         <div className="form-check">
                                           <input
@@ -1940,15 +1953,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                         </div>
                                       </div>
                                     ))}
+                                  </div>
+                                  {totalSlots > 5 && (
+                                    <div className="alert alert-info mt-2 mb-2">
+                                      <small>⚡ Còn {totalSlots - 5} slot khác ngoài 5 slot đã hiển thị</small>
+                                    </div>
+                                  )}
+                                  <div className="small text-muted mt-2">
+                                    Đã chọn: {selectedProfileIds.length} slot
+                                  </div>
+                                  <div className="small text-muted mt-1">
+                                    Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.
+                                  </div>
                                 </div>
-                                <div className="small text-muted mt-2">
-                                  Đã chọn: {selectedProfileIds.length} slot
-                                </div>
-                                <div className="small text-muted mt-1">
-                                  Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.
-                                </div>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
