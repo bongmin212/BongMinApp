@@ -5,6 +5,7 @@ import { Product, ProductPackage, Customer, Order, InventoryItem, Expense } from
 import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit } from '../Icons';
 import TrendsChart, { TrendsPoint } from './TrendsChart';
 import TopPackagesTable, { PackageAggRow } from './TopPackagesTable';
+import TopCustomersTable, { CustomerAggRow } from './TopCustomersTable';
 import { formatCurrencyVND } from '../../utils/money';
 import { addMonths, toMonthKey, rangeMonths } from '../../utils/date';
 
@@ -79,6 +80,8 @@ const Dashboard: React.FC = () => {
   const [trends, setTrends] = useState<TrendsPoint[]>([]);
   const [topPackages, setTopPackages] = useState<PackageAggRow[]>([]);
   const [packagesById, setPackagesById] = useState<Record<string, ProductPackage>>({});
+  const [topCustomers, setTopCustomers] = useState<CustomerAggRow[]>([]);
+  const [customersById, setCustomersById] = useState<Record<string, Customer>>({});
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const onDateRangeChange = (f: string, t: string) => { setDateFrom(f); setDateTo(t); };
@@ -417,6 +420,31 @@ const Dashboard: React.FC = () => {
       }
       const pkgAggRows = Object.values(pkgAggMap);
 
+      // Top customers for selected month
+      const customerAggMap: Record<string, CustomerAggRow> = {};
+      const customersById: Record<string, Customer> = Object.fromEntries(customers.map(c => [c.id, c]));
+      for (const o of monthFiltered) {
+        const cid = o.customerId;
+        const price = getOrderSnapshotPrice(o);
+        const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+        if (!customerAggMap[cid]) {
+          const customer = customers.find(c => c.id === cid);
+          customerAggMap[cid] = { 
+            customerId: cid, 
+            name: customer?.name || 'Khách hàng', 
+            code: customer?.code || '',
+            type: customer?.type || 'RETAIL',
+            revenue: 0, 
+            profit: 0, 
+            orders: 0 
+          };
+        }
+        customerAggMap[cid].revenue += price;
+        customerAggMap[cid].profit += profit;
+        customerAggMap[cid].orders += 1;
+      }
+      const customerAggRows = Object.values(customerAggMap);
+
       setStats({
         totalProducts: products.length,
         totalPackages: packages.length,
@@ -452,6 +480,8 @@ const Dashboard: React.FC = () => {
       setTrends(initial);
       setTopPackages(pkgAggRows);
       setPackagesById(packagesById);
+      setTopCustomers(customerAggRows);
+      setCustomersById(customersById);
 
       // Get recent orders
       const sortedOrders = orders
@@ -812,6 +842,7 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
             </div>
+            <TopCustomersTable rows={topCustomers} customersById={customersById} />
           </div>
         )}
       </div>
