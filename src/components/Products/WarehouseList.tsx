@@ -1617,7 +1617,7 @@ const WarehouseList: React.FC = () => {
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
                 <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
                 <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
+                <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Nguồn</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
@@ -1649,7 +1649,7 @@ const WarehouseList: React.FC = () => {
                     }
                     return packageMap.get(i.packageId) || i.packageId;
                   })()}</td>
-                  <td className="text-truncate" title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
+                  <td style={{ wordWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }} title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
                   <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
                   <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
                   <td className="text-truncate" title={(() => {
