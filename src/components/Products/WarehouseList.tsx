@@ -926,6 +926,9 @@ const WarehouseList: React.FC = () => {
       { header: 'Tên gói', key: 'packageName', width: 20 },
       { header: 'Mã gói', key: 'packageCode', width: 16 },
       
+      // Source
+      { header: 'Nguồn', key: 'sourceNote', width: 20 },
+      
       // Dates
       { header: 'Ngày nhập', key: 'purchaseDate', width: 14 },
       { header: 'Ngày hết hạn', key: 'expiryDate', width: 14 },
@@ -935,8 +938,7 @@ const WarehouseList: React.FC = () => {
       { header: 'Thời hạn (tháng)', key: 'warrantyMonthsValue', width: 14 },
       { header: 'Kho chung', key: 'isSharedPool', width: 12 },
       
-      // Source info
-      { header: 'Ghi chú nguồn', key: 'sourceNote', width: 20 },
+      // Supplier info
       { header: 'Nhà cung cấp', key: 'supplierName', width: 20 },
       { header: 'Mã nhà cung cấp', key: 'supplierId', width: 16 },
       { header: 'Tiền tệ', key: 'currency', width: 10 },
@@ -1615,6 +1617,7 @@ const WarehouseList: React.FC = () => {
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
                 <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
                 <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
+                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
@@ -1646,6 +1649,7 @@ const WarehouseList: React.FC = () => {
                     }
                     return packageMap.get(i.packageId) || i.packageId;
                   })()}</td>
+                  <td className="text-truncate" title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
                   <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
                   <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
                   <td className="text-truncate" title={(() => {
