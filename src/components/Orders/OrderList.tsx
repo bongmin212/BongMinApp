@@ -2396,7 +2396,7 @@ const OrderList: React.FC = () => {
 
       {returnConfirmState && (
         <div className="modal" role="dialog" aria-modal>
-          <div className="modal-content" style={{ maxWidth: 520 }}>
+          <div className="modal-content" style={{ maxWidth: 800 }}>
             <div className="modal-header">
               <h3 className="modal-title">{returnConfirmState.mode === 'RETURN_ONLY' ? 'Xác nhận trả slot về kho' : 'Xác nhận xử lý slot kho'}</h3>
               <button className="close" onClick={() => setReturnConfirmState(null)}>×</button>
@@ -2407,6 +2407,136 @@ const OrderList: React.FC = () => {
                   ? 'Đơn này đã hết hạn. Trước khi trả slot về kho, vui lòng xác nhận rằng bạn đã xóa slot/tài khoản khỏi hệ thống đích.'
                   : 'Đơn này đã hết hạn. Trước khi xóa đơn và trả slot về kho, vui lòng xác nhận rằng bạn đã xóa slot/tài khoản khỏi hệ thống đích.'}
               </div>
+              
+              {/* Thông tin kho hàng */}
+              {(() => {
+                const invItem = inventory.find((i: any) => i.id === returnConfirmState.inventoryId);
+                if (!invItem) return null;
+                
+                return (
+                  <div className="card mb-3">
+                    <div className="card-header">
+                      <h6 className="mb-0">Thông tin kho hàng</h6>
+                    </div>
+                    <div className="card-body">
+                      <div><strong>Sản phẩm:</strong> {productMap.get(invItem.productId)?.name || invItem.productId}</div>
+                      <div><strong>Gói:</strong> {packageMap.get(invItem.packageId)?.name || invItem.packageId}</div>
+                      <div><strong>Nhập:</strong> {new Date(invItem.purchaseDate).toLocaleDateString('vi-VN')}</div>
+                      <div><strong>Hết hạn:</strong> {new Date(invItem.expiryDate).toLocaleDateString('vi-VN')}</div>
+                      <div><strong>Nguồn:</strong> {invItem.sourceNote || '-'}</div>
+                      <div><strong>Giá mua:</strong> {typeof invItem.purchasePrice === 'number' ? `${invItem.purchasePrice.toLocaleString('vi-VN')} ${invItem.currency || 'VND'}` : '-'}</div>
+                      <div><strong>Thanh toán:</strong> {invItem.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
+                      {invItem.status === 'NEEDS_UPDATE' && invItem.previousLinkedOrderId && (() => {
+                        const prevOrder = orders.find(o => o.id === invItem.previousLinkedOrderId);
+                        return prevOrder ? (
+                          <div style={{ marginTop: 6, padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+                            <strong>Đơn hàng trước khi cần update:</strong> {prevOrder.code}
+                          </div>
+                        ) : null;
+                      })()}
+                      {invItem.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin sản phẩm:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{invItem.productInfo}</pre></div>}
+                      {invItem.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {invItem.notes}</div>}
+                      
+                      {/* Account Information Section */}
+                      {invItem.isAccountBased && invItem.accountColumns && invItem.accountColumns.length > 0 && (
+                        <div style={{ marginTop: 12 }}>
+                          <strong>Thông tin tài khoản:</strong>
+                          <div style={{ marginTop: 6 }}>
+                            {invItem.accountColumns.map((col: any) => {
+                              const value = (invItem.accountData || {})[col.id] || '';
+                              if (!value) return null;
+                              return (
+                                <div key={col.id} style={{ marginBottom: 8 }}>
+                                  <div><strong>{col.title}:</strong></div>
+                                  <pre style={{ 
+                                    whiteSpace: 'pre-wrap', 
+                                    margin: 0, 
+                                    padding: '8px', 
+                                    backgroundColor: 'var(--bg-tertiary)', 
+                                    color: 'var(--text-primary)',
+                                    borderRadius: '4px',
+                                    fontSize: '14px',
+                                    border: '1px solid var(--border-color)'
+                                  }}>
+                                    {value}
+                                  </pre>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Slot Information */}
+                      {invItem.isAccountBased && (
+                        <div style={{ marginTop: 12 }}>
+                          <strong>Thông tin slot:</strong>
+                          <div style={{ marginTop: 6 }}>
+                            <div><strong>Tổng slot:</strong> {invItem.totalSlots || 0}</div>
+                            {(() => {
+                              const profiles = Array.isArray(invItem.profiles) ? invItem.profiles : [];
+                              const assignedProfiles = profiles.filter((p: any) => p.isAssigned);
+                              const freeProfiles = profiles.filter((p: any) => !p.isAssigned && !p.needsUpdate);
+                              const needsUpdateProfiles = profiles.filter((p: any) => p.needsUpdate);
+                              
+                              return (
+                                <div style={{ marginTop: 8 }}>
+                                  <div><strong>Đã sử dụng:</strong> {assignedProfiles.length}</div>
+                                  <div><strong>Còn trống:</strong> {freeProfiles.length}</div>
+                                  {needsUpdateProfiles.length > 0 && (
+                                    <div><strong>Cần cập nhật:</strong> {needsUpdateProfiles.length}</div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Custom Fields from Order */}
+                      {(() => {
+                        const order = orders.find(o => o.id === returnConfirmState.order.id);
+                        if (!order) return null;
+                        
+                        const packageInfo = packageMap.get(order.packageId);
+                        const customFieldValues = (order as any).customFieldValues || {};
+                        
+                        if (!packageInfo?.customFields || packageInfo.customFields.length === 0) return null;
+                        
+                        return (
+                          <div style={{ marginTop: 12 }}>
+                            <strong>Trường tùy chỉnh đơn hàng:</strong>
+                            <div style={{ marginTop: 6 }}>
+                              {packageInfo.customFields.map((cf: any) => {
+                                const value = customFieldValues[cf.id];
+                                if (!value) return null;
+                                return (
+                                  <div key={cf.id} style={{ marginBottom: 8 }}>
+                                    <div><strong>{cf.title}:</strong></div>
+                                    <pre style={{ 
+                                      whiteSpace: 'pre-wrap', 
+                                      margin: 0, 
+                                      padding: '8px', 
+                                      backgroundColor: 'var(--bg-tertiary)', 
+                                      color: 'var(--text-primary)',
+                                      borderRadius: '4px',
+                                      fontSize: '14px',
+                                      border: '1px solid var(--border-color)'
+                                    }}>
+                                      {value}
+                                    </pre>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                );
+              })()}
+              
               <div className="d-flex align-items-center gap-2">
                 <input
                   id="ack-slot-removed"
