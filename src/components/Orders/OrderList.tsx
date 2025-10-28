@@ -276,6 +276,7 @@ const OrderList: React.FC = () => {
         cogs: r.cogs,
         useCustomPrice: r.use_custom_price || false,
         customPrice: r.custom_price,
+        salePrice: r.sale_price,
         customFieldValues: r.custom_field_values,
         purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
         expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),

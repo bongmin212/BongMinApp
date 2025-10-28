@@ -644,6 +644,22 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     }));
   };
 
+  const moveAccountColumn = (colId: string, direction: 'up' | 'down') => {
+    setFormData(prev => {
+      const cols = [...(prev.accountColumns || [])];
+      const index = cols.findIndex(c => c.id === colId);
+      if (index === -1) return prev;
+      
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= cols.length) return prev;
+      
+      const newCols = [...cols];
+      [newCols[index], newCols[newIndex]] = [newCols[newIndex], newCols[index]];
+      
+      return { ...prev, accountColumns: newCols };
+    });
+  };
+
   return (
     <div className="modal">
       <div className="modal-content">
@@ -930,6 +946,20 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               )}
               {(formData.accountColumns || []).map((col, idx) => (
                 <div key={col.id} className="d-flex align-items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => moveAccountColumn(col.id, 'up')}
+                    disabled={sharedConfigLocked || idx === 0}
+                    title="Di chuyển lên"
+                  >↑</button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => moveAccountColumn(col.id, 'down')}
+                    disabled={sharedConfigLocked || idx === (formData.accountColumns || []).length - 1}
+                    title="Di chuyển xuống"
+                  >↓</button>
                   <input
                     type="text"
                     className="form-control"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Order, Customer, ProductPackage, Product, OrderFormData, ORDER_STATUSES, PAYMENT_STATUSES, InventoryItem, OrderStatus, CUSTOMER_TYPES, CUSTOMER_SOURCES, CustomerSource } from '../../types';
+import { Order, Customer, ProductPackage, Product, OrderFormData, ORDER_STATUSES, PAYMENT_STATUSES, InventoryItem, OrderStatus, CUSTOMER_TYPES, CUSTOMER_SOURCES, CustomerSource, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
@@ -631,7 +631,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return pickedInventory.productInfo || '';
       })();
 
-      // Compute sale price snapshot
+      // Compute sale price snapshot - only for new orders or when package/customer changes
       const selectedCustomer = customers.find(c => c.id === formData.customerId);
       const computedBasePrice = (() => {
         if (formData.useCustomPrice) return formData.customPrice || 0;
@@ -639,6 +639,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const isCTV = (selectedCustomer?.type || 'RETAIL') === 'CTV';
         return isCTV ? (selectedPackage.ctvPrice || 0) : (selectedPackage.retailPrice || 0);
       })();
+
+      // For existing orders, preserve original salePrice unless package, customer, or price settings changed
+      const finalSalePrice = order ? (
+        (order.packageId !== formData.packageId || 
+         order.customerId !== formData.customerId || 
+         order.useCustomPrice !== formData.useCustomPrice ||
+         (formData.useCustomPrice && order.customPrice !== formData.customPrice))
+          ? computedBasePrice
+          : (order.salePrice || computedBasePrice)
+      ) : computedBasePrice;
 
         const orderData = {
         ...formData,
@@ -654,7 +664,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         customFieldValues,
         orderInfo: (autoInfo || '').trim(),
         status: (selectedInventoryId ? 'COMPLETED' : 'PROCESSING') as OrderStatus,
-        salePrice: computedBasePrice
+        salePrice: finalSalePrice
       };
 
       if (order) {
@@ -1880,6 +1890,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                     </span>
                                   </div>
                                 )}
+                                <div className="mb-2">
+                                  <strong>Thanh toán:</strong> 
+                                  <span className={`badge ${
+                                    item.paymentStatus === 'PAID' ? 'bg-success' : 'bg-warning'
+                                  }`}>
+                                    {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === item.paymentStatus)?.label || 'Chưa thanh toán'}
+                                  </span>
+                                </div>
                                 {item.sourceNote && (
                                   <div className="mb-2">
                                     <strong>Nguồn nhập:</strong> <em>{item.sourceNote}</em>
@@ -1906,6 +1924,44 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 </div>
                               </div>
                             )}
+                            
+                            {/* Account Information Section */}
+                            {(() => {
+                              const accountColumns = item.accountColumns || packageInfo?.accountColumns || [];
+                              const accountData = item.accountData || {};
+                              
+                              if (accountColumns.length > 0) {
+                                return (
+                                  <div className="mt-3">
+                                    <strong>Thông tin tài khoản:</strong>
+                                    <div className="mt-2">
+                                      {accountColumns.map((col: any) => {
+                                        const value = accountData[col.id] || '';
+                                        if (!value) return null;
+                                        return (
+                                          <div key={col.id} style={{ marginBottom: 8 }}>
+                                            <div><strong>{col.title}:</strong></div>
+                                            <pre style={{ 
+                                              whiteSpace: 'pre-wrap', 
+                                              margin: 0, 
+                                              padding: '8px', 
+                                              backgroundColor: 'var(--bg-tertiary)', 
+                                              color: 'var(--text-primary)',
+                                              borderRadius: '4px',
+                                              fontSize: '14px',
+                                              border: '1px solid var(--border-color)'
+                                            }}>
+                                              {value}
+                                            </pre>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                             
                             {item.isAccountBased && (() => {
                               // Filter available slots
