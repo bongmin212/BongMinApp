@@ -2104,6 +2104,7 @@ const WarehouseList: React.FC = () => {
           products={products as any}
           packages={packages as any}
           getCustomerName={(id: string) => customerMap.get(id) || 'Không xác định'}
+          getCustomerCode={(id: string) => (customers.find(c => c.id === id)?.code || '')}
           getPackageInfo={(packageId: string) => {
             const { pkg, product } = getPackageInfo(packageId);
             return { package: pkg, product } as any;

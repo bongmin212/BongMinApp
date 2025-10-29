@@ -1361,6 +1361,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             />
           </div>
 
+          {/* Mã khách hàng - Read-only display based on selected customer */}
+          <div className="form-group">
+            <label className="form-label">Mã khách hàng</label>
+            <input
+              type="text"
+              className="form-control"
+              value={getSelectedCustomer()?.code || ''}
+              readOnly
+              disabled={!getSelectedCustomer()?.code}
+              style={{ backgroundColor: '#f8f9fa', color: '#6c757d' }}
+              placeholder="Chọn khách hàng để hiển thị mã"
+            />
+          </div>
+
           {/* 1. Ngày mua */}
           <div className="form-group">
             <label className="form-label">

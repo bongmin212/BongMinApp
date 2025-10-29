@@ -6,6 +6,7 @@ import { getSupabase } from '../../utils/supabaseClient';
 
 type Getters = {
 	getCustomerName: (customerId: string) => string;
+	getCustomerCode?: (customerId: string) => string; // optional
 	getPackageInfo: (packageId: string) => { package?: any; product?: any } | null;
 	getStatusLabel: (status: any) => string;
 	getPaymentLabel?: (status: any) => string;
@@ -33,6 +34,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	products,
 	packages,
 	getCustomerName,
+	getCustomerCode,
 	getPackageInfo,
 	getStatusLabel,
 	getPaymentLabel,
@@ -251,6 +253,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				</div>
 				<div className="mb-3">
 					<div><strong>Mã đơn hàng:</strong> {order.code}</div>
+					<div><strong>Mã khách hàng:</strong> {getCustomerCode ? (getCustomerCode(order.customerId) || '-') : '-'}</div>
 					<div><strong>Khách hàng:</strong> {getCustomerName(order.customerId)}</div>
 					<div><strong>Sản phẩm:</strong> {pkgInfo?.product?.name || 'Không xác định'}</div>
 					<div><strong>Gói:</strong> {pkgInfo?.package?.name || 'Không xác định'}</div>

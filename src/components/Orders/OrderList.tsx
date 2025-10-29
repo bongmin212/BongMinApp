@@ -1792,6 +1792,7 @@ const OrderList: React.FC = () => {
           products={products}
           packages={packages}
           getCustomerName={getCustomerName}
+          getCustomerCode={(id: string) => customers.find(c => c.id === id)?.code || ''}
           getPackageInfo={getPackageInfo}
           getStatusLabel={getStatusLabel}
           getPaymentLabel={getPaymentLabel}

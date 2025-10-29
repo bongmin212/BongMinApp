@@ -438,6 +438,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
         products={products}
         packages={packages}
         getCustomerName={() => customer.name}
+        getCustomerCode={() => customer.code || ''}
         getPackageInfo={getPackageInfo as any}
         getStatusLabel={getStatusLabel as any}
         getPaymentLabel={(val: any) => PAYMENT_STATUSES.find(p => p.value === val)?.label || 'Chưa thanh toán'}
