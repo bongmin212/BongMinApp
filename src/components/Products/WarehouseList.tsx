@@ -33,6 +33,17 @@ const WarehouseList: React.FC = () => {
   const [profilesModal, setProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [previousProfilesModal, setPreviousProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [viewingOrder, setViewingOrder] = useState<null | Order>(null);
+  const [renewState, setRenewState] = useState<null | {
+    order: Order;
+    packageId: string;
+    useCustomPrice: boolean;
+    customPrice: number;
+    note: string;
+    paymentStatus: PaymentStatus;
+    markMessageSent: boolean;
+    useCustomExpiry: boolean;
+    customExpiryDate?: Date;
+  }>(null);
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
@@ -2113,6 +2124,20 @@ const WarehouseList: React.FC = () => {
           getPaymentLabel={getPaymentLabel as any}
           formatDate={formatDate}
           formatPrice={formatPrice}
+          onOpenRenew={() => {
+            if (!viewingOrder) return;
+            setRenewState({
+              order: viewingOrder,
+              packageId: viewingOrder.packageId,
+              useCustomPrice: false,
+              customPrice: 0,
+              note: '',
+              paymentStatus: viewingOrder.paymentStatus || 'UNPAID',
+              markMessageSent: !!(viewingOrder as any).renewalMessageSent,
+              useCustomExpiry: false,
+              customExpiryDate: undefined
+            });
+          }}
           onCopyInfo={async () => {
             const o = viewingOrder;
             const customerName = customerMap.get(o.customerId) || 'Không xác định';
@@ -2184,6 +2209,225 @@ const WarehouseList: React.FC = () => {
             }
           }}
         />
+      )}
+
+      {renewState && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Gia hạn đơn</h3>
+              <button type="button" className="close" onClick={() => setRenewState(null)}>×</button>
+            </div>
+            <div className="mb-3">
+              {(() => {
+                const o = renewState.order;
+                const currentExpiry = new Date(o.expiryDate);
+                const base = currentExpiry > new Date() ? currentExpiry : new Date();
+                const pkgInfo = getPackageInfo(renewState.packageId);
+                const pkg = pkgInfo?.pkg;
+                const product = pkgInfo?.product;
+                const months = Math.max(1, (pkg as any)?.warrantyPeriod || 1);
+                const preview = (() => {
+                  if (renewState.useCustomExpiry && renewState.customExpiryDate) {
+                    return new Date(renewState.customExpiryDate);
+                  }
+                  const d = new Date(base);
+                  d.setMonth(d.getMonth() + months);
+                  return d;
+                })();
+                const cust = customers.find(c => c.id === o.customerId);
+                const defaultPrice = (cust?.type || 'RETAIL') === 'CTV' ? ((pkg as any)?.ctvPrice || 0) : ((pkg as any)?.retailPrice || 0);
+                const price = renewState.useCustomPrice ? (renewState.customPrice || 0) : defaultPrice;
+                return (
+                  <div className="p-2">
+                    <div><strong>Mã đơn:</strong> {o.code}</div>
+                    <div><strong>Khách hàng:</strong> {customerMap.get(o.customerId) || 'Không xác định'}</div>
+                    <div><strong>Hết hạn hiện tại:</strong> {currentExpiry.toLocaleDateString('vi-VN')}</div>
+                    <div className="form-group">
+                      <label className="form-label">Gói gia hạn</label>
+                      <select
+                        className="form-control"
+                        value={renewState.packageId}
+                        onChange={(e) => setRenewState(prev => prev ? { ...prev, packageId: e.target.value } : prev)}
+                      >
+                        {packages
+                          .filter(p => p.productId === (product?.id || ''))
+                          .slice()
+                          .sort((a, b) => {
+                            const wa = Number(a.warrantyPeriod || 0);
+                            const wb = Number(b.warrantyPeriod || 0);
+                            if (wa !== wb) return wa - wb;
+                            return (a.name || '').localeCompare(b.name || '');
+                          })
+                          .map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="form-group mt-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="renewUseCustomExpiry"
+                          checked={renewState.useCustomExpiry}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            if (checked) {
+                              const currentExpiry = new Date(o.expiryDate);
+                              const base = currentExpiry > new Date() ? currentExpiry : new Date();
+                              const pkgInfo = getPackageInfo(renewState.packageId);
+                              const months = Math.max(1, (pkgInfo?.pkg as any)?.warrantyPeriod || 1);
+                              const d = new Date(base);
+                              d.setMonth(d.getMonth() + months);
+                              setRenewState(prev => prev ? { ...prev, useCustomExpiry: checked, customExpiryDate: prev.customExpiryDate || d } : prev);
+                            } else {
+                              setRenewState(prev => prev ? { ...prev, useCustomExpiry: checked, customExpiryDate: undefined } : prev);
+                            }
+                          }}
+                        />
+                        <label htmlFor="renewUseCustomExpiry" className="mb-0">Hạn tùy chỉnh</label>
+                      </div>
+                      {renewState.useCustomExpiry && (
+                        <div className="mt-2">
+                          <input
+                            type="date"
+                            className="form-control"
+                            value={renewState.customExpiryDate instanceof Date && !isNaN(renewState.customExpiryDate.getTime())
+                              ? renewState.customExpiryDate.toISOString().split('T')[0]
+                              : ''}
+                            onChange={(e) => {
+                              setRenewState(prev => prev ? { ...prev, customExpiryDate: e.target.value ? new Date(e.target.value) : undefined } : prev);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <input
+                          type="checkbox"
+                          id="renewUseCustomPrice"
+                          checked={renewState.useCustomPrice}
+                          onChange={(e) => setRenewState(prev => prev ? { ...prev, useCustomPrice: e.target.checked } : prev)}
+                        />
+                        <label htmlFor="renewUseCustomPrice" className="mb-0">Giá tùy chỉnh</label>
+                      </div>
+                      {renewState.useCustomPrice ? (
+                        <>
+                          <input
+                            type="number"
+                            className="form-control"
+                            value={renewState.customPrice || 0}
+                            onChange={(e) => setRenewState(prev => prev ? { ...prev, customPrice: Math.max(0, parseFloat(e.target.value || '0')) } : prev)}
+                            min="0"
+                            step="1000"
+                            placeholder="Nhập giá tùy chỉnh"
+                          />
+                          <div className="alert alert-success mt-2"><strong>Giá:</strong> {formatPrice(price)}</div>
+                        </>
+                      ) : (
+                        <div className="alert alert-success"><strong>Giá:</strong> {formatPrice(price)}</div>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Thanh toán</label>
+                      <select
+                        className="form-control"
+                        value={renewState.paymentStatus}
+                        onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as PaymentStatus } : prev)}
+                      >
+                        {PAYMENT_STATUSES.map(p => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mt-2">
+                      <label className="form-label">Ghi chú</label>
+                      <textarea
+                        className="form-control"
+                        rows={2}
+                        placeholder="Ghi chú gia hạn (không bắt buộc)"
+                        value={renewState.note}
+                        onChange={(e) => setRenewState(prev => prev ? { ...prev, note: e.target.value } : prev)}
+                      />
+                    </div>
+                    <div className="mt-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="renewMarkMessageSent"
+                          checked={renewState.markMessageSent}
+                          onChange={async (e) => {
+                            const checked = e.target.checked;
+                            setRenewState(prev => prev ? { ...prev, markMessageSent: checked } : prev);
+                            const sb = getSupabase();
+                            const nowIso = new Date().toISOString();
+                            if (sb) {
+                              if (checked) {
+                                await sb.from('orders').update({
+                                  renewal_message_sent: true,
+                                  renewal_message_sent_at: nowIso,
+                                  renewal_message_sent_by: null
+                                }).eq('id', renewState.order.id);
+                              } else {
+                                await sb.from('orders').update({
+                                  renewal_message_sent: false,
+                                  renewal_message_sent_at: null,
+                                  renewal_message_sent_by: null
+                                }).eq('id', renewState.order.id);
+                              }
+                            } else {
+                              try {
+                                if (checked) {
+                                  Database.updateOrder(renewState.order.id, { renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: 'system' } as any);
+                                } else {
+                                  Database.updateOrder(renewState.order.id, { renewalMessageSent: false, renewalMessageSentAt: undefined, renewalMessageSentBy: undefined } as any);
+                                }
+                              } catch {}
+                            }
+                            // Optional: could refresh local orders cache if needed
+                          }}
+                        />
+                        <label htmlFor="renewMarkMessageSent" className="mb-0">Đã gửi tin nhắn gia hạn</label>
+                      </div>
+                    </div>
+                    <div className="alert alert-info mt-2">
+                      <strong>Hết hạn mới (dự kiến):</strong> {preview.toLocaleDateString('vi-VN')}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="d-flex justify-content-end gap-2">
+              <button className="btn btn-secondary" onClick={() => setRenewState(null)}>Đóng</button>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  if (!renewState) return;
+                  const o = renewState.order;
+                  const updated = Database.renewOrder(o.id, renewState.packageId, {
+                    note: renewState.note,
+                    paymentStatus: renewState.paymentStatus,
+                    createdBy: 'system',
+                    useCustomPrice: renewState.useCustomPrice,
+                    customPrice: renewState.customPrice,
+                    useCustomExpiry: renewState.useCustomExpiry,
+                    customExpiryDate: renewState.customExpiryDate
+                  });
+                  if (updated) {
+                    setRenewState(null);
+                    setViewingOrder(updated);
+                    notify('Gia hạn đơn hàng thành công', 'success');
+                  } else {
+                    notify('Không thể gia hạn đơn hàng', 'error');
+                  }
+                }}
+              >
+                Xác nhận gia hạn
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {paymentStatusModal && (() => {

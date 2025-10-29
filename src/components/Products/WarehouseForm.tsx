@@ -221,7 +221,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       const firstPkg = packages.find(pk => pk.productId === selectedProduct);
       setFormData(prev => ({ ...prev, packageId: firstPkg ? firstPkg.id : '' }));
       // Reset to 1 month by default for shared pool
-      setPoolMonths(1);
+    if (!item) setPoolMonths(1);
     }
   }, [selectedProduct, products, packages]);
 
@@ -632,6 +632,18 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               }}
             />
           </div>
+        {currentProduct?.sharedInventoryPool && (
+          <div className="form-group">
+            <label className="form-label">Thời hạn (tháng)</label>
+            <input
+              type="number"
+              className="form-control"
+              value={poolMonths || ''}
+              onChange={(e) => setPoolMonths(Math.max(1, parseInt(e.target.value || '1', 10)))}
+              min={1}
+            />
+          </div>
+        )}
 
           <div className="form-group">
             <label className="form-label">
@@ -679,19 +691,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             </select>
           </div>
 
-          {/* Shared pool: allow entering months transiently to compute expiry (not persisted) */}
-          {currentProduct?.sharedInventoryPool && (
-            <div className="form-group">
-              <label className="form-label">Thời hạn (tháng)</label>
-              <input
-                type="number"
-                className="form-control"
-                value={poolMonths || ''}
-                onChange={(e) => setPoolMonths(Math.max(1, parseInt(e.target.value || '1', 10)))}
-                min={1}
-              />
-            </div>
-          )}
+        {/* Shared pool: allow entering months transiently to compute expiry (not persisted) */}
 
           <div className="form-group">
             <label className="form-label">Thông tin sản phẩm <span className="text-danger">*</span></label>
