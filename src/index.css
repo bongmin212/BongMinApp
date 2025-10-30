@@ -3926,15 +3926,8 @@ body:has(.modal) .main-content * {
   background-color: var(--bg-secondary);
 }
 
-:root {
-  --statusbar-bg: #f8fafc; /* light */
-}
-[data-theme='dark'],
-html.dark {
-  --statusbar-bg: #232837; /* dark hoặc màu tối tùy bạn */
-}
 .statusbar-overlay {
-  background: var(--statusbar-bg);
+  background: var(--bg-primary);
   position: fixed;
   top: 0;
   left: 0;
