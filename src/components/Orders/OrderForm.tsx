@@ -1005,7 +1005,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật đơn hàng', details: detail });
             } catch {}
             notify('Cập nhật đơn hàng thành công', 'success');
-            onSuccess(undefined);
+            onSuccess(updatedOrder);
           }
         } catch (updateError) {
           const errorMessage = updateError instanceof Error ? updateError.message : 'Có lỗi xảy ra khi cập nhật đơn hàng';
