@@ -3927,12 +3927,17 @@ body:has(.modal) .main-content * {
 }
 
 .statusbar-overlay {
+  background: #f8fafc;
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: env(safe-area-inset-top, 20px);
-  background: #f8fafc; /* hoặc màu sáng tùy theme */
   z-index: 1000;
   pointer-events: none;
+}
+@media (prefers-color-scheme: dark) {
+  .statusbar-overlay {
+    background: #18181c; /* dark */
+  }
 }
