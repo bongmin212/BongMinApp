@@ -3925,3 +3925,14 @@ body:has(.modal) .main-content * {
 [data-theme="dark"] .expenses-table tr:hover {
   background-color: var(--bg-secondary);
 }
+
+.statusbar-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: env(safe-area-inset-top, 20px);
+  background: #f8fafc; /* hoặc màu sáng tùy theme */
+  z-index: 1000;
+  pointer-events: none;
+}
