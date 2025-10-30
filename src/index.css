@@ -3927,7 +3927,7 @@ body:has(.modal) .main-content * {
 }
 
 .statusbar-overlay {
-  background: var(--bg-primary);
+  background: #ffffff !important;   /* Màu header light mode */
   position: fixed;
   top: 0;
   left: 0;
@@ -3935,4 +3935,8 @@ body:has(.modal) .main-content * {
   height: env(safe-area-inset-top, 20px);
   z-index: 1000;
   pointer-events: none;
+}
+
+[data-theme="dark"] .statusbar-overlay {
+  background: #0f172a !important;   /* Màu header dark mode */
 }
