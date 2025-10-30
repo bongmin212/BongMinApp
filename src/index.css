@@ -3927,14 +3927,14 @@ body:has(.modal) .main-content * {
 }
 
 :root {
-  --header-bg: #f8fafc; /* Light mode header background */
+  --statusbar-bg: #f8fafc; /* light */
 }
 [data-theme='dark'],
 html.dark {
-  --header-bg: #232837; /* Dark mode header background */
+  --statusbar-bg: #232837; /* dark hoặc màu tối tùy bạn */
 }
 .statusbar-overlay {
-  background: var(--header-bg);
+  background: var(--statusbar-bg);
   position: fixed;
   top: 0;
   left: 0;
