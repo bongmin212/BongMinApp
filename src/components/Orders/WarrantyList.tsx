@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
-import { Customer, Order, Product, ProductPackage, Warranty, WarrantyFormData, WARRANTY_STATUSES, InventoryItem } from '../../types';
+import { Customer, Order, Product, ProductPackage, Warranty, WarrantyFormData, WARRANTY_STATUSES, InventoryItem, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
+import OrderDetailsModal from './OrderDetailsModal';
 
-const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warranty?: Warranty }> = ({ onClose, onSuccess, warranty }) => {
+const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string) => void; warranty?: Warranty }> = ({ onClose, onSuccess, warranty }) => {
   const { state } = useAuth();
   const { notify } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -519,6 +520,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         } catch {}
 
         notify('Cập nhật đơn bảo hành thành công', 'success');
+        onSuccess(resolvedOrderId);
       } else {
         // CREATE WARRANTY LOGIC
         const { error: insertError } = await sb
@@ -614,6 +616,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
         } catch {}
 
         notify('Tạo đơn bảo hành thành công', 'success');
+        onSuccess(resolvedOrderId);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Có lỗi xảy ra khi lưu bảo hành';
@@ -621,7 +624,6 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
       return;
     }
     
-    onSuccess();
     onClose();
   };
 
@@ -914,6 +916,7 @@ const WarrantyList: React.FC = () => {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [showForm, setShowForm] = useState(false);
 	const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [searchStatus, setSearchStatus] = useState('');
@@ -1124,10 +1127,40 @@ const WarrantyList: React.FC = () => {
     } catch {}
   }, [debouncedSearchTerm, searchStatus, page, limit, dateFrom, dateTo]);
 
-  const getCustomerName = (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    const customer = customers.find(c => c.id === (order?.customerId || ''));
+  const getCustomerName = (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
     return customer?.name || 'Không xác định';
+  };
+
+  const getPackageInfo = (packageId: string) => {
+    const pkg = packages.find(p => p.id === packageId);
+    if (!pkg) return null;
+    const product = products.find(p => p.id === pkg.productId);
+    return { package: pkg, product };
+  };
+
+  const getStatusLabel = (status: OrderStatus) => {
+    return ORDER_STATUSES.find(s => s.value === status)?.label || status;
+  };
+
+  const getPaymentLabel = (status?: PaymentStatus) => {
+    return PAYMENT_STATUSES.find(p => p.value === status)?.label || 'Chưa thanh toán';
+  };
+
+  const formatDate = (date: Date) => {
+    return new Date(date).toLocaleDateString('vi-VN');
+  };
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
+  };
+
+  const getOrderPrice = (order: Order) => {
+    if (order.useCustomPrice && typeof order.customPrice === 'number') {
+      return order.customPrice;
+    }
+    const pkg = packages.find(p => p.id === order.packageId);
+    return pkg ? pkg.retailPrice : 0;
   };
 
   const getProductText = (orderId: string) => {
@@ -1150,8 +1183,8 @@ const WarrantyList: React.FC = () => {
     const q = debouncedSearchTerm.trim().toLowerCase();
     return warranties.filter(w => {
       const codeMatch = !q || (w.code || '').toLowerCase().includes(q);
-      const customerName = getCustomerName(w.orderId).toLowerCase();
       const order = orders.find(o => o.id === w.orderId);
+      const customerName = order ? getCustomerName(order.customerId).toLowerCase() : '';
       const pkg = order ? packages.find(p => p.id === order.packageId) : undefined;
       const product = pkg ? products.find(p => p.id === pkg.productId) : undefined;
       const nameMatch = !q || customerName.includes(q) || (pkg?.name || '').toLowerCase().includes(q) || (product?.name || '').toLowerCase().includes(q);
@@ -1438,7 +1471,12 @@ const handleDelete = (id: string) => {
 
               <div className="warranty-card-row">
                 <div className="warranty-card-label">Khách hàng</div>
-                <div className="warranty-card-value">{getCustomerName(w.orderId)}</div>
+                <div className="warranty-card-value">
+                  {(() => {
+                    const order = orders.find(o => o.id === w.orderId);
+                    return order ? getCustomerName(order.customerId) : 'Không xác định';
+                  })()}
+                </div>
               </div>
               <div className="warranty-card-row">
                 <div className="warranty-card-label">Sản phẩm</div>
@@ -1513,7 +1551,12 @@ const handleDelete = (id: string) => {
                       return order?.code || '-';
                     })()}
                   </td>
-                  <td>{getCustomerName(w.orderId)}</td>
+                  <td>
+                    {(() => {
+                      const order = orders.find(o => o.id === w.orderId);
+                      return order ? getCustomerName(order.customerId) : 'Không xác định';
+                    })()}
+                  </td>
                   <td>{getProductText(w.orderId)}</td>
                   <td>
                     <div className="line-clamp-3" title={w.reason} style={{ maxWidth: 420 }}>{w.reason}</div>
@@ -1557,13 +1600,84 @@ const handleDelete = (id: string) => {
       </div>
 
 		{showForm && (
-			<WarrantyForm onClose={() => setShowForm(false)} onSuccess={load} />
+			<WarrantyForm onClose={() => setShowForm(false)} onSuccess={async (orderId) => { 
+				await load(); 
+				if (orderId) { 
+					const sb = getSupabase();
+					if (sb) {
+						const { data } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
+						if (data) {
+							const order = {
+								id: data.id,
+								code: data.code,
+								customerId: data.customer_id,
+								packageId: data.package_id,
+								status: data.status,
+								paymentStatus: data.payment_status,
+								orderInfo: data.order_info,
+								notes: data.notes,
+								inventoryItemId: data.inventory_item_id,
+								inventoryProfileIds: data.inventory_profile_ids || undefined,
+								useCustomPrice: data.use_custom_price || false,
+								customPrice: data.custom_price,
+								customFieldValues: data.custom_field_values,
+								purchaseDate: data.purchase_date ? new Date(data.purchase_date) : new Date(),
+								expiryDate: data.expiry_date ? new Date(data.expiry_date) : new Date(),
+								createdBy: 'system',
+								createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+								updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+							} as Order;
+							setViewingOrder(order);
+						}
+					} else {
+						// Fallback: find from current orders
+						const order = orders.find(o => o.id === orderId);
+						if (order) setViewingOrder(order);
+					}
+				} 
+			}} />
 		)}
 		{editingWarranty && (
 			<WarrantyForm
 				warranty={editingWarranty}
 				onClose={() => setEditingWarranty(null)}
-				onSuccess={() => { setEditingWarranty(null); load(); }}
+				onSuccess={async (orderId) => { 
+					setEditingWarranty(null); 
+					await load(); 
+					if (orderId) { 
+						const sb = getSupabase();
+						if (sb) {
+							const { data } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
+							if (data) {
+								const order = {
+									id: data.id,
+									code: data.code,
+									customerId: data.customer_id,
+									packageId: data.package_id,
+									status: data.status,
+									paymentStatus: data.payment_status,
+									orderInfo: data.order_info,
+									notes: data.notes,
+									inventoryItemId: data.inventory_item_id,
+									inventoryProfileIds: data.inventory_profile_ids || undefined,
+									useCustomPrice: data.use_custom_price || false,
+									customPrice: data.custom_price,
+									customFieldValues: data.custom_field_values,
+									purchaseDate: data.purchase_date ? new Date(data.purchase_date) : new Date(),
+									expiryDate: data.expiry_date ? new Date(data.expiry_date) : new Date(),
+									createdBy: 'system',
+									createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+									updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+								} as Order;
+								setViewingOrder(order);
+							}
+						} else {
+							// Fallback: find from current orders
+							const order = orders.find(o => o.id === orderId);
+							if (order) setViewingOrder(order);
+						}
+					} 
+				}}
 			/>
 		)}
 
@@ -1581,6 +1695,88 @@ const handleDelete = (id: string) => {
             </div>
           </div>
         </div>
+      )}
+
+      {viewingOrder && (
+        <OrderDetailsModal
+          order={viewingOrder}
+          onClose={() => setViewingOrder(null)}
+          inventory={inventoryItems as any}
+          products={products as any}
+          packages={packages as any}
+          getCustomerName={getCustomerName}
+          getCustomerCode={(id: string) => customers.find(c => c.id === id)?.code || ''}
+          getPackageInfo={getPackageInfo}
+          getStatusLabel={getStatusLabel as any}
+          getPaymentLabel={getPaymentLabel as any}
+          formatDate={formatDate}
+          formatPrice={formatPrice}
+          onCopyInfo={async () => {
+            const o = viewingOrder;
+            const customerName = getCustomerName(o.customerId);
+            const pkgInfo = getPackageInfo(o.packageId);
+            const productName = pkgInfo?.product?.name || 'Không xác định';
+            const packageName = pkgInfo?.package?.name || 'Không xác định';
+            const statusLabel = getStatusLabel(o.status);
+            const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
+            const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
+            const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
+            const price = getOrderPrice(o);
+            const out: string[] = [];
+            out.push(`Mã đơn hàng: ${o.code || '-'}`);
+            out.push(`Khách hàng: ${customerName}`);
+            out.push(`Sản phẩm: ${productName}`);
+            out.push(`Gói: ${packageName}`);
+            out.push(`Ngày mua: ${purchaseDate}`);
+            out.push(`Ngày hết hạn: ${expiryDate}`);
+            out.push(`Trạng thái: ${statusLabel}`);
+            out.push(`Thanh toán: ${paymentLabel}`);
+            out.push(`Giá: ${formatPrice(price)}`);
+            const inv = (() => {
+              if (o.inventoryItemId) {
+                const found = inventoryItems.find((i: any) => i.id === o.inventoryItemId);
+                if (found) return found;
+              }
+              const byLinked = inventoryItems.find((i: any) => i.linkedOrderId === o.id);
+              if (byLinked) return byLinked;
+              return inventoryItems.find((i: any) => i.isAccountBased && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+            })();
+            if (inv) {
+              const packageInfo = packages.find(p => p.id === inv.packageId);
+              const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
+              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              if (displayColumns.length > 0) {
+                out.push('Thông tin đơn hàng:');
+                displayColumns.forEach((col: any) => {
+                  const value = (inv.accountData || {})[col.id] || '';
+                  if (String(value).trim()) {
+                    out.push(`${col.title}:`);
+                    out.push(value);
+                    out.push('');
+                  }
+                });
+              }
+            }
+            const customFieldValues = (o as any).customFieldValues || {};
+            if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
+              pkgInfo.package.customFields.forEach((cf: any) => {
+                const value = customFieldValues[cf.id];
+                if (value && String(value).trim()) {
+                  out.push(`${cf.title}:`);
+                  out.push(String(value).trim());
+                  out.push('');
+                }
+              });
+            }
+            const text = out.join('\n');
+            try {
+              await navigator.clipboard.writeText(text);
+              notify('Đã copy thông tin đơn hàng', 'success');
+            } catch (e) {
+              notify('Không thể copy vào clipboard', 'error');
+            }
+          }}
+        />
       )}
     </div>
   );
