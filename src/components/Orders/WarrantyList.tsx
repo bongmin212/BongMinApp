@@ -105,6 +105,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
           productInfo: r.product_info || '',
           notes: r.notes || '',
           status: r.status,
+          paymentStatus: r.payment_status || 'UNPAID',
           isAccountBased: !!r.is_account_based,
           accountColumns: r.account_columns || [],
           accountData: r.account_data || {},
@@ -145,6 +146,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
             productInfo: r.product_info || '',
             notes: r.notes || '',
             status: r.status,
+            paymentStatus: r.payment_status || 'UNPAID',
             isAccountBased: !!r.is_account_based,
             accountColumns: r.account_columns || [],
             accountData: r.account_data || {},
@@ -750,25 +752,121 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: () => void; warra
                     {!!form.replacementInventoryId && (() => {
                       const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
                       if (!item) return null;
-                      if (item.isAccountBased) {
-                        return (
-                          <div className="mt-2">
-                            <label className="form-label"><strong>Chọn slot thay thế</strong></label>
-                            <select
-                              className="form-control"
-                              value={replacementProfileId}
-                              onChange={(e) => setReplacementProfileId(e.target.value)}
-                            >
-                              <option value="">-- Chọn slot --</option>
-                              {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
-                                <option key={p.id} value={p.id}>{p.label}</option>
-                              ))}
-                            </select>
-                            <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
+                      const product = products.find(p => p.id === item.productId);
+                      const pkg = packages.find(p => p.id === item.packageId);
+                      
+                      return (
+                        <>
+                          {/* Thông tin kho hàng chi tiết */}
+                          <div className="card mt-3">
+                            <div className="card-header">
+                              <h6 className="mb-0">Thông tin kho hàng</h6>
+                            </div>
+                            <div className="card-body">
+                              <div><strong>Sản phẩm:</strong> {product?.name || item.productId}</div>
+                              <div><strong>Gói:</strong> {pkg?.name || item.packageId}</div>
+                              <div><strong>Mã kho:</strong> {item.code}</div>
+                              <div><strong>Nhập:</strong> {new Date(item.purchaseDate).toLocaleDateString('vi-VN')}</div>
+                              {item.expiryDate && (
+                                <div><strong>Hết hạn:</strong> {new Date(item.expiryDate).toLocaleDateString('vi-VN')}</div>
+                              )}
+                              <div><strong>Nguồn:</strong> {item.sourceNote || '-'}</div>
+                              {typeof item.purchasePrice === 'number' && (
+                                <div><strong>Giá mua:</strong> {item.purchasePrice.toLocaleString('vi-VN')} VND</div>
+                              )}
+                              <div><strong>Trạng thái:</strong> {item.status === 'AVAILABLE' ? 'Có sẵn' : item.status === 'SOLD' ? 'Đã bán' : item.status || '-'}</div>
+                              {(item as any).paymentStatus && (
+                                <div><strong>Thanh toán:</strong> {(item as any).paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
+                              )}
+                              {item.productInfo && (
+                                <div style={{ marginTop: 6 }}>
+                                  <strong>Thông tin sản phẩm:</strong>
+                                  <pre style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0 0', padding: '8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '14px' }}>
+                                    {item.productInfo}
+                                  </pre>
+                                </div>
+                              )}
+                              {item.notes && (
+                                <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {item.notes}</div>
+                              )}
+                              
+                              {/* Account Information Section */}
+                              {item.isAccountBased && item.accountColumns && item.accountColumns.length > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                  <strong>Thông tin tài khoản:</strong>
+                                  <div style={{ marginTop: 6 }}>
+                                    {item.accountColumns.map((col: any) => {
+                                      const value = (item.accountData || {})[col.id] || '';
+                                      if (!value) return null;
+                                      return (
+                                        <div key={col.id} style={{ marginBottom: 8 }}>
+                                          <div><strong>{col.title}:</strong></div>
+                                          <pre style={{ 
+                                            whiteSpace: 'pre-wrap', 
+                                            margin: 0, 
+                                            padding: '8px', 
+                                            backgroundColor: 'var(--bg-tertiary)', 
+                                            color: 'var(--text-primary)',
+                                            borderRadius: '4px',
+                                            fontSize: '14px',
+                                            border: '1px solid var(--border-color)'
+                                          }}>
+                                            {value}
+                                          </pre>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Slot Information */}
+                              {item.isAccountBased && (
+                                <div style={{ marginTop: 12 }}>
+                                  <strong>Thông tin slot:</strong>
+                                  <div style={{ marginTop: 6 }}>
+                                    <div><strong>Tổng slot:</strong> {item.totalSlots || 0}</div>
+                                    {(() => {
+                                      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+                                      const assignedProfiles = profiles.filter((p: any) => p.isAssigned);
+                                      const freeProfiles = profiles.filter((p: any) => !p.isAssigned && !(p as any).needsUpdate);
+                                      const needsUpdateProfiles = profiles.filter((p: any) => p.needsUpdate);
+                                      
+                                      return (
+                                        <div style={{ marginTop: 8 }}>
+                                          <div><strong>Đã sử dụng:</strong> {assignedProfiles.length}</div>
+                                          <div><strong>Còn trống:</strong> {freeProfiles.length}</div>
+                                          {needsUpdateProfiles.length > 0 && (
+                                            <div><strong>Cần cập nhật:</strong> {needsUpdateProfiles.length}</div>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        );
-                      }
-                      return null;
+                          
+                          {/* Slot selector for account-based */}
+                          {item.isAccountBased && (
+                            <div className="mt-2">
+                              <label className="form-label"><strong>Chọn slot thay thế</strong></label>
+                              <select
+                                className="form-control"
+                                value={replacementProfileId}
+                                onChange={(e) => setReplacementProfileId(e.target.value)}
+                              >
+                                <option value="">-- Chọn slot --</option>
+                                {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
+                                  <option key={p.id} value={p.id}>{p.label}</option>
+                                ))}
+                              </select>
+                              <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
+                            </div>
+                          )}
+                        </>
+                      );
                     })()}
                   </>
                 )}
