@@ -19,7 +19,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
   const [form, setForm] = useState<WarrantyFormData>({ code: '', orderId: '', reason: '', status: 'PENDING' });
   const [orderSearch, setOrderSearch] = useState('');
   const [debouncedOrderSearch, setDebouncedOrderSearch] = useState('');
-  const [replacementProfileId, setReplacementProfileId] = useState<string>('');
+  const [replacementProfileIds, setReplacementProfileIds] = useState<string[]>([]);
   const [inventorySearch, setInventorySearch] = useState('');
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -200,9 +200,19 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
         status: isViewOnly ? warranty.status : '' as any, // Empty for editing, actual status for viewing
         replacementInventoryId: warranty.replacementInventoryId
       });
-      setReplacementProfileId('');
+      // Load replacement profile IDs from order if exists
+      if (warranty.orderId) {
+        const order = orders.find(o => o.id === warranty.orderId);
+        if (order && (order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds)) {
+          setReplacementProfileIds((order as any).inventoryProfileIds);
+        } else {
+          setReplacementProfileIds([]);
+        }
+      } else {
+        setReplacementProfileIds([]);
+      }
     }
-  }, [warranty, isViewOnly]);
+  }, [warranty, isViewOnly, orders]);
 
   const getOrderLabel = (o: Order) => {
     const customer = customers.find(c => c.id === o.customerId)?.name || 'Không xác định';
@@ -437,39 +447,44 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             .maybeSingle();
 
           if (replacementItem) {
-            if (replacementItem.is_account_based) {
-              if (!replacementProfileId) throw new Error('Phải chọn slot cho sản phẩm account-based');
-              
-              const profiles = Array.isArray(replacementItem.profiles) ? replacementItem.profiles : [];
-              const chosenProfile = profiles.find((p: any) => p.id === replacementProfileId);
-              if (!chosenProfile || chosenProfile.isAssigned) {
-                throw new Error('Slot đã được sử dụng, vui lòng chọn slot trống');
-              }
+          if (replacementItem.is_account_based) {
+            if (!replacementProfileIds || replacementProfileIds.length === 0) throw new Error('Phải chọn ít nhất một slot cho sản phẩm account-based');
+            
+            const profiles = Array.isArray(replacementItem.profiles) ? replacementItem.profiles : [];
+            const chosenProfiles = profiles.filter((p: any) => replacementProfileIds.includes(p.id));
+            if (chosenProfiles.length !== replacementProfileIds.length) {
+              throw new Error('Một số slot không tồn tại');
+            }
+            
+            const invalidProfiles = chosenProfiles.filter((p: any) => p.isAssigned);
+            if (invalidProfiles.length > 0) {
+              throw new Error('Một số slot đã được sử dụng, vui lòng chọn slot trống');
+            }
 
-              const updatedProfiles = profiles.map((p: any) => 
-                p.id === replacementProfileId 
-                  ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() }
-                  : p
-              );
+            const updatedProfiles = profiles.map((p: any) => 
+              replacementProfileIds.includes(p.id)
+                ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() }
+                : p
+            );
 
-              // Check if there are any free slots remaining
-              const hasFreeSlots = updatedProfiles.some((p: any) => 
-                !p.isAssigned && !(p as any).needsUpdate
-              );
+            // Check if there are any free slots remaining
+            const hasFreeSlots = updatedProfiles.some((p: any) => 
+              !p.isAssigned && !(p as any).needsUpdate
+            );
 
-              const { error: replacementUpdateError } = await sb
-                .from('inventory')
-                .update({ 
-                  profiles: updatedProfiles, 
-                  status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', resolvedReplacementId);
-              
-              if (replacementUpdateError) {
-                throw new Error('Lỗi khi cập nhật slot kho hàng thay thế');
-              }
-            } else {
+            const { error: replacementUpdateError } = await sb
+              .from('inventory')
+              .update({ 
+                profiles: updatedProfiles, 
+                status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', resolvedReplacementId);
+            
+            if (replacementUpdateError) {
+              throw new Error('Lỗi khi cập nhật slot kho hàng thay thế');
+            }
+          } else {
               // Classic inventory - direct Supabase update
               if (replacementItem.linked_order_id && replacementItem.linked_order_id !== resolvedOrderId) {
                 throw new Error('Kho này đang liên kết đơn khác');
@@ -495,7 +510,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             if (!replacementItem) return null;
             if (replacementItem.is_account_based) {
               const itemForOrder = { ...replacementItem, packageId: replacementItem.package_id } as InventoryItem;
-              return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileId ? [replacementProfileId] : undefined);
+              return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileIds.length > 0 ? replacementProfileIds : undefined);
             }
             return replacementItem.product_info || null;
           })();
@@ -504,7 +519,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             .from('orders')
             .update({
               inventory_item_id: resolvedReplacementId,
-              inventory_profile_ids: replacementProfileId ? [replacementProfileId] : null,
+              inventory_profile_ids: replacementProfileIds.length > 0 ? replacementProfileIds : null,
               order_info: autoInfo
             })
             .eq('id', resolvedOrderId);
@@ -744,7 +759,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                       value={inventorySearch}
                       onChange={(e) => setInventorySearch(e.target.value)}
                     />
-                    <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileId(''); }}>
+                    <select className="form-control" value={form.replacementInventoryId || ''} onChange={e => { setForm({ ...form, replacementInventoryId: e.target.value || undefined }); setReplacementProfileIds([]); }}>
                       <option value="">-- Chọn sản phẩm từ kho hàng --</option>
                       {filteredInventory.map(item => (
                         <option key={item.id} value={item.id}>#{item.code} | {getInventoryLabel(item)}</option>
@@ -851,22 +866,55 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                           </div>
                           
                           {/* Slot selector for account-based */}
-                          {item.isAccountBased && (
-                            <div className="mt-2">
-                              <label className="form-label"><strong>Chọn slot thay thế</strong></label>
-                              <select
-                                className="form-control"
-                                value={replacementProfileId}
-                                onChange={(e) => setReplacementProfileId(e.target.value)}
-                              >
-                                <option value="">-- Chọn slot --</option>
-                                {(item.profiles || []).filter(p => !p.isAssigned && !(p as any).needsUpdate).map(p => (
-                                  <option key={p.id} value={p.id}>{p.label}</option>
-                                ))}
-                              </select>
-                              <div className="small text-muted mt-1">Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.</div>
-                            </div>
-                          )}
+                          {item.isAccountBased && (() => {
+                            const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+                            const availableSlots = profiles.filter((p: any) => !p.isAssigned && !(p as any).needsUpdate);
+                            const visibleSlots = availableSlots.slice(0, 5);
+                            const totalSlots = availableSlots.length;
+                            
+                            return (
+                              <div className="mt-3">
+                                <label className="form-label">
+                                  <strong>Chọn các slot để cấp (có thể chọn nhiều)</strong>
+                                </label>
+                                <div className="row">
+                                  {visibleSlots.map(p => (
+                                    <div key={p.id} className="col-md-6 mb-2">
+                                      <div className="form-check">
+                                        <input
+                                          className="form-check-input"
+                                          type="checkbox"
+                                          id={`slot-${p.id}`}
+                                          checked={replacementProfileIds.includes(p.id)}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setReplacementProfileIds(prev => [...prev, p.id]);
+                                            } else {
+                                              setReplacementProfileIds(prev => prev.filter(id => id !== p.id));
+                                            }
+                                          }}
+                                        />
+                                        <label className="form-check-label" htmlFor={`slot-${p.id}`}>
+                                          {p.label}
+                                        </label>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {totalSlots > 5 && (
+                                  <div className="alert alert-info mt-2 mb-2">
+                                    <small>⚡ Còn {totalSlots - 5} slot khác ngoài 5 slot đã hiển thị</small>
+                                  </div>
+                                )}
+                                <div className="small text-muted mt-2">
+                                  Đã chọn: {replacementProfileIds.length} slot
+                                </div>
+                                <div className="small text-muted mt-1">
+                                  Thông tin đơn mới sẽ tự động lấy từ cấu hình kho và slot.
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </>
                       );
                     })()}
