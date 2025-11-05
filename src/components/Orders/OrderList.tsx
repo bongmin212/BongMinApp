@@ -810,8 +810,22 @@ const OrderList: React.FC = () => {
         return;
       }
       
+      const nowIso = new Date().toISOString();
       for (const orderId of validIds) {
-        const { error: singleError } = await sb.from('orders').update({ payment_status: paymentStatus }).eq('id', orderId);
+        // When marking as REFUNDED, also record refund amount and timestamp, and cancel the order
+        let payload: any = { payment_status: paymentStatus };
+        if (paymentStatus === 'REFUNDED') {
+          const orderObj = orders.find(o => o.id === orderId);
+          const todayStr = nowIso.split('T')[0];
+          const amount = orderObj ? computeRefundAmount(orderObj as any, todayStr) : 0;
+          payload = {
+            ...payload,
+            status: 'CANCELLED',
+            refund_amount: amount,
+            refund_at: nowIso
+          };
+        }
+        const { error: singleError } = await sb.from('orders').update(payload).eq('id', orderId);
         if (singleError) {
           console.error('Single order payment update error for ID', orderId, ':', singleError);
           return notify(`Không thể cập nhật thanh toán đơn hàng ${orderId}: ${singleError.message}`, 'error');
@@ -2476,10 +2490,19 @@ const OrderList: React.FC = () => {
                 className="btn btn-danger"
                 onClick={async () => {
                   const o = refundState.order;
-                  const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED' });
+                  const nowIso = new Date().toISOString();
+                  const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED', refundAmount: refundState.amount, refundAt: nowIso } as any);
                   try {
                     const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}` });
+                    if (sb2) {
+                      await sb2.from('orders').update({
+                        payment_status: 'REFUNDED',
+                        status: 'CANCELLED',
+                        refund_amount: refundState.amount,
+                        refund_at: nowIso
+                      }).eq('id', o.id);
+                      await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}` });
+                    }
                   } catch {}
                   setRefundState(null);
                   setViewingOrder(null);

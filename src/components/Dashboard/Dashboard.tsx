@@ -22,6 +22,8 @@ interface DashboardStats {
   profitGrowth: number;
   totalExpenses: number;
   monthlyExpenses: number;
+  totalRefunds: number;
+  monthlyRefunds: number;
   netProfit: number; // Lãi thực tế sau khi trừ chi phí
   monthlyNetProfit: number;
   inventoryItems: number;
@@ -56,6 +58,8 @@ const Dashboard: React.FC = () => {
     profitGrowth: 0,
     totalExpenses: 0,
     monthlyExpenses: 0,
+    totalRefunds: 0,
+    monthlyRefunds: 0,
     netProfit: 0,
     monthlyNetProfit: 0,
     inventoryItems: 0,
@@ -172,7 +176,9 @@ const Dashboard: React.FC = () => {
           inventoryItemId: r.inventory_item_id,
           inventoryProfileIds: r.inventory_profile_ids || undefined,
           cogs: r.cogs,
-          salePrice: r.sale_price
+          salePrice: r.sale_price,
+          refundAmount: r.refund_amount || 0,
+          refundAt: r.refund_at ? new Date(r.refund_at) : undefined
         })) as any;
         inventoryItems = (inv.data || []).map((r: any) => ({
           id: r.id,
@@ -334,10 +340,17 @@ const Dashboard: React.FC = () => {
       const totalImportCost = (inventoryItems as InventoryItem[]).reduce((s, i) => s + (i.purchasePrice || 0), 0)
         + inventoryRenewals.reduce((s, r) => s + (r.amount || 0), 0);
 
-      // Calculate net profit (gross profit - external expenses only)
+      // Calculate refunds (counted by refund time, not purchase time)
+      const refundsAll = orders.filter(o => o.paymentStatus === 'REFUNDED');
+      const totalRefunds = refundsAll.reduce((s, o: any) => s + (o.refundAmount || 0), 0);
+      const monthlyRefunds = refundsAll
+        .filter((o: any) => o.refundAt && o.refundAt.getMonth() === targetMonth && o.refundAt.getFullYear() === targetYear)
+        .reduce((s, o: any) => s + (o.refundAmount || 0), 0);
+
+      // Calculate net profit (gross profit - external expenses - refunds)
       // Do NOT subtract import cost again since COGS already accounts for it
-      const netProfit = totalProfit - totalExpenses;
-      const monthlyNetProfit = monthlyProfit - monthlyExpenses;
+      const netProfit = totalProfit - totalExpenses - totalRefunds;
+      const monthlyNetProfit = monthlyProfit - monthlyExpenses - monthlyRefunds;
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const needsUpdateInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'NEEDS_UPDATE').length;
@@ -458,6 +471,8 @@ const Dashboard: React.FC = () => {
         profitGrowth,
         totalExpenses,
         monthlyExpenses,
+        totalRefunds,
+        monthlyRefunds,
         netProfit,
         monthlyNetProfit,
         inventoryItems: inventoryItems.length,
@@ -673,6 +688,12 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="sales-card">
+                <h3>Tiền hoàn tháng này</h3>
+                <div className="sales-amount">{formatCurrency(stats.monthlyRefunds)}</div>
+                <div className="sales-subtitle">Tính theo thời điểm hoàn</div>
+              </div>
+
+              <div className="sales-card">
                 <h3>Chi phí tháng này</h3>
                 <div className="sales-amount">{formatCurrency(stats.monthlyExpenses)}</div>
                 <div className="sales-subtitle">Chi phí ngoài lề</div>
@@ -697,6 +718,12 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Tổng doanh thu</h3>
                 <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
+                <div className="sales-subtitle">Tất cả thời gian</div>
+              </div>
+
+              <div className="sales-card">
+                <h3>Tổng tiền hoàn</h3>
+                <div className="sales-amount">{formatCurrency(stats.totalRefunds)}</div>
                 <div className="sales-subtitle">Tất cả thời gian</div>
               </div>
 
