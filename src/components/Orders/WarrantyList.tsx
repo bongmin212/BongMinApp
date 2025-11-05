@@ -837,31 +837,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                                 </div>
                               )}
                               
-                              {/* Slot Information */}
-                              {item.isAccountBased && (
-                                <div style={{ marginTop: 12 }}>
-                                  <strong>Thông tin slot:</strong>
-                                  <div style={{ marginTop: 6 }}>
-                                    <div><strong>Tổng slot:</strong> {item.totalSlots || 0}</div>
-                                    {(() => {
-                                      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-                                      const assignedProfiles = profiles.filter((p: any) => p.isAssigned);
-                                      const freeProfiles = profiles.filter((p: any) => !p.isAssigned && !(p as any).needsUpdate);
-                                      const needsUpdateProfiles = profiles.filter((p: any) => p.needsUpdate);
-                                      
-                                      return (
-                                        <div style={{ marginTop: 8 }}>
-                                          <div><strong>Đã sử dụng:</strong> {assignedProfiles.length}</div>
-                                          <div><strong>Còn trống:</strong> {freeProfiles.length}</div>
-                                          {needsUpdateProfiles.length > 0 && (
-                                            <div><strong>Cần cập nhật:</strong> {needsUpdateProfiles.length}</div>
-                                          )}
-                                        </div>
-                                      );
-                                    })()}
-                                  </div>
-                                </div>
-                              )}
+                              {/* Slot totals removed as requested */}
                             </div>
                           </div>
                           

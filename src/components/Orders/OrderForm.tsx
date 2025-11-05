@@ -2182,7 +2182,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               value={formData.paymentStatus}
               onChange={handleChange}
             >
-              {PAYMENT_STATUSES.map(s => (
+              {PAYMENT_STATUSES.filter(s => s.value !== 'REFUNDED').map(s => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>

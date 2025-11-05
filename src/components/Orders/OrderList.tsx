@@ -2606,42 +2606,18 @@ const OrderList: React.FC = () => {
                         </div>
                       )}
                       
-                      {/* Slot Information */}
-                      {invItem.isAccountBased && (
-                        <div style={{ marginTop: 12 }}>
-                          <strong>Thông tin slot:</strong>
-                          <div style={{ marginTop: 6 }}>
-                            <div><strong>Tổng slot:</strong> {invItem.totalSlots || 0}</div>
-                            {(() => {
-                              const profiles = Array.isArray(invItem.profiles) ? invItem.profiles : [];
-                              const assignedProfiles = profiles.filter((p: any) => p.isAssigned);
-                              const freeProfiles = profiles.filter((p: any) => !p.isAssigned && !p.needsUpdate);
-                              const needsUpdateProfiles = profiles.filter((p: any) => p.needsUpdate);
-                              
-                              return (
-                                <div style={{ marginTop: 8 }}>
-                                  <div><strong>Đã sử dụng:</strong> {assignedProfiles.length}</div>
-                                  <div><strong>Còn trống:</strong> {freeProfiles.length}</div>
-                                  {needsUpdateProfiles.length > 0 && (
-                                    <div><strong>Cần cập nhật:</strong> {needsUpdateProfiles.length}</div>
-                                  )}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      )}
+                      {/* Slot totals removed as requested */}
                       
                       {/* Custom Fields from Order */}
                       {(() => {
                         const order = orders.find(o => o.id === returnConfirmState.order.id);
                         if (!order) return null;
-                        
+
                         const packageInfo = packageMap.get(order.packageId);
                         const customFieldValues = (order as any).customFieldValues || {};
-                        
+
                         if (!packageInfo?.customFields || packageInfo.customFields.length === 0) return null;
-                        
+
                         return (
                           <div style={{ marginTop: 12 }}>
                             <strong>Trường tùy chỉnh đơn hàng:</strong>
@@ -2652,11 +2628,11 @@ const OrderList: React.FC = () => {
                                 return (
                                   <div key={cf.id} style={{ marginBottom: 8 }}>
                                     <div><strong>{cf.title}:</strong></div>
-                                    <pre style={{ 
-                                      whiteSpace: 'pre-wrap', 
-                                      margin: 0, 
-                                      padding: '8px', 
-                                      backgroundColor: 'var(--bg-tertiary)', 
+                                    <pre style={{
+                                      whiteSpace: 'pre-wrap',
+                                      margin: 0,
+                                      padding: '8px',
+                                      backgroundColor: 'var(--bg-tertiary)',
                                       color: 'var(--text-primary)',
                                       borderRadius: '4px',
                                       fontSize: '14px',
