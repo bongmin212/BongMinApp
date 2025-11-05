@@ -112,12 +112,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setSelectedInventoryId(invLinked);
       })();
       
+      // Determine expired status from expiryDate or existing status
+      const now = new Date();
+      const expiry = order.expiryDate instanceof Date ? order.expiryDate : (order.expiryDate ? new Date(order.expiryDate) : undefined as any);
+      const isExpired = (expiry ? expiry < now : false) || order.status === 'EXPIRED';
       setFormData({
         code: order.code,
         purchaseDate: order.purchaseDate instanceof Date ? order.purchaseDate : new Date(order.purchaseDate),
         packageId: order.packageId,
         customerId: order.customerId,
-        status: order.status,
+        status: isExpired ? 'EXPIRED' : order.status,
         paymentStatus: (order as any).paymentStatus || 'UNPAID',
         orderInfo: (order as any).orderInfo || '',
         notes: order.notes || '',
@@ -431,6 +435,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   useEffect(() => {
     const hasInventorySelected = !!selectedInventoryId;
     setFormData(prev => {
+      // Do not override expired status
+      if (prev.status === 'EXPIRED') return prev;
       const enforcedStatus = hasInventorySelected ? 'COMPLETED' : 'PROCESSING';
       return prev.status === enforcedStatus ? prev : { ...prev, status: enforcedStatus };
     });
@@ -681,7 +687,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         customPrice: formData.useCustomPrice ? formData.customPrice : undefined,
         customFieldValues,
         orderInfo: (autoInfo || '').trim(),
-        status: (selectedInventoryId ? 'COMPLETED' : 'PROCESSING') as OrderStatus,
+        // For existing orders, preserve current form status (e.g., EXPIRED)
+        status: (order ? formData.status : (selectedInventoryId ? 'COMPLETED' : 'PROCESSING')) as OrderStatus,
         salePrice: finalSalePrice
       };
 
@@ -2148,8 +2155,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               name="status"
               className="form-control"
               value={formData.status}
+            disabled={formData.status === 'EXPIRED'}
               onChange={(e) => {
                 const val = e.target.value as any;
+              // Lock when expired
+              if (formData.status === 'EXPIRED') return;
                 // Only allow cancelling manually
                 if (val === 'CANCELLED') {
                   setFormData(prev => ({ ...prev, status: 'CANCELLED' }));
@@ -2157,9 +2167,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               }}
             >
               <option value={formData.status}>{ORDER_STATUSES.find(s => s.value === formData.status)?.label || formData.status}</option>
+            {formData.status !== 'EXPIRED' && (
               <option value="CANCELLED">Đã hủy</option>
+            )}
             </select>
-            <small className="text-muted">Trạng thái tự động: Hoàn thành khi đã chọn kho, Đang xử lý nếu chưa chọn.</small>
+          <small className="text-muted">{formData.status === 'EXPIRED' ? 'Đơn đã hết hạn: trạng thái bị khóa.' : 'Trạng thái tự động: Hoàn thành khi đã chọn kho, Đang xử lý nếu chưa chọn.'}</small>
           </div>
 
           <div className="form-group">

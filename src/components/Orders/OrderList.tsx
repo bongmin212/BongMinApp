@@ -261,7 +261,14 @@ const OrderList: React.FC = () => {
     } catch (e) {
       // Best-effort; ignore failures and continue rendering
     }
-    const allOrders = (ordersRes.data || []).map((r: any) => {
+    let allOrders = (ordersRes.data || []).map((r: any) => {
+      const rawRenewals = Array.isArray(r.renewals) ? r.renewals : [];
+      const mappedRenewals = rawRenewals.map((x: any) => ({
+        ...x,
+        previousExpiryDate: x.previousExpiryDate ? new Date(x.previousExpiryDate) : (x.previous_expiry_date ? new Date(x.previous_expiry_date) : undefined),
+        newExpiryDate: x.newExpiryDate ? new Date(x.newExpiryDate) : (x.new_expiry_date ? new Date(x.new_expiry_date) : undefined),
+        createdAt: x.createdAt ? new Date(x.createdAt) : (x.created_at ? new Date(x.created_at) : undefined)
+      }));
       return {
         id: r.id,
         code: r.code,
@@ -284,9 +291,19 @@ const OrderList: React.FC = () => {
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
         renewalMessageSent: !!r.renewal_message_sent,
         renewalMessageSentAt: r.renewal_message_sent_at ? new Date(r.renewal_message_sent_at) : undefined,
-        renewalMessageSentBy: r.renewal_message_sent_by || undefined
+        renewalMessageSentBy: r.renewal_message_sent_by || undefined,
+        renewals: mappedRenewals
       };
     }) as Order[];
+    // Merge local renewals so they persist across reloads
+    try {
+      const localOrders = Database.getOrders();
+      allOrders = allOrders.map(o => {
+        const local = localOrders.find(lo => lo.id === o.id) as any;
+        if (!local) return o;
+        return { ...o, renewals: Array.isArray(local.renewals) ? local.renewals : (o as any).renewals } as any;
+      });
+    } catch {}
     setOrders(allOrders);
     
     const allCustomers = (customersRes.data || []).map((r: any) => {
@@ -1389,19 +1406,51 @@ const OrderList: React.FC = () => {
     return Math.max(0, Math.floor(value / 1000) * 1000);
   };
 
-  const computeRefundAmount = (order: Order, errorDateStr: string) => {
-    const price = getOrderPrice(order);
-    if (!price) return 0;
+  // Determine the applicable billing cycle for a given error date
+  const getApplicableCycle = (order: Order, errorDateStr: string) => {
     const purchase = new Date(order.purchaseDate);
     const expiry = new Date(order.expiryDate);
+
+    let cycleStart = new Date(purchase);
+    let cycleEnd = new Date(expiry);
+    let cyclePrice = getOrderPrice(order) || 0;
+    let isFromRenewal = false;
+
+    const renewals = ((order as any).renewals || []).slice().sort((a: any, b: any) => +new Date(a.newExpiryDate) - +new Date(b.newExpiryDate));
+    const lastRenewal = renewals.length > 0 ? renewals[renewals.length - 1] : null;
+
+    if (lastRenewal) {
+      cycleStart = new Date(lastRenewal.previousExpiryDate);
+      cycleEnd = new Date(lastRenewal.newExpiryDate);
+      if (typeof lastRenewal.price === 'number' && lastRenewal.price > 0) cyclePrice = lastRenewal.price;
+      isFromRenewal = true;
+    } else {
+      const pkgInfo = getPackageInfo(order.packageId);
+      const warrantyMonths = Math.max(1, Math.floor(pkgInfo?.package?.warrantyPeriod || 1));
+      const inferredStart = new Date(expiry);
+      inferredStart.setMonth(inferredStart.getMonth() - warrantyMonths);
+      cycleStart = inferredStart;
+      cycleEnd = expiry;
+      isFromRenewal = inferredStart > purchase;
+    }
+
+    return { cycleStart, cycleEnd, cyclePrice, isFromRenewal };
+  };
+
+  const computeRefundAmount = (order: Order, errorDateStr: string) => {
     const errorDate = new Date(errorDateStr);
     if (isNaN(errorDate.getTime())) return 0;
-    if (errorDate <= purchase) return roundDownToThousand(price);
-    if (errorDate >= expiry) return 0;
-    const totalDays = Math.max(1, Math.ceil((expiry.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24)));
-    const remainingDays = Math.max(0, Math.ceil((expiry.getTime() - errorDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    const { cycleStart, cycleEnd, cyclePrice } = getApplicableCycle(order, errorDateStr);
+
+    if (!cyclePrice) return 0;
+    if (errorDate <= cycleStart) return roundDownToThousand(cyclePrice);
+    if (errorDate >= cycleEnd) return 0;
+
+    const totalDays = Math.max(1, Math.ceil((cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24)));
+    const remainingDays = Math.max(0, Math.ceil((cycleEnd.getTime() - errorDate.getTime()) / (1000 * 60 * 60 * 24)));
     const prorate = remainingDays / totalDays;
-    return roundDownToThousand(Math.round(price * prorate));
+    return roundDownToThousand(Math.round(cyclePrice * prorate));
   };
 
   // Memoized row to minimize rerenders
@@ -2212,7 +2261,28 @@ const OrderList: React.FC = () => {
                   if (updated) {
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
+                      if (sb2) {
+                        // Persist renewal changes to orders table
+                        await sb2.from('orders').update({
+                          expiry_date: (updated as any).expiryDate,
+                          payment_status: (updated as any).paymentStatus,
+                          package_id: (updated as any).packageId,
+                          renewals: ((updated as any).renewals || []).map((r: any) => ({
+                            id: r.id,
+                            months: r.months,
+                            packageId: r.packageId,
+                            price: r.price,
+                            useCustomPrice: r.useCustomPrice,
+                            previousExpiryDate: r.previousExpiryDate,
+                            newExpiryDate: r.newExpiryDate,
+                            note: r.note,
+                            paymentStatus: r.paymentStatus,
+                            createdAt: r.createdAt,
+                            createdBy: r.createdBy
+                          }))
+                        }).eq('id', o.id);
+                        await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
+                      }
                     } catch {}
                     
                     setRenewState(null);
@@ -2249,6 +2319,9 @@ const OrderList: React.FC = () => {
                 const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
                 const errorDate = new Date(refundState.errorDate).toLocaleDateString('vi-VN');
                 const refundAmount = refundState.amount;
+                const cycle = getApplicableCycle(o, refundState.errorDate);
+                const cycleStartLabel = cycle.cycleStart.toLocaleDateString('vi-VN');
+                const cycleEndLabel = cycle.cycleEnd.toLocaleDateString('vi-VN');
                 return (
                   <div className="p-2">
                     <div><strong>Tên đơn:</strong> {o.code}</div>
@@ -2256,7 +2329,12 @@ const OrderList: React.FC = () => {
                     <div><strong>Gói:</strong> {packageName}</div>
                     <div><strong>Giá mua:</strong> {formatPrice(price)}</div>
                     <div><strong>Người mua:</strong> {customerName}</div>
-                    <div><strong>Ngày mua:</strong> {purchaseDate}</div>
+                    {cycle.isFromRenewal ? (
+                      <div><strong>Ngày mua (chu kỳ):</strong> {cycleStartLabel}</div>
+                    ) : (
+                      <div><strong>Ngày mua:</strong> {purchaseDate}</div>
+                    )}
+                    <div><strong>Khoảng tính:</strong> {cycleStartLabel} - {cycleEndLabel}</div>
                     <div><strong>Ngày lỗi:</strong> {errorDate}</div>
                     <div><strong>Số tiền hoàn:</strong> {formatPrice(refundAmount)}</div>
                     {(() => {
