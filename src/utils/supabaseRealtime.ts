@@ -1,7 +1,5 @@
-// DISABLED REALTIME TO REDUCE CONSOLE NOISE
-// import { getSupabase } from './supabaseClient';
-// import { Database } from './database';
-// import { reviveDates, toCamel } from './supabaseSync';
+import { getSupabase } from './supabaseClient';
+import { hydrateAllFromSupabase } from './supabaseSync';
 
 type Unsubscribe = () => void;
 
@@ -20,7 +18,26 @@ const TABLES = [
 ];
 
 export function subscribeRealtime(): Unsubscribe {
-  // REALTIME IS DISABLED - return empty unsubscribe function
-  // Realtime is disabled to reduce console noise
-  return () => {};
+  const sb = getSupabase();
+  if (!sb) return () => {};
+
+  const channel = sb.channel('realtime:all');
+
+  TABLES.forEach((table) => {
+    channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table },
+      async () => {
+        try {
+          await hydrateAllFromSupabase();
+        } catch {}
+      }
+    );
+  });
+
+  channel.subscribe();
+
+  return () => {
+    try { channel.unsubscribe(); } catch {}
+  };
 }

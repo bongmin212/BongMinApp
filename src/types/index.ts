@@ -410,6 +410,13 @@ export interface NotificationSettings {
   enableNewOrderNotifications: boolean;
   enablePaymentReminders: boolean;
   enableExpiryWarnings: boolean;
+  // Advanced preferences
+  mutedTypes?: NotificationType[]; // Do not generate/show these types
+  snoozedUntil?: string | null; // ISO string; suppress until this time
+  quietHours?: { start: string; end: string } | null; // e.g., "22:00"-"08:00"
+  rateLimitMinutes?: number; // minimum minutes between same-key notifications
+  desktopEnabled?: boolean; // enable desktop notifications
+  soundEnabled?: boolean; // enable sound
 }
 
 // Expense types

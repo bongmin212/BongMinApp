@@ -32,6 +32,12 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   enableNewOrderNotifications: true,
   enablePaymentReminders: true,
   enableExpiryWarnings: true,
+  mutedTypes: [],
+  snoozedUntil: null,
+  quietHours: null,
+  rateLimitMinutes: 15,
+  desktopEnabled: true,
+  soundEnabled: true,
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -48,6 +54,34 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   });
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+
+  // In-memory rate limiter for notification keys (type-related)
+  const lastShownRef = React.useRef<Map<string, number>>(new Map());
+
+  const isSnoozed = useCallback(() => {
+    if (!settings.snoozedUntil) return false;
+    try {
+      return new Date(settings.snoozedUntil).getTime() > Date.now();
+    } catch { return false; }
+  }, [settings.snoozedUntil]);
+
+  const isWithinQuietHours = useCallback(() => {
+    if (!settings.quietHours) return false;
+    const { start, end } = settings.quietHours;
+    if (!start || !end) return false;
+    const now = new Date();
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    const startMin = sh * 60 + (sm || 0);
+    const endMin = eh * 60 + (em || 0);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    if (startMin <= endMin) {
+      return nowMin >= startMin && nowMin < endMin;
+    } else {
+      // spans midnight
+      return nowMin >= startMin || nowMin < endMin;
+    }
+  }, [settings.quietHours]);
 
   // Load read notification IDs from localStorage
   const getReadNotificationIds = useCallback((): Set<string> => {
@@ -236,6 +270,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const checkExpiryWarnings = useCallback((orders: Order[], packages: ProductPackage[]): Notification[] => {
     if (!settings.enableExpiryWarnings) return [];
+    if (settings.mutedTypes?.includes('EXPIRY_WARNING')) return [];
 
     const warnings: Notification[] = [];
     const warningDate = new Date();
@@ -265,6 +300,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const checkNewOrders = useCallback((orders: Order[]): Notification[] => {
     if (!settings.enableNewOrderNotifications) return [];
+    if (settings.mutedTypes?.includes('NEW_ORDER')) return [];
 
     const newOrders: Notification[] = [];
     const today = new Date();
@@ -294,6 +330,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const checkPaymentReminders = useCallback((orders: Order[]): Notification[] => {
     if (!settings.enablePaymentReminders) return [];
+    if (settings.mutedTypes?.includes('PAYMENT_REMINDER')) return [];
 
     const reminders: Notification[] = [];
     const threeDaysAgo = new Date();
@@ -321,6 +358,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [settings]);
 
   const checkProcessingOrders = useCallback((orders: Order[]): Notification[] => {
+    if (settings.mutedTypes?.includes('PROCESSING_DELAY')) return [];
     const warnings: Notification[] = [];
     const oneHourAgo = new Date();
     oneHourAgo.setHours(oneHourAgo.getHours() - 1);
@@ -347,6 +385,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const checkProfileNeedsUpdate = useCallback((inventoryItems: InventoryItem[]): Notification[] => {
+    if (settings.mutedTypes?.includes('PROFILE_NEEDS_UPDATE')) return [];
     const notifications: Notification[] = [];
 
     inventoryItems.forEach(item => {
@@ -373,6 +412,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, []);
 
   const checkNewWarranties = useCallback((warranties: Warranty[]): Notification[] => {
+    if (settings.mutedTypes?.includes('NEW_WARRANTY')) return [];
     const notifications: Notification[] = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -408,7 +448,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         Database.getWarranties()
       ]);
 
-      const allNotifications = [
+      let allNotifications = [
         ...checkExpiryWarnings(orders, packages),
         ...checkNewOrders(orders),
         ...checkPaymentReminders(orders),
@@ -416,6 +456,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         ...checkProfileNeedsUpdate(inventoryItems),
         ...checkNewWarranties(warranties)
       ];
+
+      // Apply snooze and rate limiting
+      if (isSnoozed()) {
+        allNotifications = [];
+      } else if (settings.rateLimitMinutes && settings.rateLimitMinutes > 0) {
+        const now = Date.now();
+        const minDelta = settings.rateLimitMinutes * 60 * 1000;
+        allNotifications = allNotifications.filter(n => {
+          const key = `${n.type}-${n.relatedId ?? 'none'}`;
+          const last = lastShownRef.current.get(key) || 0;
+          if (now - last < minDelta) return false;
+          lastShownRef.current.set(key, now);
+          return true;
+        });
+      }
 
       // Save to Supabase if available
       const sb = getSupabase();
@@ -749,8 +804,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Initialize sound and desktop notifications
   useEffect(() => {
-    NotificationSound.init();
-    DesktopNotification.requestPermission();
+    if (settings.soundEnabled) {
+      NotificationSound.init();
+    }
+    if (settings.desktopEnabled) {
+      DesktopNotification.requestPermission();
+    }
   }, []);
 
   // Show desktop notification and play sound for new high priority notifications
@@ -760,17 +819,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 
     newHighPriorityNotifications.forEach(async (notification) => {
-      // Play sound
-      await NotificationSound.playNotificationSound('high');
+      // Respect quiet hours and settings
+      const canAlert = !isWithinQuietHours();
+      if (settings.soundEnabled && canAlert) {
+        await NotificationSound.playNotificationSound('high');
+      }
       
-      // Show desktop notification
-      await DesktopNotification.show(notification.title, {
-        body: notification.message,
-        priority: 'high',
-        actionUrl: notification.actionUrl
-      });
+      if (settings.desktopEnabled && canAlert) {
+        await DesktopNotification.show(notification.title, {
+          body: notification.message,
+          priority: 'high',
+          actionUrl: notification.actionUrl
+        });
+      }
     });
-  }, [notifications]);
+  }, [notifications, settings.soundEnabled, settings.desktopEnabled, isWithinQuietHours]);
 
   // Load notifications from Supabase on mount, then generate new ones
   useEffect(() => {

@@ -27,10 +27,21 @@ const NotificationPanel: React.FC = () => {
   } = useNotifications();
   
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>(() => {
+    try { return (localStorage.getItem('notif-active-tab') as any) || 'active'; } catch { return 'active'; }
+  });
+  const [filterType, setFilterType] = useState<string>(() => {
+    try { return localStorage.getItem('notif-filter-type') || 'all'; } catch { return 'all'; }
+  });
+  const [filterPriority, setFilterPriority] = useState<string>(() => {
+    try { return localStorage.getItem('notif-filter-priority') || 'all'; } catch { return 'all'; }
+  });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem('notif-expanded-groups');
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
 
   const isMobile = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -48,6 +59,20 @@ const NotificationPanel: React.FC = () => {
       };
     }
   }, [isOpen, isMobile]);
+
+  // Persist UI selections
+  useEffect(() => {
+    try { localStorage.setItem('notif-active-tab', activeTab); } catch {}
+  }, [activeTab]);
+  useEffect(() => {
+    try { localStorage.setItem('notif-filter-type', filterType); } catch {}
+  }, [filterType]);
+  useEffect(() => {
+    try { localStorage.setItem('notif-filter-priority', filterPriority); } catch {}
+  }, [filterPriority]);
+  useEffect(() => {
+    try { localStorage.setItem('notif-expanded-groups', JSON.stringify(Array.from(expandedGroups))); } catch {}
+  }, [expandedGroups]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {

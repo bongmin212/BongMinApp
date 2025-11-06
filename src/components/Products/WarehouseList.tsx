@@ -26,6 +26,7 @@ const WarehouseList: React.FC = () => {
   const [dateTo, setDateTo] = useState<string>('');
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
   const [renewalDialog, setRenewalDialog] = useState<null | { id: string; months: number; amount: number; note: string }>(null);
+  const [bulkRenewalDialog, setBulkRenewalDialog] = useState<null | { ids: string[]; months: number; amount: number; note: string }>(null);
   const [viewingInventory, setViewingInventory] = useState<null | InventoryItem>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -33,6 +34,7 @@ const WarehouseList: React.FC = () => {
   const [profilesModal, setProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [previousProfilesModal, setPreviousProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [viewingOrder, setViewingOrder] = useState<null | Order>(null);
+  const [inventoryRenewals, setInventoryRenewals] = useState<Array<{ id: string; inventoryId: string; months: number; amount: number; previousExpiryDate: Date; newExpiryDate: Date; note?: string; createdAt: Date }>>([]);
   const [renewState, setRenewState] = useState<null | {
     order: Order;
     packageId: string;
@@ -49,6 +51,25 @@ const WarehouseList: React.FC = () => {
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
+  // Load inventory renewals from Supabase for accurate history display
+  useEffect(() => {
+    (async () => {
+      const sb = getSupabase();
+      if (!sb) return;
+      const { data } = await sb.from('inventory_renewals').select('*');
+      const mapped = (data || []).map((r: any) => ({
+        id: r.id,
+        inventoryId: r.inventory_id,
+        months: r.months,
+        amount: Number(r.amount) || 0,
+        previousExpiryDate: r.previous_expiry_date ? new Date(r.previous_expiry_date) : new Date(),
+        newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(),
+        note: r.note || undefined,
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      }));
+      setInventoryRenewals(mapped);
+    })();
+  }, []);
 
   const fixOrphanedSlots = async () => {
     const sb = getSupabase();
@@ -1147,73 +1168,7 @@ const WarehouseList: React.FC = () => {
   const bulkRenewal = () => {
     const renewables = pageItems.filter(i => selectedIds.includes(i.id));
     if (renewables.length === 0) return;
-    
-    setConfirmState({
-      message: `Gia hạn ${renewables.length} kho hàng đã chọn?`,
-      onConfirm: async () => {
-        const sb = getSupabase();
-        if (!sb) return notify('Không thể gia hạn kho hàng', 'error');
-        
-        let successCount = 0;
-        let errorCount = 0;
-        const renewalDetails: string[] = [];
-        
-        for (const inv of renewables) {
-          try {
-            const product = products.find(p => p.id === inv.productId);
-            const packageInfo = packages.find(p => p.id === inv.packageId);
-            
-            // Calculate new expiry date
-            const currentExpiry = new Date(inv.expiryDate);
-            const newExpiry = new Date(currentExpiry);
-            
-            if (product?.sharedInventoryPool) {
-              // For shared pool products, add 1 month
-              newExpiry.setMonth(newExpiry.getMonth() + 1);
-            } else {
-              // For regular products, add package warranty period
-              const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
-              newExpiry.setMonth(newExpiry.getMonth() + warrantyPeriod);
-            }
-            
-            const { error } = await sb.from('inventory').update({ 
-              expiry_date: newExpiry.toISOString() 
-            }).eq('id', inv.id);
-            
-            if (!error) {
-              successCount++;
-              renewalDetails.push(`${inv.code}: ${currentExpiry.toISOString().split('T')[0]} -> ${newExpiry.toISOString().split('T')[0]}`);
-            } else {
-              errorCount++;
-            }
-          } catch (err) {
-            errorCount++;
-          }
-        }
-        
-        if (successCount > 0) {
-          try {
-            const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: null, 
-              action: 'Gia hạn hàng loạt kho hàng', 
-              details: `count=${successCount}; ids=${renewables.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}` 
-            });
-          } catch {}
-        }
-        
-        if (errorCount === 0) {
-          notify(`Đã gia hạn thành công ${successCount} kho hàng`, 'success');
-        } else if (successCount > 0) {
-          notify(`Đã gia hạn thành công ${successCount} kho hàng, ${errorCount} lỗi`, 'warning');
-        } else {
-          notify('Không thể gia hạn kho hàng', 'error');
-        }
-        
-        setSelectedIds([]);
-        refresh();
-      }
-    });
+    setBulkRenewalDialog({ ids: renewables.map(i => i.id), months: 1, amount: 0, note: '' });
   };
 
   const statusLabel = (status: InventoryItem['status']) => {
@@ -1972,6 +1927,20 @@ const WarehouseList: React.FC = () => {
                     if (!renewalError) {
                       // Also store locally for backward compatibility
                       Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, createdBy: state.user?.id || 'system' });
+                      // Update in-memory list so history shows immediately
+                      setInventoryRenewals(prev => ([
+                        ...prev,
+                        {
+                          id: crypto?.randomUUID ? crypto.randomUUID() : `${inv.id}-${Date.now()}`,
+                          inventoryId: inv.id,
+                          months: renewalDialog.months,
+                          amount: renewalDialog.amount,
+                          previousExpiryDate: currentExpiry,
+                          newExpiryDate: newExpiry,
+                          note: renewalDialog.note,
+                          createdAt: new Date()
+                        }
+                      ]));
                     }
                     
                     try {
@@ -1991,11 +1960,140 @@ const WarehouseList: React.FC = () => {
         );
       })()}
 
+      {bulkRenewalDialog && (() => {
+        const renewables = items.filter(x => bulkRenewalDialog.ids.includes(x.id));
+        const count = renewables.length;
+        return (
+          <div className="modal" role="dialog" aria-modal style={{ zIndex: 10002 }}>
+            <div className="modal-content" style={{ maxWidth: 420 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Gia hạn hàng loạt ({count})</h3>
+                <button className="close" onClick={() => setBulkRenewalDialog(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                <div className="form-group">
+                  <label className="form-label">Số tháng</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    value={bulkRenewalDialog.months}
+                    min={1}
+                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, months: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Giá gia hạn cho mỗi kho (VND)</label>
+                  <input 
+                    type="text"
+                    className="form-control"
+                    value={
+                      bulkRenewalDialog.amount === 0
+                        ? ''
+                        : new Intl.NumberFormat('vi-VN').format(bulkRenewalDialog.amount) + ' đ'
+                    }
+                    onChange={e => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      const num = raw ? Number(raw) : 0;
+                      setBulkRenewalDialog({ ...bulkRenewalDialog, amount: num });
+                    }}
+                    placeholder="0 đ"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ghi chú</label>
+                  <input 
+                    type="text" 
+                    className="form-control" 
+                    value={bulkRenewalDialog.note} 
+                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, note: e.target.value })} 
+                  />
+                </div>
+                <div className="alert alert-info" role="alert">
+                  Tất cả kho sẽ được cộng +{bulkRenewalDialog.months} tháng. Chi phí sẽ được ghi nhận theo thời điểm bấm gia hạn.
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button className="btn btn-secondary" onClick={() => setBulkRenewalDialog(null)}>Hủy</button>
+                <button className="btn btn-success" onClick={async () => {
+                  const sb = getSupabase();
+                  if (!sb) { notify('Không thể gia hạn hàng loạt', 'error'); return; }
+                  const renewablesNow = items.filter(x => bulkRenewalDialog.ids.includes(x.id));
+                  let successCount = 0;
+                  let errorCount = 0;
+                  const renewalDetails: string[] = [];
+                  for (const inv of renewablesNow) {
+                    try {
+                      const currentExpiry = new Date(inv.expiryDate);
+                      const newExpiry = new Date(currentExpiry);
+                      const monthsAdded = Math.max(1, bulkRenewalDialog.months || 1);
+                      newExpiry.setMonth(newExpiry.getMonth() + monthsAdded);
+                      const { error } = await sb.from('inventory').update({ expiry_date: newExpiry.toISOString() }).eq('id', inv.id);
+                      if (error) { errorCount++; continue; }
+                      // Ghi nhận chi phí gia hạn
+                      const { error: renewalError } = await sb.from('inventory_renewals').insert({
+                        inventory_id: inv.id,
+                        months: monthsAdded,
+                        amount: bulkRenewalDialog.amount,
+                        previous_expiry_date: currentExpiry.toISOString(),
+                        new_expiry_date: newExpiry.toISOString(),
+                        note: bulkRenewalDialog.note
+                      });
+                      if (renewalError) { errorCount++; continue; }
+                      // Local cache (back-compat)
+                      Database.renewInventoryItem(inv.id, monthsAdded, bulkRenewalDialog.amount, { note: bulkRenewalDialog.note, createdBy: state.user?.id || 'system' });
+                      // Update in-memory list so history shows immediately
+                      setInventoryRenewals(prev => ([
+                        ...prev,
+                        {
+                          id: crypto?.randomUUID ? crypto.randomUUID() : `${inv.id}-${Date.now()}`,
+                          inventoryId: inv.id,
+                          months: monthsAdded,
+                          amount: bulkRenewalDialog.amount,
+                          previousExpiryDate: currentExpiry,
+                          newExpiryDate: newExpiry,
+                          note: bulkRenewalDialog.note,
+                          createdAt: new Date()
+                        }
+                      ]));
+                      successCount++;
+                      renewalDetails.push(`${inv.code}: ${currentExpiry.toISOString().split('T')[0]} -> ${newExpiry.toISOString().split('T')[0]}`);
+                    } catch {
+                      errorCount++;
+                    }
+                  }
+                  if (successCount > 0) {
+                    try {
+                      const sb2 = getSupabase();
+                      if (sb2) await sb2.from('activity_logs').insert({ 
+                        employee_id: state.user?.id || null,
+                        action: 'Gia hạn hàng loạt kho hàng',
+                        details: `count=${successCount}; months=${bulkRenewalDialog.months}; amount=${bulkRenewalDialog.amount}; ids=${renewablesNow.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}`
+                      });
+                    } catch {}
+                  }
+                  if (errorCount === 0) {
+                    notify(`Đã gia hạn thành công ${successCount} kho hàng`, 'success');
+                  } else if (successCount > 0) {
+                    notify(`Đã gia hạn thành công ${successCount} kho hàng, ${errorCount} lỗi`, 'warning');
+                  } else {
+                    notify('Không thể gia hạn kho hàng', 'error');
+                  }
+                  setBulkRenewalDialog(null);
+                  setSelectedIds([]);
+                  refresh();
+                }}>Xác nhận</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {viewingInventory && (() => {
         const inv = items.find(x => x.id === viewingInventory.id) || viewingInventory;
         const product = products.find(p => p.id === inv.productId);
         const pkg = packages.find(p => p.id === inv.packageId);
-        const renewals = Database.getInventoryRenewals().filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+        const renewals = inventoryRenewals.filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
         
         // Get account columns from package or inventory item
         const accountColumns = pkg?.accountColumns || inv.accountColumns || [];
