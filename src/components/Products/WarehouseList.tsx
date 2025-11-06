@@ -1819,7 +1819,19 @@ const WarehouseList: React.FC = () => {
                                 return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
                               })()}</td>
                               <td>{order ? `${order.code}` : prevOrder ? `(Trước: ${prevOrder.code})` : '-'}</td>
-                              <td>{order?.expiryDate ? new Date(order.expiryDate).toISOString().split('T')[0] : (p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-')}</td>
+                              <td>{(() => {
+                                if (!p.isAssigned && (p as any).needsUpdate) {
+                                  return (
+                                    <button className="btn btn-sm btn-primary" onClick={() => setConfirmState({
+                                      message: `Đánh dấu slot "${p.label}" đã update?`,
+                                      onConfirm: () => clearProfileNeedsUpdate(item.id, p.id)
+                                    })}>Đã update</button>
+                                  );
+                                }
+                                return order?.expiryDate
+                                  ? new Date(order.expiryDate).toISOString().split('T')[0]
+                                  : (p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-');
+                              })()}</td>
                               <td>
                                 <div className="d-flex gap-2">
                                   {order && (
@@ -1827,14 +1839,13 @@ const WarehouseList: React.FC = () => {
                                       Xem đơn hàng
                                     </button>
                                   )}
+                                  {!order && prevOrder && (
+                                    <button className="btn btn-sm btn-light" onClick={() => { setPreviousProfilesModal(profilesModal); setProfilesModal(null); setViewingOrder(prevOrder); }}>
+                                      Xem đơn hàng
+                                    </button>
+                                  )}
                                   {!order && p.isAssigned && (
                                     <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
-                                  )}
-                                  {!p.isAssigned && (p as any).needsUpdate && (
-                                    <button className="btn btn-sm btn-primary" onClick={() => setConfirmState({
-                                      message: `Đánh dấu slot "${p.label}" đã update?`,
-                                      onConfirm: () => clearProfileNeedsUpdate(item.id, p.id)
-                                    })}>Đã update</button>
                                   )}
                                 </div>
                               </td>

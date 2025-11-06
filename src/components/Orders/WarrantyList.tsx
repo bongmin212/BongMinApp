@@ -271,20 +271,77 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 
   const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
 
-  const filteredOrders = React.useMemo(() => {
-    const q = debouncedOrderSearch;
-    // Only show completed orders for warranty creation
-    const completedOrders = orders.filter(o => o.status === 'COMPLETED');
-    if (!q) return completedOrders;
-    return completedOrders.filter(o => {
-      const code = String(o.code || '').toLowerCase();
-      const customer = customers.find(c => c.id === o.customerId)?.name?.toLowerCase() || '';
-      const pkg = packages.find(p => p.id === o.packageId);
-      const product = products.find(p => p?.id === pkg?.productId)?.name?.toLowerCase() || '';
-      const pkgName = String(pkg?.name || '').toLowerCase();
-      return code.includes(q) || customer.includes(q) || product.includes(q) || pkgName.includes(q);
-    });
-  }, [debouncedOrderSearch, orders, customers, packages, products]);
+	const filteredOrders = React.useMemo(() => {
+		const q = debouncedOrderSearch.trim().toLowerCase();
+		// Only show completed orders for warranty creation
+		const completedOrders = orders.filter(o => o.status === 'COMPLETED');
+		if (!q) return completedOrders;
+		return completedOrders.filter(o => {
+			const code = String(o.code || '').toLowerCase();
+			const customer = customers.find(c => c.id === o.customerId);
+			const customerName = (customer?.name || '').toLowerCase();
+			const customerCode = (customer?.code || '').toLowerCase();
+			const pkg = packages.find(p => p.id === o.packageId);
+			const product = products.find(p => p?.id === pkg?.productId);
+			const productName = (product?.name || '').toLowerCase();
+			const pkgName = String(pkg?.name || '').toLowerCase();
+			const orderInfo = String((o as any).orderInfo || '').toLowerCase();
+			const notes = String((o as any).notes || '').toLowerCase();
+			// Include custom field values in search (same behavior as Orders list)
+			const customFieldValues = ((o as any).customFieldValues || {}) as Record<string, string>;
+			let customFieldsText = '';
+			if (pkg && Array.isArray((pkg as any).customFields) && (pkg as any).customFields.length > 0) {
+				customFieldsText = (pkg as any).customFields
+					.map((cf: any) => {
+						const val = customFieldValues[cf.id];
+						return val && String(val).trim() ? String(val).toLowerCase() : '';
+					})
+					.filter(Boolean)
+					.join(' ');
+			}
+
+			// Find linked inventory similar to Orders list logic
+			const linkedInv = (() => {
+				if ((o as any).inventoryItemId) {
+					const found = inventoryItems.find(i => i.id === (o as any).inventoryItemId);
+					if (found) return found as any;
+				}
+				const byLinked = inventoryItems.find(i => (i as any).linked_order_id === o.id || (i as any).linkedOrderId === o.id);
+				if (byLinked) return byLinked as any;
+				return inventoryItems.find(i => (i as any).is_account_based || (i as any).isAccountBased
+					? ((i as any).profiles || []).some((p: any) => p.assignedOrderId === o.id)
+					: false) as any;
+			})();
+
+			let inventorySearchText = '';
+			if (linkedInv) {
+				inventorySearchText = [
+					linkedInv.code || '',
+					(linkedInv as any).productInfo || '',
+					(linkedInv as any).sourceNote || '',
+					(linkedInv as any).notes || '',
+					(linkedInv as any).supplierName || '',
+					(linkedInv as any).supplierId || ''
+				].join(' ').toLowerCase();
+				const accountData = (linkedInv as any).accountData || {};
+				Object.values(accountData).forEach((v: any) => {
+					if (typeof v === 'string') inventorySearchText += ' ' + v.toLowerCase();
+				});
+			}
+
+			return (
+				code.includes(q) ||
+				customerName.includes(q) ||
+				customerCode.includes(q) ||
+				productName.includes(q) ||
+				pkgName.includes(q) ||
+				orderInfo.includes(q) ||
+				notes.includes(q) ||
+				customFieldsText.includes(q) ||
+				inventorySearchText.includes(q)
+			);
+		});
+	}, [debouncedOrderSearch, orders, customers, packages, products, inventoryItems]);
 
   const filteredInventory = React.useMemo(() => {
     const q = debouncedInventorySearch;
@@ -1625,40 +1682,8 @@ const handleDelete = (id: string) => {
 
 		{showForm && (
 			<WarrantyForm onClose={() => setShowForm(false)} onSuccess={async (orderId) => { 
-				await load(); 
-				if (orderId) { 
-					const sb = getSupabase();
-					if (sb) {
-						const { data } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
-						if (data) {
-							const order = {
-								id: data.id,
-								code: data.code,
-								customerId: data.customer_id,
-								packageId: data.package_id,
-								status: data.status,
-								paymentStatus: data.payment_status,
-								orderInfo: data.order_info,
-								notes: data.notes,
-								inventoryItemId: data.inventory_item_id,
-								inventoryProfileIds: data.inventory_profile_ids || undefined,
-								useCustomPrice: data.use_custom_price || false,
-								customPrice: data.custom_price,
-								customFieldValues: data.custom_field_values,
-								purchaseDate: data.purchase_date ? new Date(data.purchase_date) : new Date(),
-								expiryDate: data.expiry_date ? new Date(data.expiry_date) : new Date(),
-								createdBy: 'system',
-								createdAt: data.created_at ? new Date(data.created_at) : new Date(),
-								updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
-							} as Order;
-							setViewingOrder(order);
-						}
-					} else {
-						// Fallback: find from current orders
-						const order = orders.find(o => o.id === orderId);
-						if (order) setViewingOrder(order);
-					}
-				} 
+				// After creating a warranty, only reload list; do NOT auto-open order details
+				await load();
 			}} />
 		)}
 		{editingWarranty && (

@@ -43,6 +43,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	onCopyInfo,
 	onOpenRenew
 }) => {
+	// Local warranties state to ensure live updates without hard refresh
+	const [warranties, setWarranties] = useState<any[]>([]);
 	// Force re-render when warranties for this order change (realtime)
 	const [warrantyTick, setWarrantyTick] = useState(0);
 	useEffect(() => {
@@ -63,6 +65,34 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 		};
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [order.id]);
+
+	// Load warranties for this order and refresh on realtime tick
+	useEffect(() => {
+		(async () => {
+			try {
+				const sb = getSupabase();
+				if (sb) {
+					const { data } = await sb
+						.from('warranties')
+						.select('*')
+						.eq('order_id', order.id)
+						.order('created_at', { ascending: true });
+					setWarranties((data || []).map((r: any) => ({
+						id: r.id,
+						code: r.code,
+						reason: r.reason,
+						status: r.status,
+						createdAt: r.created_at ? new Date(r.created_at) : new Date()
+					})));
+				} else {
+					setWarranties(Database.getWarrantiesByOrder(order.id));
+				}
+			} catch (e) {
+				setWarranties(Database.getWarrantiesByOrder(order.id));
+			}
+		})();
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [order.id, warrantyTick]);
 	const pkgInfo = getPackageInfo(order.packageId);
 	const paymentLabel = (PAYMENT_STATUSES.find(p => p.value === (order as any).paymentStatus)?.label) || 'Chưa thanh toán';
 
@@ -254,9 +284,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					{renderCustomFields()}
 					{order.notes && <div><strong>Ghi chú:</strong> {order.notes}</div>}
 					{(() => {
-						// warrantyTick is used only to force recalculation on realtime events
-						void warrantyTick;
-						const list = Database.getWarrantiesByOrder(order.id);
+						const list = warranties;
 						return (
 							<div style={{ marginTop: '12px' }}>
 								<strong>Lịch sử bảo hành:</strong>
