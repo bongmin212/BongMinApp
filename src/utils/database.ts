@@ -935,6 +935,8 @@ export class Database {
     const defaultPrice = customer?.type === 'CTV' ? (pkg?.ctvPrice || 0) : (pkg?.retailPrice || 0);
     const useCustomPrice = !!opts?.useCustomPrice && (opts?.customPrice || 0) > 0;
     const finalPrice = useCustomPrice ? Math.max(0, Number(opts?.customPrice || 0)) : defaultPrice;
+    const nextCustomPrice = useCustomPrice ? finalPrice : undefined;
+    const nextSalePrice = finalPrice;
 
     const renewal = {
       id: (Date.now().toString(36) + Math.random().toString(36).substr(2)),
@@ -956,6 +958,9 @@ export class Database {
       paymentStatus: renewal.paymentStatus,
       packageId: packageId || current.packageId,
       renewals: [...(current as any).renewals || [], renewal],
+      useCustomPrice,
+      customPrice: nextCustomPrice,
+      salePrice: nextSalePrice,
       updatedAt: new Date()
     } as any;
 
