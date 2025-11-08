@@ -33,6 +33,8 @@ interface DashboardStats {
   expiredInventory: number;
   monthlyImportCost: number;
   totalImportCost: number;
+  monthlyPaidImportCost: number; // Tổng chi phí nhập hàng đã thanh toán (tháng)
+  totalPaidImportCost: number; // Tổng chi phí nhập hàng đã thanh toán (tất cả)
   unpaidCount: number;
   processingCount: number;
   cancelledCount: number;
@@ -69,6 +71,8 @@ const Dashboard: React.FC = () => {
     expiredInventory: 0,
     monthlyImportCost: 0,
     totalImportCost: 0,
+    monthlyPaidImportCost: 0,
+    totalPaidImportCost: 0,
     unpaidCount: 0,
     processingCount: 0,
     cancelledCount: 0,
@@ -192,6 +196,7 @@ const Dashboard: React.FC = () => {
           productInfo: r.product_info,
           notes: r.notes,
           status: r.status,
+          paymentStatus: r.payment_status,
           isAccountBased: !!r.is_account_based,
           accountColumns: r.account_columns || [],
           accountData: r.account_data || {},
@@ -237,18 +242,40 @@ const Dashboard: React.FC = () => {
 
       // Calculate stats - chỉ dùng sale_price từ order
       const getOrderSnapshotPrice = (order: Order): number => {
-        // Exclude refunded orders from revenue
+        // Exclude fully refunded orders from revenue
         if (order.paymentStatus === 'REFUNDED') return 0;
-        // Also exclude if order has been refunded (check refundAmount)
-        const refundAmount = (order as any).refundAmount || 0;
-        if (refundAmount > 0) return 0;
         
         // Chỉ dùng sale_price từ order, không dùng fallback
         const salePrice = (order as any).salePrice;
-        if (typeof salePrice === 'number' && !isNaN(salePrice) && salePrice >= 0) {
-          return salePrice;
+        if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) {
+          return 0;
         }
-        return 0;
+        
+        // Nếu có refundAmount, trừ khỏi salePrice để có doanh thu thực tế
+        const refundAmount = (order as any).refundAmount || 0;
+        const netRevenue = Math.max(0, salePrice - refundAmount);
+        
+        return netRevenue;
+      };
+
+      // Tính COGS đã điều chỉnh theo tỷ lệ refund
+      const getAdjustedCOGS = (order: Order): number => {
+        const cogs = ((order as any).cogs ?? order.cogs) || 0;
+        if (cogs === 0) return 0;
+        
+        const salePrice = (order as any).salePrice;
+        if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice <= 0) {
+          return cogs;
+        }
+        
+        const refundAmount = (order as any).refundAmount || 0;
+        if (refundAmount <= 0) return cogs;
+        
+        // Điều chỉnh COGS theo tỷ lệ refund
+        const refundRatio = refundAmount / salePrice;
+        const adjustedCOGS = cogs * (1 - refundRatio);
+        
+        return Math.max(0, adjustedCOGS);
       };
 
       const totalRevenue = orders
@@ -288,12 +315,12 @@ const Dashboard: React.FC = () => {
       const revenueGrowth = lastMonthRevenue > 0 ? 
         ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
 
-      // Calculate total profit using order.cogs (COGS from inventory)
+      // Calculate total profit using order.cogs (COGS from inventory, adjusted for refunds)
       const totalProfit = orders
         .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID')
-        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - ((order as any).cogs || 0)), 0);
+        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
 
-      // Calculate monthly profit using order.cogs
+      // Calculate monthly profit using order.cogs (adjusted for refunds)
       const monthlyProfit = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
@@ -302,9 +329,9 @@ const Dashboard: React.FC = () => {
                  orderDate.getMonth() === targetMonth &&
                  orderDate.getFullYear() === targetYear;
         })
-        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - ((order as any).cogs || 0)), 0);
+        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
 
-      // Calculate last month profit using order.cogs
+      // Calculate last month profit using order.cogs (adjusted for refunds)
       const lastMonthProfit = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
@@ -313,7 +340,7 @@ const Dashboard: React.FC = () => {
                  orderDate.getMonth() === lastMonth &&
                  orderDate.getFullYear() === lastMonthYear;
         })
-        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - ((order as any).cogs || 0)), 0);
+        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
 
       const profitGrowth = lastMonthProfit > 0 ? 
         ((monthlyProfit - lastMonthProfit) / lastMonthProfit) * 100 : 0;
@@ -331,16 +358,115 @@ const Dashboard: React.FC = () => {
         .reduce((sum, expense) => sum + expense.amount, 0);
 
       // Import cost from inventory: sum of purchase prices by month + renewals in that month
+      // Tránh trùng với COGS: chỉ tính chi phí nhập hàng cho items CHƯA BÁN trong tháng đó
+      // (vì COGS đã trừ purchase_price của hàng đã bán rồi)
+      
+      // Đếm số slot đã bán trong tháng cho mỗi inventory item (từ orders)
+      const soldSlotsInMonth: Record<string, number> = {};
+      orders
+        .filter(order => {
+          const orderDate = new Date(order.purchaseDate);
+          return order.status === 'COMPLETED' && 
+                 order.paymentStatus === 'PAID' &&
+                 orderDate.getMonth() === targetMonth &&
+                 orderDate.getFullYear() === targetYear &&
+                 order.inventoryItemId;
+        })
+        .forEach(order => {
+          if (order.inventoryItemId) {
+            soldSlotsInMonth[order.inventoryItemId] = (soldSlotsInMonth[order.inventoryItemId] || 0) + 1;
+          }
+        });
+      
+      // Chi phí nhập hàng tháng này = purchase_price của items nhập trong tháng NHƯNG CHƯA BÁN trong tháng đó
+      // Với multi-slot account: tính theo số slot chưa bán
+      // Chỉ tính cho items đã thanh toán (PAID) - vì chỉ khi đã thanh toán mới là chi phí thực tế
       const importCostByMonth = (inventoryItems as InventoryItem[])
-        .filter(i => new Date(i.purchaseDate).getMonth() === targetMonth && new Date(i.purchaseDate).getFullYear() === targetYear)
-        .reduce((s, i) => s + (i.purchasePrice || 0), 0);
+        .filter(i => {
+          const purchaseDate = new Date(i.purchaseDate);
+          const isInMonth = purchaseDate.getMonth() === targetMonth && purchaseDate.getFullYear() === targetYear;
+          const isPaid = !i.paymentStatus || i.paymentStatus === 'PAID'; // Chỉ tính cho items đã thanh toán
+          return isInMonth && isPaid;
+        })
+        .reduce((s, i) => {
+          const soldSlots = soldSlotsInMonth[i.id] || 0;
+          if (i.isAccountBased && i.totalSlots && i.totalSlots > 0) {
+            // Multi-slot account: tính theo số slot chưa bán
+            const remainingSlots = i.totalSlots - soldSlots;
+            if (remainingSlots > 0) {
+              const costPerSlot = (i.purchasePrice || 0) / i.totalSlots;
+              return s + (costPerSlot * remainingSlots);
+            }
+          } else {
+            // Single item: nếu chưa bán thì tính toàn bộ purchase_price
+            if (soldSlots === 0) {
+              return s + (i.purchasePrice || 0);
+            }
+          }
+          return s;
+        }, 0);
+      
       const renewalCostByMonth = inventoryRenewals
         .filter(r => r.createdAt.getMonth() === targetMonth && r.createdAt.getFullYear() === targetYear)
         .reduce((s, r) => s + (r.amount || 0), 0);
       const monthlyImportCost = importCostByMonth + renewalCostByMonth;
 
-      // All-time import cost (purchase + renewals)
-      const totalImportCost = (inventoryItems as InventoryItem[]).reduce((s, i) => s + (i.purchasePrice || 0), 0)
+      // Tổng chi phí nhập hàng đã thanh toán trong tháng (không phân biệt đã bán hay chưa)
+      const monthlyPaidImportCost = (inventoryItems as InventoryItem[])
+        .filter(i => {
+          const purchaseDate = new Date(i.purchaseDate);
+          const isInMonth = purchaseDate.getMonth() === targetMonth && purchaseDate.getFullYear() === targetYear;
+          const isPaid = !i.paymentStatus || i.paymentStatus === 'PAID';
+          return isInMonth && isPaid;
+        })
+        .reduce((s, i) => s + (i.purchasePrice || 0), 0)
+        + renewalCostByMonth;
+
+      // All-time import cost: tương tự, tính theo số slot chưa bán
+      // Đếm số slot đã bán cho mỗi inventory item (từ orders)
+      const allSoldSlots: Record<string, number> = {};
+      orders
+        .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID' && order.inventoryItemId)
+        .forEach(order => {
+          if (order.inventoryItemId) {
+            allSoldSlots[order.inventoryItemId] = (allSoldSlots[order.inventoryItemId] || 0) + 1;
+          }
+        });
+      
+      // Tổng chi phí nhập hàng = purchase_price của items CHƯA BÁN (tính theo slot) + renewals
+      // Với multi-slot account: tính theo số slot chưa bán
+      // Chỉ tính cho items đã thanh toán (PAID) - vì chỉ khi đã thanh toán mới là chi phí thực tế
+      const totalImportCost = (inventoryItems as InventoryItem[])
+        .filter(i => {
+          const isPaid = !i.paymentStatus || i.paymentStatus === 'PAID'; // Chỉ tính cho items đã thanh toán
+          return isPaid;
+        })
+        .reduce((s, i) => {
+          const soldSlots = allSoldSlots[i.id] || 0;
+          if (i.isAccountBased && i.totalSlots && i.totalSlots > 0) {
+            // Multi-slot account: tính theo số slot chưa bán
+            const remainingSlots = i.totalSlots - soldSlots;
+            if (remainingSlots > 0) {
+              const costPerSlot = (i.purchasePrice || 0) / i.totalSlots;
+              return s + (costPerSlot * remainingSlots);
+            }
+          } else {
+            // Single item: nếu chưa bán thì tính toàn bộ purchase_price
+            if (soldSlots === 0) {
+              return s + (i.purchasePrice || 0);
+            }
+          }
+          return s;
+        }, 0)
+        + inventoryRenewals.reduce((s, r) => s + (r.amount || 0), 0);
+
+      // Tổng chi phí nhập hàng đã thanh toán (tất cả thời gian, không phân biệt đã bán hay chưa)
+      const totalPaidImportCost = (inventoryItems as InventoryItem[])
+        .filter(i => {
+          const isPaid = !i.paymentStatus || i.paymentStatus === 'PAID';
+          return isPaid;
+        })
+        .reduce((s, i) => s + (i.purchasePrice || 0), 0)
         + inventoryRenewals.reduce((s, r) => s + (r.amount || 0), 0);
 
       // Calculate refunds - tính tất cả refundAmount từ tất cả orders
@@ -357,12 +483,13 @@ const Dashboard: React.FC = () => {
         })
         .reduce((s, o: any) => s + (o.refundAmount || 0), 0);
 
-      // Calculate net profit (gross profit - external expenses - refunds - import cost)
+      // Calculate net profit (gross profit - external expenses - import cost)
       // COGS = giá vốn của hàng đã bán (snapshot khi bán)
       // Import cost = chi phí nhập hàng mới (có thể chưa bán)
+      // Refunds đã được trừ trong revenue rồi (qua getOrderSnapshotPrice), không cần trừ lại
       // Cần trừ cả hai vì chúng khác nhau
-      const netProfit = totalProfit - totalExpenses - totalRefunds - totalImportCost;
-      const monthlyNetProfit = monthlyProfit - monthlyExpenses - monthlyRefunds - monthlyImportCost;
+      const netProfit = totalProfit - totalExpenses - totalImportCost;
+      const monthlyNetProfit = monthlyProfit - monthlyExpenses - monthlyImportCost;
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const needsUpdateInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'NEEDS_UPDATE').length;
@@ -405,7 +532,7 @@ const Dashboard: React.FC = () => {
         if (b) {
           const p = getOrderSnapshotPrice(o);
           b.revenue += p;
-          b.profit += (p - (((o as any).cogs ?? o.cogs) || 0));
+          b.profit += (p - getAdjustedCOGS(o));
         }
       }
       for (const e of expenses) {
@@ -415,20 +542,9 @@ const Dashboard: React.FC = () => {
         if (b) b.expenses += e.amount || 0;
       }
 
-      // Top packages - đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn
+      // Top packages - đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn và doanh thu
       // Filter orders hợp lệ (không CANCELLED)
       const validOrders = orders.filter(order => order.status !== 'CANCELLED');
-      
-      // Filter theo thời gian cho doanh thu (nếu có dateFrom/dateTo hoặc selectedMonthOffset)
-      const monthFilteredForRevenue = validOrders.filter(order => {
-        const orderDate = new Date(order.purchaseDate);
-        if (dateFrom || dateTo) {
-          const fromOk = !dateFrom || orderDate >= new Date(dateFrom);
-          const toOk = !dateTo || orderDate <= new Date(dateTo);
-          return fromOk && toOk;
-        }
-        return orderDate.getMonth() === targetMonth && orderDate.getFullYear() === targetYear;
-      });
       
       // Tạo map từ inventoryItemId -> productId để xử lý shared pool
       const inventoryItemById: Record<string, InventoryItem> = Object.fromEntries(
@@ -486,8 +602,8 @@ const Dashboard: React.FC = () => {
         pkgAggMap[key].orders += 1;
       }
       
-      // Tính doanh thu và lãi từ orders đã filter theo thời gian
-      for (const o of monthFilteredForRevenue) {
+      // Tính doanh thu và lãi từ TẤT CẢ orders (không filter theo thời gian)
+      for (const o of validOrders) {
         let pid = o.packageId;
         let prodId: string | undefined;
         
@@ -514,12 +630,11 @@ const Dashboard: React.FC = () => {
         // Dùng packageId làm key, hoặc productId nếu không có packageId
         const key = pid || `product_${prodId}`;
         
-        // Chỉ tính doanh thu và lãi từ orders đã thanh toán và chưa hoàn tiền
+        // Chỉ tính doanh thu và lãi từ orders đã thanh toán (getOrderSnapshotPrice đã xử lý refund)
         const isPaidCompleted = o.status === 'COMPLETED' && o.paymentStatus === 'PAID';
-        const refundAmount = (o as any).refundAmount || 0;
-        if (isPaidCompleted && refundAmount === 0 && pkgAggMap[key]) {
+        if (isPaidCompleted && pkgAggMap[key]) {
           const price = getOrderSnapshotPrice(o);
-          const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+          const profit = price - getAdjustedCOGS(o);
           pkgAggMap[key].revenue += price;
           pkgAggMap[key].profit += profit;
         }
@@ -550,12 +665,11 @@ const Dashboard: React.FC = () => {
         }
         customerAggMap[cid].orders += 1;
         
-        // Tính doanh thu và lãi từ orders đã thanh toán và chưa hoàn tiền (tất cả thời gian)
+        // Tính doanh thu và lãi từ orders đã thanh toán (getOrderSnapshotPrice đã xử lý refund)
         const isPaidCompleted = o.status === 'COMPLETED' && o.paymentStatus === 'PAID';
-        const refundAmount = (o as any).refundAmount || 0;
-        if (isPaidCompleted && refundAmount === 0) {
+        if (isPaidCompleted) {
           const price = getOrderSnapshotPrice(o);
-          const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+          const profit = price - getAdjustedCOGS(o);
           customerAggMap[cid].revenue += price;
           customerAggMap[cid].profit += profit;
         }
@@ -586,6 +700,8 @@ const Dashboard: React.FC = () => {
         expiredInventory,
         monthlyImportCost,
         totalImportCost,
+        monthlyPaidImportCost,
+        totalPaidImportCost,
         unpaidCount: unpaidOrders.length,
         processingCount: processingOrders.length,
         cancelledCount: cancelledOrders.length,
@@ -805,8 +921,8 @@ const Dashboard: React.FC = () => {
 
               <div className="sales-card">
                 <h3>Chi phí nhập hàng</h3>
-                <div className="sales-amount">{formatCurrency(stats.monthlyImportCost)}</div>
-                <div className="sales-subtitle">Giá mua + gia hạn kho</div>
+                <div className="sales-amount">{formatCurrency(stats.monthlyPaidImportCost)}</div>
+                <div className="sales-subtitle">Tổng chi phí nhập kho đã thanh toán</div>
               </div>
 
               <div className="sales-card">
@@ -839,14 +955,14 @@ const Dashboard: React.FC = () => {
 
               <div className="sales-card">
                 <h3>Tổng chi phí nhập hàng</h3>
-                <div className="sales-amount">{formatCurrency(stats.totalImportCost)}</div>
-                <div className="sales-subtitle">Tất cả thời gian</div>
+                <div className="sales-amount">{formatCurrency(stats.totalPaidImportCost)}</div>
+                <div className="sales-subtitle">Tổng chi phí nhập kho đã thanh toán</div>
               </div>
 
               <div className="sales-card">
                 <h3>Tổng lãi thực tế</h3>
                 <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
-                <div className="sales-subtitle">Lãi gộp (doanh thu - COGS) - chi phí ngoài lề - tiền hoàn - chi phí nhập hàng</div>
+                <div className="sales-subtitle">Lãi gộp (doanh thu - COGS) - chi phí ngoài lề - chi phí nhập hàng</div>
               </div>
             </div>
 
