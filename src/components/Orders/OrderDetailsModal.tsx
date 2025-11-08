@@ -10,6 +10,7 @@ type Getters = {
 	getPackageInfo: (packageId: string) => { package?: any; product?: any } | null;
 	getStatusLabel: (status: any) => string;
 	getPaymentLabel?: (status: any) => string;
+	getOrderPrice?: (order: Order) => number; // optional, for consistent price calculation
 };
 
 type InventoryAccess = {
@@ -41,7 +42,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	formatDate,
 	formatPrice,
 	onCopyInfo,
-	onOpenRenew
+	onOpenRenew,
+	getOrderPrice: getOrderPriceProp
 }) => {
 	// Local warranties state to ensure live updates without hard refresh
 	const [warranties, setWarranties] = useState<any[]>([]);
@@ -95,6 +97,26 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	}, [order.id, warrantyTick]);
 	const pkgInfo = getPackageInfo(order.packageId);
 	const paymentLabel = (PAYMENT_STATUSES.find(p => p.value === (order as any).paymentStatus)?.label) || 'Chưa thanh toán';
+
+	// Calculate order price - use provided function if available, otherwise calculate locally
+	const getOrderPrice = () => {
+		if (getOrderPriceProp) {
+			return getOrderPriceProp(order);
+		}
+		// Fallback calculation - prioritize salePrice (snapshot price)
+		// Respect custom price if set
+		if ((order as any).useCustomPrice && typeof (order as any).customPrice === 'number' && (order as any).customPrice > 0) {
+			return (order as any).customPrice;
+		}
+		// Use sale_price snapshot if available (this is the standard price)
+		if (typeof (order as any).salePrice === 'number' && (order as any).salePrice > 0) {
+			return (order as any).salePrice;
+		}
+		// Fallback to package price
+		const pkg = pkgInfo?.package;
+		if (!pkg) return 0;
+		return pkg.retailPrice || pkg.ctvPrice || 0;
+	};
 
 	const findInventory = () => {
 		// First try to find by inventoryItemId if it exists
@@ -278,6 +300,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Ngày hết hạn:</strong> {formatDate(order.expiryDate)}</div>
 					<div><strong>Trạng thái:</strong> {getStatusLabel(order.status)}</div>
 					<div><strong>Thanh toán:</strong> {getPaymentLabel ? (getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán') : paymentLabel}</div>
+					<div><strong>Giá đơn hàng:</strong> {formatPrice ? formatPrice(getOrderPrice()) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getOrderPrice())}</div>
 
 					{renderInventoryCard()}
 					{renderAccountOrderInfo()}

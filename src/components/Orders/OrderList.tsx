@@ -1402,6 +1402,11 @@ const OrderList: React.FC = () => {
     if (order.useCustomPrice && typeof order.customPrice === 'number' && order.customPrice > 0) {
       return order.customPrice;
     }
+    // Use sale_price snapshot if available (this is the standard price)
+    if (typeof order.salePrice === 'number' && order.salePrice > 0) {
+      return order.salePrice;
+    }
+    // Fallback to package price based on customer type
     return customer.type === 'CTV'
       ? packageInfo.package.ctvPrice
       : packageInfo.package.retailPrice;
@@ -1861,6 +1866,7 @@ const OrderList: React.FC = () => {
           getPaymentLabel={getPaymentLabel}
           formatDate={formatDate}
           formatPrice={formatPrice}
+          getOrderPrice={getOrderPrice}
           onOpenRenew={() => {
             setRenewState({
               order: viewingOrder,
