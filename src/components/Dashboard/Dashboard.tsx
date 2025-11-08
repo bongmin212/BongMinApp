@@ -235,17 +235,20 @@ const Dashboard: React.FC = () => {
         inventoryRenewals = Database.getInventoryRenewals();
       }
 
-      // Calculate stats
+      // Calculate stats - chỉ dùng sale_price từ order
       const getOrderSnapshotPrice = (order: Order): number => {
-        const snapshot = (order as any).salePrice;
-        if (typeof snapshot === 'number' && !isNaN(snapshot)) return snapshot;
-        // Fallback for legacy orders: compute using existing logic
-        const packageData = packages.find((p: ProductPackage) => p.id === order.packageId);
-        if (!packageData) return 0;
-        if (order.useCustomPrice) return order.customPrice || 0;
-        const customer = customers.find((c: Customer) => c.id === order.customerId);
-        const isCTV = (customer?.type || 'RETAIL') === 'CTV';
-        return isCTV ? packageData.ctvPrice : packageData.retailPrice;
+        // Exclude refunded orders from revenue
+        if (order.paymentStatus === 'REFUNDED') return 0;
+        // Also exclude if order has been refunded (check refundAmount)
+        const refundAmount = (order as any).refundAmount || 0;
+        if (refundAmount > 0) return 0;
+        
+        // Chỉ dùng sale_price từ order, không dùng fallback
+        const salePrice = (order as any).salePrice;
+        if (typeof salePrice === 'number' && !isNaN(salePrice) && salePrice >= 0) {
+          return salePrice;
+        }
+        return 0;
       };
 
       const totalRevenue = orders
@@ -340,17 +343,26 @@ const Dashboard: React.FC = () => {
       const totalImportCost = (inventoryItems as InventoryItem[]).reduce((s, i) => s + (i.purchasePrice || 0), 0)
         + inventoryRenewals.reduce((s, r) => s + (r.amount || 0), 0);
 
-      // Calculate refunds (counted by refund time, not purchase time)
-      const refundsAll = orders.filter(o => o.paymentStatus === 'REFUNDED');
-      const totalRefunds = refundsAll.reduce((s, o: any) => s + (o.refundAmount || 0), 0);
-      const monthlyRefunds = refundsAll
-        .filter((o: any) => o.refundAt && o.refundAt.getMonth() === targetMonth && o.refundAt.getFullYear() === targetYear)
+      // Calculate refunds - tính tất cả refundAmount từ tất cả orders
+      // Tổng tiền hoàn: tổng tất cả refundAmount
+      const totalRefunds = orders.reduce((s, o: any) => s + (o.refundAmount || 0), 0);
+      // Tiền hoàn tháng này: tính theo thời điểm hoàn (refundAt) hoặc nếu không có thì theo purchaseDate
+      const monthlyRefunds = orders
+        .filter((o: any) => {
+          const refundAmount = o.refundAmount || 0;
+          if (refundAmount <= 0) return false;
+          // Nếu có refundAt, dùng refundAt; nếu không có, dùng purchaseDate
+          const refundDate = o.refundAt ? new Date(o.refundAt) : new Date(o.purchaseDate);
+          return refundDate.getMonth() === targetMonth && refundDate.getFullYear() === targetYear;
+        })
         .reduce((s, o: any) => s + (o.refundAmount || 0), 0);
 
-      // Calculate net profit (gross profit - external expenses - refunds)
-      // Do NOT subtract import cost again since COGS already accounts for it
-      const netProfit = totalProfit - totalExpenses - totalRefunds;
-      const monthlyNetProfit = monthlyProfit - monthlyExpenses - monthlyRefunds;
+      // Calculate net profit (gross profit - external expenses - refunds - import cost)
+      // COGS = giá vốn của hàng đã bán (snapshot khi bán)
+      // Import cost = chi phí nhập hàng mới (có thể chưa bán)
+      // Cần trừ cả hai vì chúng khác nhau
+      const netProfit = totalProfit - totalExpenses - totalRefunds - totalImportCost;
+      const monthlyNetProfit = monthlyProfit - monthlyExpenses - monthlyRefunds - monthlyImportCost;
 
       const availableInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'AVAILABLE').length;
       const needsUpdateInventory = inventoryItems.filter((item: InventoryItem) => item.status === 'NEEDS_UPDATE').length;
@@ -403,11 +415,13 @@ const Dashboard: React.FC = () => {
         if (b) b.expenses += e.amount || 0;
       }
 
-      // Top packages for selected month
-      const monthFiltered = orders.filter(order => {
+      // Top packages - đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn
+      // Filter orders hợp lệ (không CANCELLED)
+      const validOrders = orders.filter(order => order.status !== 'CANCELLED');
+      
+      // Filter theo thời gian cho doanh thu (nếu có dateFrom/dateTo hoặc selectedMonthOffset)
+      const monthFilteredForRevenue = validOrders.filter(order => {
         const orderDate = new Date(order.purchaseDate);
-        const isPaid = order.status === 'COMPLETED' && order.paymentStatus === 'PAID';
-        if (!isPaid) return false;
         if (dateFrom || dateTo) {
           const fromOk = !dateFrom || orderDate >= new Date(dateFrom);
           const toOk = !dateTo || orderDate <= new Date(dateTo);
@@ -415,31 +429,113 @@ const Dashboard: React.FC = () => {
         }
         return orderDate.getMonth() === targetMonth && orderDate.getFullYear() === targetYear;
       });
+      
+      // Tạo map từ inventoryItemId -> productId để xử lý shared pool
+      const inventoryItemById: Record<string, InventoryItem> = Object.fromEntries(
+        inventoryItems.map(item => [item.id, item])
+      );
+      
       const pkgAggMap: Record<string, PackageAggRow> = {};
       const productById: Record<string, Product> = Object.fromEntries(products.map(p => [p.id, p]));
       const packagesById: Record<string, ProductPackage> = Object.fromEntries(packages.map(p => [p.id, p]));
-      for (const o of monthFiltered) {
-        const pid = o.packageId;
-        const price = getOrderSnapshotPrice(o);
-        const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
-        if (!pkgAggMap[pid]) {
-          const pkg = packages.find(p => p.id === pid);
-          const prodName = pkg ? (productById[pkg.productId]?.name || '') : '';
-          pkgAggMap[pid] = { packageId: pid, name: pkg?.name || 'Gói', productName: prodName, revenue: 0, profit: 0, orders: 0 };
+      
+      // Đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn
+      for (const o of validOrders) {
+        let pid = o.packageId;
+        let pkg: ProductPackage | undefined;
+        let prodId: string | undefined;
+        
+        // Xử lý shared pool: nếu không có packageId, lấy từ inventoryItem
+        if (!pid && o.inventoryItemId) {
+          const invItem = inventoryItemById[o.inventoryItemId];
+          if (invItem) {
+            prodId = invItem.productId;
+            // Với shared pool, tìm package đầu tiên của product đó
+            if (prodId) {
+              const productPkgs = packages.filter(p => p.productId === prodId);
+              if (productPkgs.length > 0) {
+                pkg = productPkgs[0]; // Lấy package đầu tiên để group
+                pid = pkg.id;
+              }
+            }
+          }
+        } else if (pid) {
+          pkg = packages.find(p => p.id === pid);
+          prodId = pkg?.productId;
         }
-        pkgAggMap[pid].revenue += price;
-        pkgAggMap[pid].profit += profit;
-        pkgAggMap[pid].orders += 1;
+        
+        // Skip nếu vẫn không có packageId hoặc productId
+        if (!pid && !prodId) continue;
+        
+        // Dùng packageId làm key, hoặc productId nếu không có packageId
+        const key = pid || `product_${prodId}`;
+        
+        // Đếm tất cả orders (trừ CANCELLED), không phân biệt status
+        if (!pkgAggMap[key]) {
+          const prodName = prodId ? (productById[prodId]?.name || '') : '';
+          const pkgName = pkg?.name || (prodId && productById[prodId]?.sharedInventoryPool ? 'Kho chung' : 'Gói');
+          pkgAggMap[key] = { 
+            packageId: pid || key, 
+            name: pkgName, 
+            productName: prodName, 
+            revenue: 0, 
+            profit: 0, 
+            orders: 0 
+          };
+        }
+        pkgAggMap[key].orders += 1;
+      }
+      
+      // Tính doanh thu và lãi từ orders đã filter theo thời gian
+      for (const o of monthFilteredForRevenue) {
+        let pid = o.packageId;
+        let prodId: string | undefined;
+        
+        // Xử lý shared pool: nếu không có packageId, lấy từ inventoryItem
+        if (!pid && o.inventoryItemId) {
+          const invItem = inventoryItemById[o.inventoryItemId];
+          if (invItem) {
+            prodId = invItem.productId;
+            if (prodId) {
+              const productPkgs = packages.filter(p => p.productId === prodId);
+              if (productPkgs.length > 0) {
+                pid = productPkgs[0].id;
+              }
+            }
+          }
+        } else if (pid) {
+          const pkg = packages.find(p => p.id === pid);
+          prodId = pkg?.productId;
+        }
+        
+        // Skip nếu vẫn không có packageId hoặc productId
+        if (!pid && !prodId) continue;
+        
+        // Dùng packageId làm key, hoặc productId nếu không có packageId
+        const key = pid || `product_${prodId}`;
+        
+        // Chỉ tính doanh thu và lãi từ orders đã thanh toán và chưa hoàn tiền
+        const isPaidCompleted = o.status === 'COMPLETED' && o.paymentStatus === 'PAID';
+        const refundAmount = (o as any).refundAmount || 0;
+        if (isPaidCompleted && refundAmount === 0 && pkgAggMap[key]) {
+          const price = getOrderSnapshotPrice(o);
+          const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+          pkgAggMap[key].revenue += price;
+          pkgAggMap[key].profit += profit;
+        }
       }
       const pkgAggRows = Object.values(pkgAggMap);
 
-      // Top customers for selected month
+      // Top customers - đếm TẤT CẢ orders và tính doanh thu (không filter theo thời gian)
       const customerAggMap: Record<string, CustomerAggRow> = {};
       const customersById: Record<string, Customer> = Object.fromEntries(customers.map(c => [c.id, c]));
-      for (const o of monthFiltered) {
+      
+      // Đếm TẤT CẢ orders và tính doanh thu (không filter theo thời gian)
+      for (const o of validOrders) {
         const cid = o.customerId;
-        const price = getOrderSnapshotPrice(o);
-        const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+        if (!cid) continue; // Skip orders without customerId
+        
+        // Đếm tất cả orders (trừ CANCELLED), không phân biệt status
         if (!customerAggMap[cid]) {
           const customer = customers.find(c => c.id === cid);
           customerAggMap[cid] = { 
@@ -452,9 +548,17 @@ const Dashboard: React.FC = () => {
             orders: 0 
           };
         }
-        customerAggMap[cid].revenue += price;
-        customerAggMap[cid].profit += profit;
         customerAggMap[cid].orders += 1;
+        
+        // Tính doanh thu và lãi từ orders đã thanh toán và chưa hoàn tiền (tất cả thời gian)
+        const isPaidCompleted = o.status === 'COMPLETED' && o.paymentStatus === 'PAID';
+        const refundAmount = (o as any).refundAmount || 0;
+        if (isPaidCompleted && refundAmount === 0) {
+          const price = getOrderSnapshotPrice(o);
+          const profit = price - ((((o as any).cogs) ?? o.cogs) || 0);
+          customerAggMap[cid].revenue += price;
+          customerAggMap[cid].profit += profit;
+        }
       }
       const customerAggRows = Object.values(customerAggMap);
 
@@ -742,7 +846,7 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Tổng lãi thực tế</h3>
                 <div className="sales-amount">{formatCurrency(stats.netProfit)}</div>
-                <div className="sales-subtitle">Lãi sau COGS + chi phí ngoài lề</div>
+                <div className="sales-subtitle">Lãi gộp (doanh thu - COGS) - chi phí ngoài lề - tiền hoàn - chi phí nhập hàng</div>
               </div>
             </div>
 
