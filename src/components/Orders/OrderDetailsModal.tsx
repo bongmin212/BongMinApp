@@ -360,7 +360,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					})()}
 				</div>
 				<div className="d-flex justify-content-end gap-2">
-					{new Date(order.expiryDate) >= new Date() && onOpenRenew && (
+					{onOpenRenew && (
 						<button className="btn btn-success" onClick={onOpenRenew}>Gia hạn</button>
 					)}
 					{onCopyInfo && (

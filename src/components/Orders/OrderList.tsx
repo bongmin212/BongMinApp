@@ -26,7 +26,8 @@ const OrderList: React.FC = () => {
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<OrderStatus | ''>('');
   const [filterPayment, setFilterPayment] = useState<PaymentStatus | ''>('');
-  const [filterCustomerType, setFilterCustomerType] = useState<'CTV' | 'RETAIL' | ''>('');
+  const [filterProduct, setFilterProduct] = useState<string>('');
+  const [filterPackage, setFilterPackage] = useState<string>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
@@ -98,7 +99,8 @@ const OrderList: React.FC = () => {
       const q = params.get('q') || '';
       const status = (params.get('status') || '') as OrderStatus | '';
       const payment = (params.get('payment') || '') as PaymentStatus | '';
-      const customerType = (params.get('customerType') || '') as 'CTV' | 'RETAIL' | '';
+      const product = params.get('product') || '';
+      const packageId = params.get('package') || '';
       const from = params.get('from') || '';
       const to = params.get('to') || '';
       const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
@@ -111,7 +113,8 @@ const OrderList: React.FC = () => {
       setDebouncedSearchTerm(q);
       setFilterStatus(status);
       setFilterPayment(payment);
-      setFilterCustomerType(customerType);
+      setFilterProduct(product);
+      setFilterPackage(packageId);
       setDateFrom(from);
       setDateTo(to);
       setExpiryFilter(expiry);
@@ -140,7 +143,8 @@ const OrderList: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const status = (params.get('status') || '') as OrderStatus | '';
         const payment = (params.get('payment') || '') as PaymentStatus | '';
-        const customerType = (params.get('customerType') || '') as 'CTV' | 'RETAIL' | '';
+        const product = params.get('product') || '';
+        const packageId = params.get('package') || '';
         const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
         const notSent = params.get('onlyExpiringNotSent') === '1';
         const p = parseInt(params.get('page') || '1', 10);
@@ -148,7 +152,8 @@ const OrderList: React.FC = () => {
         // Only update if values are different to avoid infinite loops
         if (status !== filterStatus) setFilterStatus(status);
         if (payment !== filterPayment) setFilterPayment(payment);
-        if (customerType !== filterCustomerType) setFilterCustomerType(customerType);
+        if (product !== filterProduct) setFilterProduct(product);
+        if (packageId !== filterPackage) setFilterPackage(packageId);
         if (expiry !== expiryFilter) setExpiryFilter(expiry);
         if (notSent !== onlyExpiringNotSent) setOnlyExpiringNotSent(notSent);
         if (p !== page) setPage(p);
@@ -181,7 +186,7 @@ const OrderList: React.FC = () => {
   // Reset page on filter/search changes (debounced)
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPayment, filterCustomerType, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
 
   // No localStorage persistence
 
@@ -192,7 +197,8 @@ const OrderList: React.FC = () => {
       if (debouncedSearchTerm) params.set('q', debouncedSearchTerm); else params.delete('q');
       if (filterStatus) params.set('status', filterStatus as string); else params.delete('status');
       if (filterPayment) params.set('payment', filterPayment as string); else params.delete('payment');
-      if (filterCustomerType) params.set('customerType', filterCustomerType as string); else params.delete('customerType');
+      if (filterProduct) params.set('product', filterProduct); else params.delete('product');
+      if (filterPackage) params.set('package', filterPackage); else params.delete('package');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
       if (expiryFilter) params.set('expiry', expiryFilter); else params.delete('expiry');
@@ -203,7 +209,7 @@ const OrderList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPayment, filterCustomerType, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
 
   const loadData = async () => {
     const sb = getSupabase();
@@ -1015,6 +1021,166 @@ const OrderList: React.FC = () => {
     }).format(price);
   };
 
+  // Base filtered list (without product/package filters) - used to determine available filter options
+  const baseFilteredOrders = useMemo(() => {
+    const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
+    const nowTs = Date.now();
+    const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
+    const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
+    
+    return orders.filter(order => {
+      // Search
+      const pkg = packageMap.get(order.packageId);
+      const product = pkg ? productMap.get(pkg.productId) : undefined;
+      const detailsTextLower = buildFullOrderInfo(order).text.toLowerCase();
+      
+      // Find linked inventory for this order
+      const linkedInventory = (() => {
+        if (order.inventoryItemId) {
+          const found = inventory.find((i: any) => i.id === order.inventoryItemId);
+          if (found) return found;
+        }
+        const byLinked = inventory.find((i: any) => i.linked_order_id === order.id);
+        if (byLinked) return byLinked;
+        return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === order.id));
+      })();
+      
+      // Build inventory search text
+      let inventorySearchText = '';
+      if (linkedInventory) {
+        inventorySearchText = [
+          linkedInventory.code || '',
+          linkedInventory.productInfo || '',
+          linkedInventory.sourceNote || '',
+          linkedInventory.notes || '',
+          linkedInventory.supplierName || '',
+          linkedInventory.supplierId || ''
+        ].join(' ').toLowerCase();
+        
+        // Add account data if available
+        if (linkedInventory.accountData) {
+          Object.values(linkedInventory.accountData).forEach(value => {
+            if (value && typeof value === 'string') {
+              inventorySearchText += ' ' + value.toLowerCase();
+            }
+          });
+        }
+      }
+      
+      const matchesSearch =
+        (order.code || '').toLowerCase().includes(normalizedSearch) ||
+        (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
+        (customerCodeLower.get(order.customerId) || '').includes(normalizedSearch) ||
+        (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
+        (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
+        ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch) ||
+        (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
+        detailsTextLower.includes(normalizedSearch) ||
+        inventorySearchText.includes(normalizedSearch);
+
+      if (!matchesSearch) return false;
+
+      // Status & payment
+      if (filterStatus && order.status !== filterStatus) return false;
+      if (filterPayment && order.paymentStatus !== filterPayment) return false;
+
+      // Date range
+      const purchaseTs = new Date(order.purchaseDate).getTime();
+      if (purchaseTs < fromTs || purchaseTs > toTs) return false;
+
+      // Expiry bucket
+      const expiryTs = new Date(order.expiryDate).getTime();
+      if (expiryFilter) {
+        const daysToExpiry = Math.ceil((expiryTs - nowTs) / 86400000);
+        const isExpired = expiryTs < nowTs;
+        const isExpiring = daysToExpiry >= 0 && daysToExpiry <= 7;
+        const isActive = expiryTs >= nowTs && daysToExpiry > 7;
+        if (
+          !(
+            (expiryFilter === 'EXPIRED' && isExpired) ||
+            (expiryFilter === 'EXPIRING' && isExpiring) ||
+            (expiryFilter === 'ACTIVE' && isActive)
+          )
+        ) {
+          return false;
+        }
+      }
+
+      // Only expiring and not yet sent renewal message
+      if (onlyExpiringNotSent) {
+        const daysToExpiry = Math.ceil((expiryTs - nowTs) / 86400000);
+        const isExpiring = daysToExpiry >= 0 && daysToExpiry <= 7;
+        if (!(isExpiring && !((order as any).renewalMessageSent))) return false;
+      }
+
+      // Slot returned filter
+      if (slotReturnedFilter) {
+        const isReturned = isSlotReturned(order);
+        if (slotReturnedFilter === 'NOT_RETURNED' && isReturned) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
+
+  // Extract available products and packages from base filtered list
+  // Products: if package filter is set, only show products that have that package
+  const availableProducts = useMemo(() => {
+    const productSet = new Set<string>();
+    baseFilteredOrders.forEach(order => {
+      const pkg = packageMap.get(order.packageId);
+      if (pkg) {
+        // If package filter is set, only include products that have that package
+        if (filterPackage) {
+          if (pkg.id === filterPackage) {
+            const product = productMap.get(pkg.productId);
+            if (product) productSet.add(product.id);
+          }
+        } else {
+          const product = productMap.get(pkg.productId);
+          if (product) productSet.add(product.id);
+        }
+      }
+    });
+    return Array.from(productSet).map(id => productMap.get(id)).filter(Boolean) as Product[];
+  }, [baseFilteredOrders, packageMap, productMap, filterPackage]);
+
+  // Packages: if product filter is set, only show packages from that product
+  const availablePackages = useMemo(() => {
+    const packageSet = new Set<string>();
+    baseFilteredOrders.forEach(order => {
+      const pkg = packageMap.get(order.packageId);
+      if (pkg) {
+        // If product filter is set, only include packages from that product
+        if (filterProduct) {
+          const product = productMap.get(pkg.productId);
+          if (product && product.id === filterProduct) {
+            packageSet.add(pkg.id);
+          }
+        } else {
+          packageSet.add(pkg.id);
+        }
+      }
+    });
+    return Array.from(packageSet).map(id => packageMap.get(id)).filter(Boolean) as ProductPackage[];
+  }, [baseFilteredOrders, packageMap, productMap, filterProduct]);
+
+  // Clear package filter if selected package is not in available packages
+  useEffect(() => {
+    if (filterPackage && !availablePackages.find(p => p.id === filterPackage)) {
+      setFilterPackage('');
+    }
+  }, [filterPackage, availablePackages]);
+
+  // Clear product filter if selected product is not in available products
+  useEffect(() => {
+    if (filterProduct && !availableProducts.find(p => p.id === filterProduct)) {
+      setFilterProduct('');
+    }
+  }, [filterProduct, availableProducts]);
+
   const filteredOrders = useMemo(() => {
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
     const nowTs = Date.now();
@@ -1078,12 +1244,6 @@ const OrderList: React.FC = () => {
       if (filterStatus && order.status !== filterStatus) return false;
       if (filterPayment && order.paymentStatus !== filterPayment) return false;
 
-      // Customer type
-      if (filterCustomerType) {
-        const customer = customers.find(c => c.id === order.customerId);
-        if (!customer || customer.type !== filterCustomerType) return false;
-      }
-
       // Date range
       const purchaseTs = new Date(order.purchaseDate).getTime();
       if (purchaseTs < fromTs || purchaseTs > toTs) return false;
@@ -1121,12 +1281,22 @@ const OrderList: React.FC = () => {
         }
       }
 
+      // Product filter
+      if (filterProduct) {
+        if (!product || product.id !== filterProduct) return false;
+      }
+
+      // Package filter
+      if (filterPackage) {
+        if (!pkg || pkg.id !== filterPackage) return false;
+      }
+
       return true;
     });
     
     
     return filtered;
-  }, [orders, customers, debouncedSearchTerm, filterStatus, filterPayment, filterCustomerType, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
+  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
@@ -1413,13 +1583,24 @@ const OrderList: React.FC = () => {
   };
 
   const getTotalRevenue = useMemo(() => {
-    const paidCompleted = filteredOrders.filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID');
+    const completed = filteredOrders.filter(order => order.status === 'COMPLETED');
     let sum = 0;
-    for (let i = 0; i < paidCompleted.length; i++) {
-      sum += getOrderPrice(paidCompleted[i]);
+    for (let i = 0; i < completed.length; i++) {
+      sum += getOrderPrice(completed[i]);
     }
     return () => sum;
   }, [filteredOrders, customerMap, packageMap, productMap]);
+
+  const getSelectedTotal = useMemo(() => {
+    let sum = 0;
+    for (let i = 0; i < selectedIds.length; i++) {
+      const order = filteredOrders.find(o => o.id === selectedIds[i]);
+      if (order) {
+        sum += getOrderPrice(order);
+      }
+    }
+    return sum;
+  }, [selectedIds, filteredOrders, customerMap, packageMap, productMap]);
 
   const roundDownToThousand = (value: number) => {
     return Math.max(0, Math.floor(value / 1000) * 1000);
@@ -1553,7 +1734,8 @@ const OrderList: React.FC = () => {
     setDebouncedSearchTerm('');
     setFilterStatus('');
     setFilterPayment('');
-    setFilterCustomerType('');
+    setFilterProduct('');
+    setFilterPackage('');
     setDateFrom('');
     setDateTo('');
     setExpiryFilter('');
@@ -1577,7 +1759,6 @@ const OrderList: React.FC = () => {
                 debouncedSearchTerm,
                 filterStatus,
                 filterPayment,
-                filterCustomerType,
                 dateFrom,
                 dateTo,
                 expiryFilter,
@@ -1590,7 +1771,6 @@ const OrderList: React.FC = () => {
                 debouncedSearchTerm,
                 filterStatus,
                 filterPayment,
-                filterCustomerType,
                 dateFrom,
                 dateTo,
                 expiryFilter,
@@ -1601,6 +1781,7 @@ const OrderList: React.FC = () => {
             {selectedIds.length > 0 && (
             <div className="d-flex gap-2 align-items-center">
               <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+              <span className="badge bg-info">Tổng tiền: {formatPrice(getSelectedTotal)}</span>
               {/* Bulk delete removed per request */}
               <div className="d-flex gap-1">
                   <button className="btn btn-secondary" onClick={() => bulkSetStatus('CANCELLED')}>Đã hủy</button>
@@ -1695,12 +1876,41 @@ const OrderList: React.FC = () => {
           <div>
             <select
               className="form-control"
-              value={filterCustomerType}
-              onChange={(e) => setFilterCustomerType(e.target.value as 'CTV' | 'RETAIL' | '')}
+              value={filterProduct}
+              onChange={(e) => {
+                setFilterProduct(e.target.value);
+                // Clear package filter when product changes
+                if (e.target.value) {
+                  setFilterPackage('');
+                }
+              }}
             >
-              <option value="">Tất cả loại khách</option>
-              <option value="CTV">Cộng Tác Viên</option>
-              <option value="RETAIL">Khách Lẻ</option>
+              <option value="">Tất cả sản phẩm</option>
+              {availableProducts.map(product => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterPackage}
+              onChange={(e) => {
+                setFilterPackage(e.target.value);
+                // Clear product filter when package changes
+                if (e.target.value) {
+                  setFilterProduct('');
+                }
+              }}
+            >
+              <option value="">Tất cả gói</option>
+              {availablePackages.map(pkg => (
+                <option key={pkg.id} value={pkg.id}>
+                  {pkg.name}
+                </option>
+              ))}
             </select>
           </div>
           <div style={{ gridColumn: 'span 2' }}>
