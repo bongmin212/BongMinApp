@@ -1878,10 +1878,17 @@ const OrderList: React.FC = () => {
               className="form-control"
               value={filterProduct}
               onChange={(e) => {
-                setFilterProduct(e.target.value);
-                // Clear package filter when product changes
-                if (e.target.value) {
-                  setFilterPackage('');
+                const newProductId = e.target.value;
+                setFilterProduct(newProductId);
+                // Clear package filter only if current package doesn't belong to the new product
+                if (newProductId && filterPackage) {
+                  const currentPackage = packageMap.get(filterPackage);
+                  if (currentPackage) {
+                    const currentProduct = productMap.get(currentPackage.productId);
+                    if (!currentProduct || currentProduct.id !== newProductId) {
+                      setFilterPackage('');
+                    }
+                  }
                 }
               }}
             >
@@ -1898,10 +1905,17 @@ const OrderList: React.FC = () => {
               className="form-control"
               value={filterPackage}
               onChange={(e) => {
-                setFilterPackage(e.target.value);
-                // Clear product filter when package changes
-                if (e.target.value) {
-                  setFilterProduct('');
+                const newPackageId = e.target.value;
+                setFilterPackage(newPackageId);
+                // Clear product filter only if current product doesn't have the new package
+                if (newPackageId && filterProduct) {
+                  const newPackage = packageMap.get(newPackageId);
+                  if (newPackage) {
+                    const newPackageProduct = productMap.get(newPackage.productId);
+                    if (!newPackageProduct || newPackageProduct.id !== filterProduct) {
+                      setFilterProduct('');
+                    }
+                  }
                 }
               }}
             >
