@@ -1825,66 +1825,6 @@ const OrderList: React.FC = () => {
           <div>
             <select
               className="form-control"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as OrderStatus | '')}
-            >
-              <option value="">Tất cả trạng thái</option>
-              {ORDER_STATUSES.map(status => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-control"
-              value={expiryFilter}
-              onChange={(e) => setExpiryFilter(e.target.value as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '')}
-            >
-              <option value="">Tất cả hạn dùng</option>
-              <option value="EXPIRING">Sắp hết hạn (&lt;= 7 ngày)</option>
-              <option value="EXPIRED">Đã hết hạn</option>
-              <option value="ACTIVE">Còn hạn (&gt; 7 ngày)</option>
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-control"
-              value={onlyExpiringNotSent ? 'NOT_SENT' : ''}
-              onChange={(e) => setOnlyExpiringNotSent(e.target.value === 'NOT_SENT')}
-            >
-              <option value="">Tất cả gửi gia hạn</option>
-              <option value="NOT_SENT">Chưa gửi gia hạn</option>
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-control"
-              value={slotReturnedFilter}
-              onChange={(e) => setSlotReturnedFilter(e.target.value as 'NOT_RETURNED' | '')}
-            >
-              <option value="">Tất cả slot</option>
-              <option value="NOT_RETURNED">Chưa trả slot về kho</option>
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-control"
-              value={filterPayment}
-              onChange={(e) => setFilterPayment(e.target.value as PaymentStatus | '')}
-            >
-              <option value="">Tất cả thanh toán</option>
-              {PAYMENT_STATUSES.map(p => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-control"
               value={filterProduct}
               onChange={(e) => {
                 const newProductId = e.target.value;
@@ -1936,6 +1876,34 @@ const OrderList: React.FC = () => {
               ))}
             </select>
           </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as OrderStatus | '')}
+            >
+              <option value="">Tất cả trạng thái</option>
+              {ORDER_STATUSES.map(status => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterPayment}
+              onChange={(e) => setFilterPayment(e.target.value as PaymentStatus | '')}
+            >
+              <option value="">Tất cả thanh toán</option>
+              {PAYMENT_STATUSES.map(p => (
+                <option key={p.value} value={p.value}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div style={{ gridColumn: 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày mua"
@@ -1943,6 +1911,38 @@ const OrderList: React.FC = () => {
               to={dateTo}
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={expiryFilter}
+              onChange={(e) => setExpiryFilter(e.target.value as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '')}
+            >
+              <option value="">Tất cả hạn dùng</option>
+              <option value="EXPIRING">Sắp hết hạn (&lt;= 7 ngày)</option>
+              <option value="EXPIRED">Đã hết hạn</option>
+              <option value="ACTIVE">Còn hạn (&gt; 7 ngày)</option>
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={onlyExpiringNotSent ? 'NOT_SENT' : ''}
+              onChange={(e) => setOnlyExpiringNotSent(e.target.value === 'NOT_SENT')}
+            >
+              <option value="">Tất cả gửi gia hạn</option>
+              <option value="NOT_SENT">Chưa gửi gia hạn</option>
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={slotReturnedFilter}
+              onChange={(e) => setSlotReturnedFilter(e.target.value as 'NOT_RETURNED' | '')}
+            >
+              <option value="">Tất cả slot</option>
+              <option value="NOT_RETURNED">Chưa trả slot về kho</option>
+            </select>
           </div>
           <div>
             <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>

@@ -20,6 +20,8 @@ const WarehouseList: React.FC = () => {
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('');
+  const [filterProduct, setFilterProduct] = useState<string>('');
+  const [filterPackage, setFilterPackage] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
@@ -578,6 +580,8 @@ const WarehouseList: React.FC = () => {
       const q = params.get('q') || '';
       const status = params.get('status') || '';
       const paymentStatus = params.get('paymentStatus') || '';
+      const product = params.get('product') || '';
+      const packageId = params.get('package') || '';
       const from = params.get('from') || '';
       const to = params.get('to') || '';
       const accounts = params.get('accounts') === '1';
@@ -590,6 +594,8 @@ const WarehouseList: React.FC = () => {
       setDebouncedSearchTerm(q);
       setFilterStatus(status);
       setFilterPaymentStatus(paymentStatus);
+      setFilterProduct(product);
+      setFilterPackage(packageId);
       setDateFrom(from);
       setDateTo(to);
       setOnlyAccounts(accounts);
@@ -608,6 +614,8 @@ const WarehouseList: React.FC = () => {
         const params = new URLSearchParams(window.location.search);
         const status = params.get('status') || '';
         const paymentStatus = params.get('paymentStatus') || '';
+        const product = params.get('product') || '';
+        const packageId = params.get('package') || '';
         const from = params.get('from') || '';
         const to = params.get('to') || '';
         const accounts = params.get('accounts') === '1';
@@ -617,6 +625,8 @@ const WarehouseList: React.FC = () => {
         // Only update if values are different to avoid infinite loops
         if (status !== filterStatus) setFilterStatus(status);
         if (paymentStatus !== filterPaymentStatus) setFilterPaymentStatus(paymentStatus);
+        if (product !== filterProduct) setFilterProduct(product);
+        if (packageId !== filterPackage) setFilterPackage(packageId);
         if (from !== dateFrom) setDateFrom(from);
         if (to !== dateTo) setDateTo(to);
         if (accounts !== onlyAccounts) setOnlyAccounts(accounts);
@@ -680,7 +690,7 @@ const WarehouseList: React.FC = () => {
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
 
   // Persist limit
   useEffect(() => {
@@ -694,6 +704,8 @@ const WarehouseList: React.FC = () => {
       if (debouncedSearchTerm) params.set('q', debouncedSearchTerm); else params.delete('q');
       if (filterStatus) params.set('status', filterStatus); else params.delete('status');
       if (filterPaymentStatus) params.set('paymentStatus', filterPaymentStatus); else params.delete('paymentStatus');
+      if (filterProduct) params.set('product', filterProduct); else params.delete('product');
+      if (filterPackage) params.set('package', filterPackage); else params.delete('package');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
       params.set('accounts', onlyAccounts ? '1' : '0');
@@ -704,7 +716,7 @@ const WarehouseList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
   const packageMap = useMemo(() => new Map(packages.map(p => [p.id, p.name])), [packages]);
@@ -757,6 +769,136 @@ const WarehouseList: React.FC = () => {
     const now = Date.now();
     return i.status !== 'SOLD' && t >= now && t <= now + 7 * 24 * 3600 * 1000;
   };
+
+  // Base filtered list (without product/package filters) - used to determine available filter options
+  const baseFilteredItems = useMemo(() => {
+    const norm = debouncedSearchTerm.trim().toLowerCase();
+    
+    return items.filter(i => {
+      // Search in account data fields
+      const accountDataMatches = !norm || (() => {
+        if (!i.accountData || typeof i.accountData !== 'object') return false;
+        return Object.values(i.accountData).some(value => 
+          String(value || '').toLowerCase().includes(norm)
+        );
+      })();
+
+      // Search in linked orders (classic linked_order_id and account-based profiles)
+      const linkedOrderMatches = !norm || (() => {
+        const orderIds: string[] = [];
+        if (i.linkedOrderId) orderIds.push(i.linkedOrderId);
+        const profiles = Array.isArray(i.profiles) ? i.profiles : [];
+        profiles.forEach((p: any) => { if (p.assignedOrderId) orderIds.push(p.assignedOrderId); });
+        const unique = Array.from(new Set(orderIds));
+        if (unique.length === 0) return false;
+        const allOrders = Database.getOrders();
+        return unique.some(id => {
+          const o = allOrders.find((x: any) => x.id === id);
+          if (!o) return false;
+          const customerNameLower = (customerMap.get(o.customerId) || '').toLowerCase();
+          const pkgInfo = getPackageInfo(o.packageId);
+          const productNameLower = (pkgInfo.product?.name || '').toLowerCase();
+          const packageNameLower = (pkgInfo.pkg?.name || '').toLowerCase();
+          const detailsLower = buildFullOrderInfo(o).text.toLowerCase();
+          const notesLower = (o.notes ? String(o.notes) : '').toLowerCase();
+          const orderInfoLower = (o as any).orderInfo ? String((o as any).orderInfo).toLowerCase() : '';
+          return (
+            (o.code || '').toLowerCase().includes(norm) ||
+            customerNameLower.includes(norm) ||
+            productNameLower.includes(norm) ||
+            packageNameLower.includes(norm) ||
+            detailsLower.includes(norm) ||
+            notesLower.includes(norm) ||
+            orderInfoLower.includes(norm)
+          );
+        });
+      })();
+
+      const matchesSearch = !norm ||
+        (i.code || '').toLowerCase().includes(norm) ||
+        (productMap.get(i.productId) || '').toLowerCase().includes(norm) ||
+        (packageMap.get(i.packageId) || '').toLowerCase().includes(norm) ||
+        (i.productInfo || '').toLowerCase().includes(norm) ||
+        (i.sourceNote || '').toLowerCase().includes(norm) ||
+        (i.notes || '').toLowerCase().includes(norm) ||
+        accountDataMatches ||
+        linkedOrderMatches;
+
+      const matchesStatus = !filterStatus || (
+        filterStatus === 'EXPIRING_SOON' 
+          ? isExpiringSoon(i) 
+          : filterStatus === 'NEEDS_UPDATE'
+            ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
+            : i.status === filterStatus as any
+      );
+      const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
+
+      const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
+      const pToOk = !dateTo || new Date(i.purchaseDate) <= new Date(dateTo);
+
+      const pkg = packages.find(p => p.id === i.packageId) as any;
+      const isAcc = !!(i.isAccountBased || pkg?.isAccountBased);
+      const hasFree = isAcc ? ((i.totalSlots || 0) - (i.profiles || []).filter(p => p.isAssigned).length) > 0 : false;
+      const accountsOk = !onlyAccounts || isAcc;
+      const freeOk = !onlyFreeSlots || hasFree;
+
+      return matchesSearch && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
+    });
+  }, [items, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap]);
+
+  // Extract available products and packages from base filtered list
+  // Products: if package filter is set, only show products that have that package
+  const availableProducts = useMemo(() => {
+    const productSet = new Set<string>();
+    baseFilteredItems.forEach(item => {
+      const product = products.find(p => p.id === item.productId);
+      if (product) {
+        // If package filter is set, only include products that have that package
+        if (filterPackage) {
+          const pkg = packages.find(p => p.id === filterPackage);
+          if (pkg && pkg.productId === product.id) {
+            productSet.add(product.id);
+          }
+        } else {
+          productSet.add(product.id);
+        }
+      }
+    });
+    return Array.from(productSet).map(id => products.find(p => p.id === id)).filter(Boolean) as Product[];
+  }, [baseFilteredItems, products, packages, filterPackage]);
+
+  // Packages: if product filter is set, only show packages from that product
+  const availablePackages = useMemo(() => {
+    const packageSet = new Set<string>();
+    baseFilteredItems.forEach(item => {
+      const pkg = packages.find(p => p.id === item.packageId);
+      if (pkg) {
+        // If product filter is set, only include packages from that product
+        if (filterProduct) {
+          if (pkg.productId === filterProduct) {
+            packageSet.add(pkg.id);
+          }
+        } else {
+          packageSet.add(pkg.id);
+        }
+      }
+    });
+    return Array.from(packageSet).map(id => packages.find(p => p.id === id)).filter(Boolean) as ProductPackage[];
+  }, [baseFilteredItems, packages, filterProduct]);
+
+  // Clear package filter if selected package is not in available packages
+  useEffect(() => {
+    if (filterPackage && !availablePackages.find(p => p.id === filterPackage)) {
+      setFilterPackage('');
+    }
+  }, [filterPackage, availablePackages]);
+
+  // Clear product filter if selected product is not in available products
+  useEffect(() => {
+    if (filterProduct && !availableProducts.find(p => p.id === filterProduct)) {
+      setFilterProduct('');
+    }
+  }, [filterProduct, availableProducts]);
 
   const filteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
@@ -831,13 +973,19 @@ const WarehouseList: React.FC = () => {
       const accountsOk = !onlyAccounts || isAcc;
       const freeOk = !onlyFreeSlots || hasFree;
 
+      // Product filter
+      if (filterProduct && i.productId !== filterProduct) return false;
+
+      // Package filter
+      if (filterPackage && i.packageId !== filterPackage) return false;
+
       return matchesSearch && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
     });
     
     // WarehouseList: Filtered results
     
     return filtered;
-  }, [items, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+  }, [items, filterStatus, filterPaymentStatus, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -1300,6 +1448,8 @@ const WarehouseList: React.FC = () => {
     setDebouncedSearchTerm('');
     setFilterStatus('');
     setFilterPaymentStatus('');
+    setFilterProduct('');
+    setFilterPackage('');
     setDateFrom('');
     setDateTo('');
     setOnlyAccounts(false);
@@ -1373,6 +1523,58 @@ const WarehouseList: React.FC = () => {
             />
           </div>
           <div>
+            <select
+              className="form-control"
+              value={filterProduct}
+              onChange={(e) => {
+                const newProductId = e.target.value;
+                setFilterProduct(newProductId);
+                // Clear package filter only if current package doesn't belong to the new product
+                if (newProductId && filterPackage) {
+                  const currentPackage = packages.find(p => p.id === filterPackage);
+                  if (currentPackage) {
+                    if (currentPackage.productId !== newProductId) {
+                      setFilterPackage('');
+                    }
+                  }
+                }
+              }}
+            >
+              <option value="">Tất cả sản phẩm</option>
+              {availableProducts.map(product => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterPackage}
+              onChange={(e) => {
+                const newPackageId = e.target.value;
+                setFilterPackage(newPackageId);
+                // Clear product filter only if current product doesn't have the new package
+                if (newPackageId && filterProduct) {
+                  const newPackage = packages.find(p => p.id === newPackageId);
+                  if (newPackage) {
+                    if (newPackage.productId !== filterProduct) {
+                      setFilterProduct('');
+                    }
+                  }
+                }
+              }}
+            >
+              <option value="">Tất cả gói</option>
+              {availablePackages.map(pkg => (
+                <option key={pkg.id} value={pkg.id}>
+                  {pkg.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <select className="form-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">Trạng thái</option>
               <option value="AVAILABLE">Sẵn có</option>
@@ -1382,14 +1584,6 @@ const WarehouseList: React.FC = () => {
               <option value="NEEDS_UPDATE">Cần update</option>
             </select>
           </div>
-          <div style={{ gridColumn: 'span 2' }}>
-            <DateRangeInput
-              label="Khoảng ngày nhập"
-              from={dateFrom}
-              to={dateTo}
-              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
-            />
-          </div>
           <div>
             <select className="form-control" value={filterPaymentStatus} onChange={(e) => setFilterPaymentStatus(e.target.value)}>
               <option value="">Thanh toán</option>
@@ -1397,6 +1591,14 @@ const WarehouseList: React.FC = () => {
                 <option key={status.value} value={status.value}>{status.label}</option>
               ))}
             </select>
+          </div>
+          <div style={{ gridColumn: 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày nhập"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+            />
           </div>
           <div>
             <select
