@@ -2331,7 +2331,7 @@ const WarehouseList: React.FC = () => {
               {(() => {
                 const o = renewState.order;
                 const currentExpiry = new Date(o.expiryDate);
-                const base = currentExpiry > new Date() ? currentExpiry : new Date();
+                const base = currentExpiry;
                 const pkgInfo = getPackageInfo(renewState.packageId);
                 const pkg = pkgInfo?.pkg;
                 const product = pkgInfo?.product;

@@ -298,7 +298,10 @@ const OrderList: React.FC = () => {
         renewalMessageSent: !!r.renewal_message_sent,
         renewalMessageSentAt: r.renewal_message_sent_at ? new Date(r.renewal_message_sent_at) : undefined,
         renewalMessageSentBy: r.renewal_message_sent_by || undefined,
-        renewals: mappedRenewals
+        renewals: mappedRenewals,
+        refundAmount: r.refund_amount || 0,
+        refundAt: r.refund_at ? new Date(r.refund_at) : undefined,
+        createdBy: r.created_by || 'system'
       };
     }) as Order[];
     // Merge local renewals so they persist across reloads
@@ -1712,12 +1715,18 @@ const OrderList: React.FC = () => {
           <td>
             <div className="d-flex gap-2">
               <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
-              <button
-                onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
-                className="btn btn-warning"
-              >
-                Tính tiền hoàn
-              </button>
+              {order.paymentStatus === 'REFUNDED' ? (
+                <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
+                  Đã hoàn: {formatPrice((order as any).refundAmount || 0)}
+                </div>
+              ) : (
+                <button
+                  onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
+                  className="btn btn-warning"
+                >
+                  Tính tiền hoàn
+                </button>
+              )}
               <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
               {new Date(order.expiryDate) < new Date() && !isSlotReturned(order) && (
                 <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot về kho</button>
@@ -1994,10 +2003,16 @@ const OrderList: React.FC = () => {
 
               <div className="order-card-actions">
                 <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
-                <button
-                  onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
-                  className="btn btn-warning"
-                >Tính tiền hoàn</button>
+                {order.paymentStatus === 'REFUNDED' ? (
+                  <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
+                    Đã hoàn: {formatPrice((order as any).refundAmount || 0)}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
+                    className="btn btn-warning"
+                  >Tính tiền hoàn</button>
+                )}
                 <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
                 {new Date(order.expiryDate) < new Date() && !isSlotReturned(order) && (
                   <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot</button>
@@ -2183,7 +2198,7 @@ const OrderList: React.FC = () => {
               {(() => {
                 const o = renewState.order;
                 const currentExpiry = new Date(o.expiryDate);
-                const base = currentExpiry > new Date() ? currentExpiry : new Date();
+                const base = currentExpiry;
                 const pkg = getPackageInfo(renewState.packageId)?.package;
                 const months = Math.max(1, pkg?.warrantyPeriod || 1);
                 const preview = (() => {

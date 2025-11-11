@@ -922,8 +922,7 @@ export class Database {
 
     const current = orders[index];
     const pkg = this.getPackages().find(p => p.id === packageId);
-    const now = new Date();
-    const base = current.expiryDate > now ? new Date(current.expiryDate) : now;
+    const base = new Date(current.expiryDate);
     const safeMonths = Math.max(1, Math.floor(pkg?.warrantyPeriod || 1));
     
     // Use custom expiry if provided, otherwise calculate from warranty period

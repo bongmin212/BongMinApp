@@ -549,7 +549,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             {(() => {
               const o = renewState.order;
               const currentExpiry = new Date(o.expiryDate);
-              const base = currentExpiry > new Date() ? currentExpiry : new Date();
+              const base = currentExpiry;
               const pkg = getPackageInfo(renewState.packageId)?.package;
               const months = Math.max(1, (pkg as any)?.warrantyPeriod || 1);
               const preview = (() => {
