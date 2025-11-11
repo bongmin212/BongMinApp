@@ -1,82 +1,82 @@
-# BongMin App - Hệ thống Quản lý Đơn hàng, Sản phẩm & Khách hàng
+# BongMin App — Order, Product, and Customer Management
 
-Ứng dụng quản lý toàn diện cho việc phân phối khóa bản quyền số và dịch vụ giải trí.
+Comprehensive management app for distributing digital license keys and entertainment services.
 
-## Tính năng chính
+## Core Features
 
-### 🔐 Hệ thống Xác thực & Phân quyền
-- Đăng nhập bằng tên người dùng và mật khẩu
-- 2 loại tài khoản: Quản lý và Nhân viên
-- Phân quyền chi tiết theo vai trò
-- Ghi log hoạt động nhân viên
-- Bảo mật Row Level Security (RLS) với Supabase
+### 🔐 Authentication & Authorization
+- Username/password login
+- Two roles: Manager and Employee
+- Fine-grained, role-based permissions
+- Employee activity logging
+- Supabase Row Level Security (RLS)
 
-### 📦 Quản lý Sản phẩm
-- Quản lý danh mục sản phẩm bản quyền số
-- Nhiều gói sản phẩm với thời hạn bảo hành khác nhau
-- Giá riêng cho Cộng tác viên và Khách lẻ
-- Hỗ trợ gói "vĩnh viễn" (mặc định 2 năm)
-- Trường tùy chỉnh cho từng gói sản phẩm
-- Hỗ trợ tài khoản đa profile
+### 📦 Product Management
+- Manage catalog of digital-license products
+- Multiple packages per product with different warranty/expiry terms
+- Separate pricing for collaborators vs. retail customers
+- “Lifetime” package support (defaults to 24 months)
+- Custom fields per package
+- Multi-profile account support
 
-### 👥 Quản lý Khách hàng
-- 2 loại khách hàng: Cộng tác viên (CTV) và Khách lẻ
-- Theo dõi nguồn khách hàng (Facebook, Telegram, Page, Web, Zalo)
-- Lưu trữ thông tin chi tiết và ghi chú
-- Xem lịch sử đơn hàng của từng khách hàng
+### 👥 Customer Management
+- Two customer types: Collaborator and Retail
+- Track acquisition source (Facebook, Telegram, Page, Web, Zalo)
+- Store detailed info and notes
+- Per-customer order history
 
-### 🛒 Quản lý Đơn hàng
-- Tạo đơn hàng với thông tin đầy đủ
-- Tính toán tự động ngày hết hạn dựa trên thời hạn gói
-- Theo dõi trạng thái đơn hàng (Đang xử lý, Hoàn thành, Đã hủy, Đã hết hạn)
-- Tìm kiếm và lọc đơn hàng theo nhiều tiêu chí
-- Quản lý trạng thái thanh toán
-- Gia hạn đơn hàng với lịch sử chi tiết
-- Giá tùy chỉnh cho từng đơn hàng
-- Liên kết với kho hàng và quản lý profile
+### 🛒 Order Management
+- Create full-detail orders
+- Auto-calculate expiry date based on package term
+- Order statuses: Processing, Completed, Cancelled, Expired
+- Powerful search and filters
+- Payment status tracking
+- Renewals with full history
+- Per-order custom pricing
+- Link to inventory and manage profiles
 
-### 📦 Quản lý Kho hàng (Inventory)
-- Quản lý kho hàng với trạng thái chi tiết
-- Theo dõi trạng thái thanh toán với nhà cung cấp
-- Hỗ trợ tài khoản đa profile với slots
-- Quản lý bảo hành và gia hạn kho hàng
-- Tự động giải phóng profile khi hết hạn
-- Chia sẻ pool kho hàng giữa các gói sản phẩm
+### 🗃 Inventory Management
+- Detailed inventory status tracking
+- Track vendor payment status
+- Multi-profile slots support
+- Warranty and renewal management
+- Auto-release profiles when expired
+- Shared inventory pool across packages
 
-### 🔧 Quản lý Bảo hành
-- Tạo và theo dõi yêu cầu bảo hành
-- Trạng thái bảo hành: Chưa xong, Đã fix, Đã đổi bảo hành
-- Liên kết với sản phẩm thay thế từ kho hàng
+### 🔧 Warranty Management
+- Create and track warranty tickets
+- Warranty statuses: Pending, Fixed, Replaced
+- Link to replacement items from inventory
 
-### 💰 Quản lý Chi phí
-- Theo dõi chi phí kinh doanh
-- Phân loại chi phí theo loại (Mua hàng, Vận hành, Marketing, Khác)
-- Tạo báo cáo chi phí
+### 💰 Expense Management
+- Track operating/business expenses
+- Categorize by type (Purchasing, Operations, Marketing, Other)
+- Generate expense reports
 
-### 📊 Dashboard & Báo cáo
-- Dashboard tổng quan với biểu đồ xu hướng
-- Bảng top khách hàng và gói sản phẩm
-- Thống kê doanh thu và đơn hàng
-- Xuất dữ liệu Excel và PDF với định dạng tiếng Việt
+### 📊 Dashboard & Reports
+- Overview dashboard with trend charts
+- Top customers and top packages tables
+- Revenue and orders statistics
+- Excel and PDF export (VN formatting supported)
 
-### 🔔 Hệ thống Thông báo
-- Thông báo cảnh báo hết hạn
-- Thông báo đơn hàng mới
-- Nhắc nhở thanh toán
-- Thông báo profile cần cập nhật
-- Thông báo bảo hành mới
-- Cài đặt thông báo tùy chỉnh
+### 🔔 Notifications
+- Expiry warnings
+- New order notifications
+- Payment reminders
+- Profiles that need updates
+- New warranty tickets
+- Customizable notification settings
+- Desktop and sound notifications
 
-### 📈 Ghi log Hoạt động
-- Theo dõi tất cả hoạt động của nhân viên
-- Ghi log chi tiết các thao tác quan trọng
-- Lịch sử thay đổi dữ liệu
+### 📈 Activity Logs
+- Track all staff activities
+- Log details of critical operations
+- Data change history
 
 ## Security Setup & Configuration
 
 ### 🔒 Database Security (CRITICAL)
-
-This application uses Supabase with Row Level Security (RLS) policies. **IMPORTANT:** The default policies are secure and role-based. Do not modify them without understanding the security implications.
+This app uses Supabase with strict Row Level Security (RLS). Do not change policies unless you fully understand the implications.
 
 #### Required Environment Variables
 Create a `.env` file in the project root:
@@ -86,385 +86,268 @@ REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 #### Database Migration Order
-Run these migrations in Supabase SQL editor in this exact order:
+Run these SQL files in Supabase in order (for fresh installs run reset first):
+1. Base setup: `supabase/reset.sql`
+2. Role helper: `supabase/migration_add_role_check_function.sql`
+3. RLS policies: `supabase/migration_fix_rls_policies.sql`
+4. Function security: `supabase/migration_fix_cleanup_function_permissions.sql`
+5. Password safety: `supabase/migration_fix_password_hash_nullable.sql`
+6. Security audits: `supabase/migration_add_security_audit_logs.sql`
 
-1. **Base Setup:** `supabase/reset.sql` (for fresh installations)
-2. **Role Helper:** `supabase/migration_add_role_check_function.sql`
-3. **RLS Policies:** `supabase/migration_fix_rls_policies.sql`
-4. **Function Security:** `supabase/migration_fix_cleanup_function_permissions.sql`
-5. **Password Security:** `supabase/migration_fix_password_hash_nullable.sql`
-6. **Audit Logging:** `supabase/migration_add_security_audit_logs.sql`
-
-#### Security Features Implemented
-
-**Row Level Security (RLS) Policies:**
-- ✅ Anonymous users have **NO ACCESS** to any data
-- ✅ Only authenticated users can access data
-- ✅ MANAGER role can delete sensitive records (customers, orders, products)
-- ✅ EMPLOYEE role can read/write but cannot delete critical data
-- ✅ Users can only update their own employee record (unless MANAGER)
-
-**Function Security:**
-- ✅ `cleanup_orphaned_employees()` requires MANAGER role
-- ✅ Anonymous users cannot execute sensitive functions
-- ✅ All functions use `SECURITY DEFINER` with proper role checks
-
-**Password Security:**
-- ✅ Password hash field is NOT NULL
-- ✅ Placeholder passwords must be changed
-- ✅ Password validation constraints
-
-**Audit Logging:**
-- ✅ Security events are logged to `security_audit_logs` table
-- ✅ Failed login attempts tracking
-- ✅ Suspicious activity detection
-- ✅ Only MANAGER can view security logs
+#### Implemented Security
+- RLS: no anonymous access; authenticated only; Managers can delete sensitive records; Employees have limited write; users can update only their own employee record
+- Functions: sensitive functions require Manager role; use SECURITY DEFINER with role checks
+- Passwords: non-null hashes; placeholder passwords must be changed; basic constraints enforced
+- Auditing: critical security events logged to `security_audit_logs`; failed login tracking; suspicious activity detection; only Managers can view
 
 #### Rate Limiting Recommendations
-
-**Supabase Project Settings:**
-1. Go to Supabase Dashboard → Settings → API
-2. Set **API Rate Limit** to:
-   - Anonymous: 10 requests/minute
-   - Authenticated: 100 requests/minute
-3. Enable **Database Rate Limiting**:
-   - Max connections: 100
-   - Statement timeout: 30 seconds
-
-**Additional Security Measures:**
-- Enable **Supabase Auth** email confirmations
-- Set up **Supabase Auth** password policies (minimum 8 characters)
-- Enable **Supabase Auth** brute force protection
-- Consider using **Supabase Edge Functions** for sensitive operations
+- Supabase API limits: Anonymous ~10 req/min; Authenticated ~100 req/min
+- DB limits: Max connections ~100; statement timeout ~30s
+- Enable email confirmations; enforce password policy; enable brute force protection
+- Consider Supabase Edge Functions for sensitive ops
 
 #### Testing Security
-
-After setup, verify security by testing:
-
-1. **Anonymous Access Test:**
-   ```bash
-   # This should fail with 401/403 errors
-   curl -H "Authorization: Bearer YOUR_ANON_KEY" \
-        https://your-project.supabase.co/rest/v1/employees
-   ```
-
-2. **Role Permission Test:**
-   - Login as EMPLOYEE → Try to delete a customer (should fail)
-   - Login as MANAGER → Try to delete a customer (should succeed)
-
-3. **Function Security Test:**
-   ```sql
-   -- This should fail for non-MANAGER users
-   SELECT * FROM public.cleanup_orphaned_employees();
-   ```
+1) Anonymous access (should fail):
+```bash
+curl -H "Authorization: Bearer YOUR_ANON_KEY" https://your-project.supabase.co/rest/v1/employees
+```
+2) Role permissions:
+- Employee: deleting a customer should fail
+- Manager: deleting a customer should succeed
+3) Function guard (should fail if not Manager):
+```sql
+SELECT * FROM public.cleanup_orphaned_employees();
+```
 
 #### Security Monitoring
-
-Monitor these tables for security events:
-- `security_audit_logs` - Failed logins, suspicious activities
-- `activity_logs` - User actions and system events
-
-**Alert Thresholds:**
-- More than 5 failed logins in 1 hour → Suspicious activity
-- Multiple RLS policy violations → Potential attack
-- Unusual access patterns → Review immediately
+- Tables to monitor: `security_audit_logs` and `activity_logs`
+- Alerts to watch: >5 failed logins/hour, repeated policy violations, unusual access
 
 ### ⚠️ Security Warnings
+1) Never disable RLS
+2) Never grant anon access to sensitive functions
+3) Use Manager role for admin tasks
+4) Monitor `security_audit_logs` regularly
+5) Keep Supabase keys secret
 
-1. **Never disable RLS policies** - This would expose all data
-2. **Never grant anon access** to sensitive functions
-3. **Always use MANAGER role** for administrative tasks
-4. **Monitor security_audit_logs** regularly
-5. **Keep Supabase keys secure** - Never commit to public repos
+### 🔧 Troubleshooting (Security)
+- Access denied: ensure authentication, verify role in `employees`, confirm RLS rules
+- Function fails: verify Manager role, check function perms, check audit logs
+- Data not loading: check auth, RLS, and browser console
 
-### 🔧 Troubleshooting Security Issues
-
-**Common Issues:**
-
-1. **"Access denied" errors:**
-   - Check if user is authenticated
-   - Verify user has correct role in employees table
-   - Ensure RLS policies are properly applied
-
-2. **Function execution fails:**
-   - Verify user has MANAGER role
-   - Check function permissions
-   - Review security_audit_logs for details
-
-3. **Data not loading:**
-   - Check authentication status
-   - Verify RLS policies allow the operation
-   - Review browser console for errors
-
-**Debug Commands:**
+Useful SQL:
 ```sql
--- Check current user role
+-- Who am I (app helper)
 SELECT public.is_manager();
-
--- Check RLS policies
+-- View policies
 SELECT * FROM pg_policies WHERE schemaname = 'public';
-
--- View security logs
-SELECT * FROM public.security_audit_logs 
-ORDER BY created_at DESC LIMIT 10;
+-- Recent security events
+SELECT * FROM public.security_audit_logs ORDER BY created_at DESC LIMIT 10;
 ```
 
 ## Installation & Setup
 
-### System Requirements
-- Node.js 16+
-- npm or yarn
+### Requirements
+- Node.js 18+
+- npm (or yarn/pnpm if you prefer)
 
-### Installation
+### Install
 ```bash
-# Clone repository
+# Clone
 git clone <repository-url>
 cd BongMinApp
 
-# Install dependencies
+# Dependencies
 npm install
 
-# Start application
+# Dev server
 npm start
 ```
 
-### Account Setup
-- Create your first admin account after launching the application
+### Build & Deploy
+```bash
+# Production build
+npm run build
+```
+- Deploy the `build/` output (e.g., Vercel). Copy `.env` vars to your hosting provider.
+- `vercel.json` is present for basic Vercel config.
 
-## Cấu trúc Dự án
+### First-time Account
+- Create the first Manager account after launch (or seed via Supabase if desired)
+
+## Project Structure
 
 ```
 src/
 ├── components/          # React components
-│   ├── Auth/           # Xác thực
-│   ├── Layout/         # Layout chính
-│   ├── Products/       # Quản lý sản phẩm
+│   ├── Auth/            # Authentication UI
+│   ├── Layout/          # Header, sidebar, app shell
+│   ├── Products/        # Product & package management
 │   │   ├── ProductList.tsx
 │   │   ├── ProductForm.tsx
 │   │   ├── PackageList.tsx
 │   │   ├── PackageForm.tsx
 │   │   ├── WarehouseList.tsx
 │   │   └── WarehouseForm.tsx
-│   ├── Customers/      # Quản lý khách hàng
+│   ├── Customers/       # Customer management
 │   │   ├── CustomerList.tsx
 │   │   ├── CustomerForm.tsx
 │   │   └── CustomerOrderHistory.tsx
-│   ├── Orders/         # Quản lý đơn hàng
+│   ├── Orders/          # Order, details, warranty
 │   │   ├── OrderList.tsx
 │   │   ├── OrderForm.tsx
 │   │   ├── OrderDetailsModal.tsx
 │   │   └── WarrantyList.tsx
-│   ├── Expenses/       # Quản lý chi phí
+│   ├── Expenses/        # Expenses module
 │   │   └── ExpenseList.tsx
-│   ├── Dashboard/      # Dashboard & báo cáo
+│   ├── Dashboard/       # Overview & analytics
 │   │   ├── Dashboard.tsx
 │   │   ├── TrendsChart.tsx
 │   │   ├── TopCustomersTable.tsx
 │   │   └── TopPackagesTable.tsx
-│   ├── ActivityLogs/   # Lịch sử hoạt động
+│   ├── ActivityLogs/    # Staff actions history
 │   │   └── ActivityLogList.tsx
-│   ├── Notifications/  # Hệ thống thông báo
+│   ├── Notifications/   # Alerts panel
 │   │   └── NotificationPanel.tsx
-│   ├── Export/         # Xuất dữ liệu
-│   ├── Shared/         # Components dùng chung
+│   ├── Export/          # Data export helpers
+│   ├── Shared/          # Shared components
 │   │   └── DateRangeInput.tsx
-│   └── Icons.tsx       # Icon components
-├── contexts/           # React Context
+│   └── Icons.tsx        # Icon components
+├── contexts/            # React Contexts
 │   ├── AuthContext.tsx
 │   ├── ThemeContext.tsx
 │   ├── ToastContext.tsx
 │   └── NotificationContext.tsx
-├── types/             # TypeScript types
+├── types/               # TypeScript types
 │   └── index.ts
-├── utils/             # Utilities
-│   ├── database.ts    # Database operations
-│   ├── excel.ts       # Excel export
-│   ├── money.ts       # Currency formatting
-│   ├── date.ts        # Date utilities
-│   ├── supabaseClient.ts    # Supabase client
-│   ├── supabaseAuth.ts      # Supabase authentication
-│   ├── supabaseRealtime.ts  # Real-time subscriptions
-│   ├── supabaseSync.ts      # Data synchronization
-│   ├── desktopNotification.ts # Desktop notifications
-│   ├── notificationSound.ts  # Sound notifications
-│   └── excel.ts       # Excel export utilities
-└── App.tsx           # Main component
+├── utils/               # Utilities
+│   ├── database.ts              # DB ops
+│   ├── excel.ts                 # Excel export
+│   ├── money.ts                 # Currency formatting
+│   ├── date.ts                  # Date helpers
+│   ├── supabaseClient.ts        # Supabase client
+│   ├── supabaseAuth.ts          # Auth helpers
+│   ├── supabaseRealtime.ts      # Realtime listeners
+│   ├── supabaseSync.ts          # Data sync
+│   ├── desktopNotification.ts   # Desktop notifications
+│   ├── notificationSound.ts     # Audio notifications
+│   └── excel.ts                 # Excel helpers
+└── App.tsx              # Main component
 ```
 
-## Tính năng Chi tiết
+## Detailed Capabilities
 
-### Quản lý Sản phẩm
-- ✅ Thêm, sửa, xóa sản phẩm
-- ✅ Quản lý gói sản phẩm với giá khác nhau
-- ✅ Thời hạn bảo hành linh hoạt
-- ✅ Tìm kiếm và lọc sản phẩm
-- ✅ Trường tùy chỉnh cho từng gói
-- ✅ Hỗ trợ tài khoản đa profile
+### Products
+- Add/edit/remove products and packages
+- Flexible warranty/expiry terms
+- Search, filter, and custom fields
+- Multi-profile accounts
 
-### Quản lý Khách hàng
-- ✅ Thêm, sửa, xóa khách hàng
-- ✅ Phân loại khách hàng (CTV/Khách lẻ)
-- ✅ Theo dõi nguồn khách hàng
-- ✅ Xem lịch sử đơn hàng
-- ✅ Mã khách hàng cố định
+### Customers
+- Add/edit/remove customers
+- Classify Collaborator vs Retail
+- Track acquisition source
+- Stable customer codes
+- Full order history
 
-### Quản lý Đơn hàng
-- ✅ Tạo đơn hàng mới
-- ✅ Tính toán tự động ngày hết hạn
-- ✅ Theo dõi trạng thái đơn hàng
-- ✅ Tìm kiếm và lọc đơn hàng
-- ✅ Thống kê doanh thu
-- ✅ Gia hạn đơn hàng với lịch sử
-- ✅ Giá tùy chỉnh cho từng đơn
-- ✅ Liên kết với kho hàng
-- ✅ Quản lý profile slots
+### Orders
+- Create/renew orders with history
+- Auto expiry calculation
+- Statuses and filters
+- Revenue stats
+- Custom pricing per order
+- Link to inventory and manage slots
 
-### Quản lý Kho hàng
-- ✅ Quản lý kho hàng chi tiết
-- ✅ Theo dõi trạng thái thanh toán
-- ✅ Hỗ trợ tài khoản đa profile
-- ✅ Quản lý bảo hành và gia hạn
-- ✅ Tự động giải phóng profile
-- ✅ Chia sẻ pool kho hàng
+### Inventory
+- Detailed status and payments
+- Multi-profile slot management
+- Warranty and renewals
+- Auto release expired profiles
+- Shared pool
 
-### Quản lý Bảo hành
-- ✅ Tạo yêu cầu bảo hành
-- ✅ Theo dõi trạng thái bảo hành
-- ✅ Liên kết sản phẩm thay thế
-- ✅ Lịch sử bảo hành chi tiết
+### Warranty
+- Tickets, status, linking replacements
+- History
 
-### Hệ thống Xác thực
-- ✅ Đăng nhập/đăng xuất
-- ✅ Phân quyền theo vai trò
-- ✅ Ghi log hoạt động
-- ✅ Bảo mật Row Level Security
+### Data Export
+- Excel for all lists
+- PDF for orders and customers
+- Vietnamese formatting supported
 
-### Xuất Dữ liệu
-- ✅ Xuất Excel cho tất cả danh sách
-- ✅ Xuất PDF cho đơn hàng và khách hàng
-- ✅ Hỗ trợ định dạng tiếng Việt
-- ✅ Tùy chỉnh báo cáo
+### Expenses
+- Track, categorize, and report
+- Excel report export
 
-### Quản lý Chi phí
-- ✅ Theo dõi chi phí kinh doanh
-- ✅ Phân loại chi phí
-- ✅ Tạo báo cáo chi phí
-- ✅ Xuất báo cáo Excel
+### Dashboard & Analytics
+- Overview, trends, tops, and time series
+- Recharts-based visualizations
 
-### Dashboard & Thống kê
-- ✅ Dashboard tổng quan
-- ✅ Biểu đồ xu hướng doanh thu
-- ✅ Top khách hàng và gói sản phẩm
-- ✅ Thống kê theo thời gian
-- ✅ Biểu đồ trực quan với Recharts
-
-### Hệ thống Thông báo
-- ✅ Thông báo cảnh báo hết hạn
-- ✅ Thông báo đơn hàng mới
-- ✅ Nhắc nhở thanh toán
-- ✅ Thông báo profile cần cập nhật
-- ✅ Thông báo bảo hành mới
-- ✅ Cài đặt thông báo tùy chỉnh
-- ✅ Desktop notifications
-- ✅ Sound notifications
+### Notifications
+- Expiry, new orders, payments, profiles, warranty
+- Desktop + sound notifications
 
 ## Technology Stack
+- Frontend: React 18.2.0 + TypeScript ^4.9.5
+- Styling: CSS, responsive layout
+- State: React Context + Hooks
+- Database: Supabase (PostgreSQL) with RLS
+- Auth: Supabase Auth with custom roles
+- Charts: Recharts ^2.15.4
+- Export: xlsx ^0.18.5, jspdf ^3.0.3, jspdf-autotable ^5.0.2, html2canvas ^1.4.0
+- Virtualization: react-window ^1.8.8
+- Build: Create React App 5 (+ cross-env)
+- Deployment: Vercel
+- Realtime: Supabase Realtime
 
-- **Frontend:** React 18.2.0 + TypeScript 4.9.5
-- **Styling:** CSS3 với responsive design
-- **State Management:** React Context + Hooks
-- **Database:** Supabase (PostgreSQL) với Row Level Security
-- **Authentication:** Supabase Auth với phân quyền tùy chỉnh
-- **Charts:** Recharts 2.15.4 cho dashboard
-- **Export:** xlsx 0.18.5, jspdf 3.0.3, jspdf-autotable 5.0.2, html2canvas 1.4.0
-- **Virtualization:** react-window 1.8.8 cho danh sách lớn
-- **Build Tool:** Create React App với cross-env
-- **Deployment:** Vercel
-- **Real-time:** Supabase Realtime cho đồng bộ dữ liệu
+## Usage Guide
+1) Login with your account (Manager = full access; Employee = restricted)
+2) Products tab: manage products, packages, warehouse, custom fields, pricing
+3) Customers tab: manage customers, types, sources, and view history
+4) Orders tab: create/manage orders, link inventory, renew, custom pricing
+5) Warranty tab: create/manage tickets, statuses, replacements
+6) Expenses tab: track expenses and export reports
+7) Dashboard: trends, tops, and exports
+8) Exports: use export buttons on each page (Excel/PDF)
+9) Notifications: view panel, configure types, desktop/audio
 
-## Hướng dẫn Sử dụng
-
-### 1. Xác thực
-- Đăng nhập bằng tài khoản đã tạo
-- Tài khoản Quản lý có quyền đầy đủ
-- Tài khoản Nhân viên có quyền hạn chế
-
-### 2. Quản lý Sản phẩm
-- Vào tab "Sản phẩm" để quản lý danh sách sản phẩm
-- Vào tab "Gói sản phẩm" để quản lý các gói sản phẩm
-- Vào tab "Kho hàng" để quản lý kho hàng
-- Thiết lập giá cho từng loại khách hàng
-- Cấu hình trường tùy chỉnh cho gói sản phẩm
-
-### 3. Quản lý Khách hàng
-- Vào tab "Khách hàng" để quản lý danh sách khách hàng
-- Phân loại khách hàng và theo dõi nguồn
-- Xem lịch sử đơn hàng của từng khách hàng
-
-### 4. Tạo Đơn hàng
-- Vào tab "Đơn hàng" để quản lý đơn hàng
-- Tạo đơn hàng mới với thông tin đầy đủ
-- Hệ thống tự động tính ngày hết hạn
-- Liên kết với kho hàng và quản lý profile
-- Sử dụng giá tùy chỉnh nếu cần
-
-### 5. Quản lý Bảo hành
-- Vào tab "Bảo hành" để quản lý yêu cầu bảo hành
-- Tạo yêu cầu bảo hành mới
-- Theo dõi trạng thái và xử lý bảo hành
-- Liên kết với sản phẩm thay thế từ kho hàng
-
-### 6. Quản lý Chi phí
-- Vào tab "Chi phí" để theo dõi chi phí kinh doanh
-- Phân loại chi phí theo loại
-- Tạo báo cáo chi phí
-
-### 7. Dashboard & Báo cáo
-- Vào tab "Dashboard" để xem tổng quan
-- Xem biểu đồ xu hướng doanh thu
-- Xem top khách hàng và gói sản phẩm
-- Xuất báo cáo Excel và PDF
-
-### 8. Xuất Dữ liệu
-- Sử dụng nút "Xuất dữ liệu" trên mỗi trang
-- Chọn định dạng Excel hoặc PDF
-- File sẽ được tải về máy tính
-
-### 9. Thông báo
-- Xem thông báo trong panel thông báo
-- Cài đặt loại thông báo muốn nhận
-- Nhận thông báo desktop và âm thanh
-
-## Lưu ý Quan trọng
-
-- Dữ liệu được lưu trữ trong cơ sở dữ liệu Supabase
-- Đồng bộ thời gian thực trên nhiều thiết bị
-- Khả năng hoạt động offline với backup local storage
-- Sao lưu và khôi phục dữ liệu tự động
-- Hỗ trợ đa người dùng với phân quyền theo vai trò
-- Bảo mật Row Level Security (RLS) cho tất cả dữ liệu
-- Hệ thống thông báo real-time với desktop notifications
-- Virtualization cho hiệu suất tốt với danh sách lớn
-- Hỗ trợ đa ngôn ngữ (tiếng Việt)
-- Responsive design cho mọi thiết bị
+## Important Notes
+- Data stored in Supabase; realtime sync across devices
+- Basic offline safety via local storage fallback
+- Automated backups/restore recommended (via Supabase)
+- Multi-user with role-based permissions
+- RLS protection across all data
+- Realtime notifications (desktop + sound)
+- Virtualized lists for performance
+- Responsive UI
 
 ## Development
 
-### Available Scripts
-- `npm start` - Start development server
-- `npm build` - Build for production
-- `npm test` - Run tests
-- `npm eject` - Eject from Create React App
+### Scripts
+- `npm start` — Start dev server
+- `npm run build` — Production build
+- `npm test` — Run tests
+- `npm run eject` — CRA eject
 
-### Dependencies
-- React 18.2.0 + React DOM 18.2.0
-- TypeScript 4.9.5
-- Supabase 2.58.0
-- React Router DOM 6.8.0
-- Recharts 2.15.4 (Dashboard charts)
-- React Window 1.8.8 (Virtualization)
-- XLSX 0.18.5 (Excel export)
-- jsPDF 3.0.3 + jsPDF AutoTable 5.0.2 (PDF export)
-- HTML2Canvas 1.4.0 (Screenshot for PDF)
-- Cross-env 7.0.3 (Environment variables)
+### Key Dependencies
+- react ^18.2.0, react-dom ^18.2.0
+- typescript ^4.9.5
+- @supabase/supabase-js ^2.58.0
+- react-router-dom ^6.8.0
+- recharts ^2.15.4
+- react-window ^1.8.8
+- xlsx ^0.18.5
+- jspdf ^3.0.3, jspdf-autotable ^5.0.2
+- html2canvas ^1.4.0
+- cross-env ^7.0.3
+
+## Recent Changes (Latest Highlights)
+- Added Notifications module and panel (desktop and sound alerts)
+- Added Expenses module and Excel reporting
+- Added Dashboard: trends, top customers, top packages
+- Expanded Inventory features: multi-profile, shared pool, vendor payment status
+- Added Warranty management and linking replacements
+- Strengthened security: role checker function, RLS fixes, function permissions
+- Added Security Audit Logs and Activity Logs
+- Improved Order Management (filters, renewals, custom pricing)
+
 

@@ -1586,20 +1586,38 @@ const OrderList: React.FC = () => {
   };
 
   const getTotalRevenue = useMemo(() => {
-    const completed = filteredOrders.filter(order => order.status === 'COMPLETED');
+    // Align with Dashboard: only COMPLETED + PAID, use sale_price snapshot minus refund
+    const getOrderSnapshotRevenue = (order: Order): number => {
+      if (order.paymentStatus === 'REFUNDED') return 0;
+      const salePrice = (order as any).salePrice;
+      if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) return 0;
+      const refundAmount = (order as any).refundAmount || 0;
+      const netRevenue = Math.max(0, salePrice - refundAmount);
+      return netRevenue;
+    };
+    const paidCompleted = filteredOrders.filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID');
     let sum = 0;
-    for (let i = 0; i < completed.length; i++) {
-      sum += getOrderPrice(completed[i]);
+    for (let i = 0; i < paidCompleted.length; i++) {
+      sum += getOrderSnapshotRevenue(paidCompleted[i]);
     }
     return () => sum;
   }, [filteredOrders, customerMap, packageMap, productMap]);
 
   const getSelectedTotal = useMemo(() => {
+    // Sum selected orders the same way as revenue: PAID + COMPLETED snapshot revenue
+    const getOrderSnapshotRevenue = (order: Order): number => {
+      if (order.paymentStatus === 'REFUNDED') return 0;
+      const salePrice = (order as any).salePrice;
+      if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) return 0;
+      const refundAmount = (order as any).refundAmount || 0;
+      const netRevenue = Math.max(0, salePrice - refundAmount);
+      return netRevenue;
+    };
     let sum = 0;
     for (let i = 0; i < selectedIds.length; i++) {
       const order = filteredOrders.find(o => o.id === selectedIds[i]);
-      if (order) {
-        sum += getOrderPrice(order);
+      if (order && order.status === 'COMPLETED' && order.paymentStatus === 'PAID') {
+        sum += getOrderSnapshotRevenue(order);
       }
     }
     return sum;
