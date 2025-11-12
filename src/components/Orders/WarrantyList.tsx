@@ -1772,6 +1772,10 @@ const handleDelete = (id: string) => {
             const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
             const price = getOrderPrice(o);
             const out: string[] = [];
+            out.push('═══════════════════════════════════════');
+            out.push('📋 THÔNG TIN ĐƠN HÀNG');
+            out.push('═══════════════════════════════════════');
+            out.push('');
             out.push(`Mã đơn hàng: ${o.code || '-'}`);
             out.push(`Khách hàng: ${customerName}`);
             out.push(`Sản phẩm: ${productName}`);
@@ -1795,12 +1799,16 @@ const handleDelete = (id: string) => {
               const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
               const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
               if (displayColumns.length > 0) {
-                out.push('Thông tin đơn hàng:');
+                out.push('');
+                out.push('─────────────────────────────────────');
+                out.push('🔐 THÔNG TIN TÀI KHOẢN');
+                out.push('─────────────────────────────────────');
+                out.push('');
                 displayColumns.forEach((col: any) => {
                   const value = (inv.accountData || {})[col.id] || '';
                   if (String(value).trim()) {
-                    out.push(`${col.title}:`);
-                    out.push(value);
+                    out.push(`📌 ${col.title}:`);
+                    out.push(`   ${value}`);
                     out.push('');
                   }
                 });
@@ -1808,11 +1816,16 @@ const handleDelete = (id: string) => {
             }
             const customFieldValues = (o as any).customFieldValues || {};
             if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
+              out.push('');
+              out.push('─────────────────────────────────────');
+              out.push('📝 TRƯỜNG TÙY CHỈNH');
+              out.push('─────────────────────────────────────');
+              out.push('');
               pkgInfo.package.customFields.forEach((cf: any) => {
                 const value = customFieldValues[cf.id];
                 if (value && String(value).trim()) {
-                  out.push(`${cf.title}:`);
-                  out.push(String(value).trim());
+                  out.push(`📌 ${cf.title}:`);
+                  out.push(`   ${String(value).trim()}`);
                   out.push('');
                 }
               });
