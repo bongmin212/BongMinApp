@@ -241,11 +241,20 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					{fieldsWithValues.map((cf: any) => {
 						const value = customFieldValues[cf.id];
 						return (
-							<div key={cf.id} className="mb-3">
+							<div key={cf.id} style={{ marginBottom: 8 }}>
 								<div><strong>{cf.title}:</strong></div>
-								<div className="mt-1 p-2 bg-light rounded">
-									<pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{String(value).trim()}</pre>
-								</div>
+								<pre style={{ 
+									whiteSpace: 'pre-wrap', 
+									margin: 0, 
+									padding: '8px', 
+									backgroundColor: 'var(--bg-tertiary)', 
+									color: 'var(--text-primary)',
+									borderRadius: '4px',
+									fontSize: '14px',
+									border: '1px solid var(--border-color)'
+								}}>
+									{String(value).trim()}
+								</pre>
 							</div>
 						);
 					})}
