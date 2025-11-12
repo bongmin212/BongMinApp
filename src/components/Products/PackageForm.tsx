@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ProductPackage, Product, PackageFormData, PackageCustomField } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
@@ -245,14 +245,24 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
     return () => clearTimeout(t);
   }, [productSearch]);
 
-  const getFilteredProducts = () => {
+  const filteredProducts = useMemo(() => {
     const q = debouncedProductSearch;
     if (!q) return products;
     return products.filter(p => (
       (p.name || '').toLowerCase().includes(q) ||
       (p.code || '').toLowerCase().includes(q)
     ));
-  };
+  }, [products, debouncedProductSearch]);
+
+  useEffect(() => {
+    if (!debouncedProductSearch) return;
+    if (filteredProducts.length !== 1) return;
+    const match = filteredProducts[0];
+    setFormData(prev => {
+      if (prev.productId === match.id) return prev;
+      return { ...prev, productId: match.id };
+    });
+  }, [debouncedProductSearch, filteredProducts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -714,7 +724,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               onChange={handleChange}
             >
               <option value="">Chọn sản phẩm</option>
-              {getFilteredProducts().map(product => (
+              {filteredProducts.map(product => (
                 <option key={product.id} value={product.id}>
                   {product.name}
                 </option>

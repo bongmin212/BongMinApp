@@ -252,14 +252,25 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     return () => clearTimeout(t);
   }, [productSearch]);
 
-  const getFilteredProducts = () => {
+  const filteredProducts = useMemo(() => {
     const q = debouncedProductSearch;
     if (!q) return products;
     return products.filter(p => (
       (p.name || '').toLowerCase().includes(q) ||
       (p.code || '').toLowerCase().includes(q)
     ));
-  };
+  }, [products, debouncedProductSearch]);
+
+  useEffect(() => {
+    if (!debouncedProductSearch) return;
+    if (filteredProducts.length !== 1) return;
+    const match = filteredProducts[0];
+    setSelectedProduct(prev => (prev === match.id ? prev : match.id));
+    setFormData(prev => {
+      if (prev.productId === match.id) return prev;
+      return { ...prev, productId: match.id, packageId: '' };
+    });
+  }, [debouncedProductSearch, filteredProducts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -583,7 +594,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                   Đang tải sản phẩm...
                 </option>
               )}
-              {getFilteredProducts().map(p => (
+              {filteredProducts.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>

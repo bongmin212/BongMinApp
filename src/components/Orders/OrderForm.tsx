@@ -1312,16 +1312,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     return customers.find(c => c.id === formData.customerId);
   };
 
-  const getFilteredProducts = () => {
+  const filteredProducts = useMemo(() => {
     const q = debouncedProductSearch;
     if (!q) return products;
     return products.filter(p => (
       (p.name || '').toLowerCase().includes(q) ||
       (p.code || '').toLowerCase().includes(q)
     ));
-  };
+  }, [products, debouncedProductSearch]);
 
-  const getFilteredCustomers = () => {
+  const filteredCustomers = useMemo(() => {
     const q = debouncedCustomerSearch;
     if (!q) return customers;
     return customers.filter(c => {
@@ -1331,7 +1331,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const code = String(c.code || '').toLowerCase();
       return name.includes(q) || phone.includes(q) || email.includes(q) || code.includes(q);
     });
-  };
+  }, [customers, debouncedCustomerSearch]);
 
   const getFilteredInventory = useMemo(() => {
     const q = debouncedInventorySearch;
@@ -1344,6 +1344,28 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       return code.includes(q) || info.includes(q) || productName.includes(q) || packageName.includes(q);
     });
   }, [availableInventory, debouncedInventorySearch, products, packages]);
+
+  useEffect(() => {
+    if (!debouncedCustomerSearch) return;
+    if (filteredCustomers.length !== 1) return;
+    const match = filteredCustomers[0];
+    setFormData(prev => {
+      if (prev.customerId === match.id) return prev;
+      return { ...prev, customerId: match.id };
+    });
+  }, [debouncedCustomerSearch, filteredCustomers]);
+
+  useEffect(() => {
+    if (!debouncedProductSearch) return;
+    if (filteredProducts.length !== 1) return;
+    const match = filteredProducts[0];
+    if (selectedProduct === match.id) return;
+    setSelectedProduct(match.id);
+    setFormData(prev => {
+      if (!prev.packageId) return prev;
+      return { ...prev, packageId: '' };
+    });
+  }, [debouncedProductSearch, filteredProducts, selectedProduct]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -1443,7 +1465,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   onChange={handleChange}
                 >
                   <option value="">Chọn khách hàng</option>
-                  {getFilteredCustomers().map(customer => (
+                  {filteredCustomers.map(customer => (
                     <option key={customer.id} value={customer.id}>
                       {customer.code} - {customer.name} ({customer.type === 'CTV' ? 'CTV' : 'Khách lẻ'})
                     </option>
@@ -1659,7 +1681,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               onChange={handleProductChange}
             >
               <option value="">Chọn sản phẩm</option>
-              {getFilteredProducts().map(product => (
+              {filteredProducts.map(product => (
                 <option key={product.id} value={product.id}>
                   {product.name}
                 </option>

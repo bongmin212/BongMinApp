@@ -343,6 +343,17 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 		});
 	}, [debouncedOrderSearch, orders, customers, packages, products, inventoryItems]);
 
+  useEffect(() => {
+    if (warranty) return;
+    if (!debouncedOrderSearch) return;
+    if (filteredOrders.length !== 1) return;
+    const match = filteredOrders[0];
+    setForm(prev => {
+      if (prev.orderId === match.id) return prev;
+      return { ...prev, orderId: match.id };
+    });
+  }, [debouncedOrderSearch, filteredOrders, warranty]);
+
   const filteredInventory = React.useMemo(() => {
     const q = debouncedInventorySearch;
     if (!q) return availableInventoryItems;
