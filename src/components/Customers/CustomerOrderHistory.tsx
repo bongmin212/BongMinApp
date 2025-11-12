@@ -528,7 +528,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
           if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
             out.push('');
             out.push('─────────────────────────────────────');
-            out.push('📝 TRƯỜNG TÙY CHỈNH');
+            out.push('📝 THÔNG TIN THÊM');
             out.push('─────────────────────────────────────');
             out.push('');
             (pkgInfo.package.customFields as any[]).forEach((cf: any) => {

@@ -1818,7 +1818,7 @@ const handleDelete = (id: string) => {
             if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
               out.push('');
               out.push('─────────────────────────────────────');
-              out.push('📝 TRƯỜNG TÙY CHỈNH');
+              out.push('📝 THÔNG TIN THÊM');
               out.push('─────────────────────────────────────');
               out.push('');
               pkgInfo.package.customFields.forEach((cf: any) => {

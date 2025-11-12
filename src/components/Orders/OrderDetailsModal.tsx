@@ -263,35 +263,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 		);
 	};
 
-	const renderAccountOrderInfo = () => {
-		if (!inv) return null;
-		const packageInfo = packages.find((p: any) => p.id === inv.packageId);
-		const accountColumns = (packageInfo?.accountColumns || inv.accountColumns || []) as any[];
-		const displayColumns = accountColumns.filter(col => col.includeInOrderInfo);
-		if (displayColumns.length === 0) return null;
-		return (
-			<div className="card mt-2">
-				<div className="card-header">
-					<strong>📋 Thông tin đơn hàng</strong>
-				</div>
-				<div className="card-body">
-					{displayColumns.map(col => {
-						const value = (inv.accountData || {})[col.id] || '';
-						if (!String(value).trim()) return null;
-						return (
-							<div key={col.id} className="mb-3">
-								<div><strong>{col.title}:</strong></div>
-									<div className="mt-1 p-2 bg-light rounded">
-										<pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{value}</pre>
-									</div>
-							</div>
-						);
-					})}
-				</div>
-			</div>
-		);
-	};
-
 	return (
 		<div className="modal">
 			<div className="modal-content" style={{ maxWidth: '640px' }}>
@@ -312,7 +283,6 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Giá đơn hàng:</strong> {formatPrice ? formatPrice(getOrderPrice()) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getOrderPrice())}</div>
 
 					{renderInventoryCard()}
-					{renderAccountOrderInfo()}
 					{renderCustomFields()}
 					{order.notes && <div><strong>Ghi chú:</strong> {order.notes}</div>}
 					{(() => {

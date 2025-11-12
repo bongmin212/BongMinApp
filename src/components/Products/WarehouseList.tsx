@@ -2512,7 +2512,7 @@ const WarehouseList: React.FC = () => {
             if (pkgInfo?.pkg?.customFields && Object.keys(customFieldValues).length > 0) {
               out.push('');
               out.push('─────────────────────────────────────');
-              out.push('📝 TRƯỜNG TÙY CHỈNH');
+              out.push('📝 THÔNG TIN THÊM');
               out.push('─────────────────────────────────────');
               out.push('');
               pkgInfo.pkg.customFields.forEach((cf: any) => {
