@@ -153,6 +153,20 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					.filter(p => p.assignedOrderId === order.id)
 					.map(p => (p.label || p.id))
 				: [];
+		const accountColumns = (() => {
+			if (inv.accountColumns && inv.accountColumns.length > 0) {
+				return inv.accountColumns;
+			}
+			if (packageInfo?.accountColumns && packageInfo.accountColumns.length > 0) {
+				return packageInfo.accountColumns;
+			}
+			const pkg = pkgInfo?.package;
+			if (pkg?.accountColumns && pkg.accountColumns.length > 0) {
+				return pkg.accountColumns;
+			}
+			return [];
+		})();
+		const accountData = inv.accountData || {};
 		return (
 			<div className="card mt-2">
 				<div className="card-header">
@@ -185,13 +199,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					{inv.notes && (
 						<div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {inv.notes}</div>
 					)}
-					{(inv.isAccountBased || inv.is_account_based) && inv.accountColumns && inv.accountColumns.length > 0 && (
+					{accountColumns.length > 0 && (
 						<div style={{ marginTop: 12 }}>
 							<strong>Thông tin tài khoản:</strong>
 							<div style={{ marginTop: 6 }}>
-								{inv.accountColumns.map((col: any) => {
-									const value = (inv.accountData || {})[col.id] || '';
-									if (!value) return null;
+								{accountColumns.map((col: any) => {
+									const value = accountData[col.id] || '';
 									return (
 										<div key={col.id} style={{ marginBottom: 8 }}>
 											<div><strong>{col.title}:</strong></div>
@@ -205,7 +218,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 												fontSize: '14px',
 												border: '1px solid var(--border-color)'
 											}}>
-												{value}
+												{value || '-'}
 											</pre>
 										</div>
 									);

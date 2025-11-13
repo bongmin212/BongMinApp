@@ -2345,7 +2345,6 @@ const WarehouseList: React.FC = () => {
                     <div style={{ marginTop: 6 }}>
                       {accountColumns.map((col: any) => {
                         const value = accountData[col.id] || '';
-                        if (!value) return null;
                         return (
                           <div key={col.id} style={{ marginBottom: 8 }}>
                             <div><strong>{col.title}:</strong></div>
@@ -2359,7 +2358,7 @@ const WarehouseList: React.FC = () => {
                               fontSize: '14px',
                               border: '1px solid var(--border-color)'
                             }}>
-                              {value}
+                              {value || '-'}
                             </pre>
                           </div>
                         );
