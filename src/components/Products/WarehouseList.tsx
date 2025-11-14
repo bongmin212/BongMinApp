@@ -761,6 +761,47 @@ const WarehouseList: React.FC = () => {
     return i.status !== 'SOLD' && t >= now && t <= now + 7 * 24 * 3600 * 1000;
   };
 
+  const getActualStatus = (item: InventoryItem) => {
+    // For account-based items, compute status from profiles
+    if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
+      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+      const totalSlots = item.totalSlots || profiles.length;
+      
+      if (totalSlots === 0) return item.status; // No slots = use persisted status
+      
+      // Check if any slot is free (not assigned and not needsUpdate)
+      const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
+      
+      // If profiles are empty, check if there are any assigned profiles in the database
+      if (profiles.length === 0) {
+        // No profiles means no slots are assigned, so it's AVAILABLE
+        return 'AVAILABLE';
+      }
+      
+      // If we have profiles but none are assigned, it's AVAILABLE
+      if (!profiles.some((p: any) => p.isAssigned)) {
+        return 'AVAILABLE';
+      }
+      
+      if (!hasFreeSlot) {
+        // All slots are either assigned or needsUpdate
+        return 'SOLD';
+      }
+      // Has at least one free slot
+      return 'AVAILABLE';
+    }
+    
+    // Regular inventory: use expiry-based logic (existing code)
+    const now = new Date();
+    const expiryDate = new Date(item.expiryDate);
+    // If truly past due, always show EXPIRED
+    if (expiryDate < now) return 'EXPIRED';
+    // If not expired anymore but status is still EXPIRED from earlier, coerce to AVAILABLE for display
+    if (item.status === 'EXPIRED') return 'AVAILABLE';
+    // Preserve other states (SOLD, AVAILABLE, NEEDS_UPDATE)
+    return item.status;
+  };
+
   // Base filtered list (without product/package filters) - used to determine available filter options
   const baseFilteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
@@ -818,7 +859,9 @@ const WarehouseList: React.FC = () => {
           ? isExpiringSoon(i) 
           : filterStatus === 'NEEDS_UPDATE'
             ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
-            : i.status === filterStatus as any
+            : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
+              ? getActualStatus(i) === filterStatus
+              : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
 
@@ -947,7 +990,9 @@ const WarehouseList: React.FC = () => {
           ? isExpiringSoon(i) 
           : filterStatus === 'NEEDS_UPDATE'
             ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
-            : i.status === filterStatus as any
+            : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
+              ? getActualStatus(i) === filterStatus
+              : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
 
@@ -1314,47 +1359,6 @@ const WarehouseList: React.FC = () => {
       case 'NEEDS_UPDATE': return 'Cần update';
       default: return status;
     }
-  };
-
-  const getActualStatus = (item: InventoryItem) => {
-    // For account-based items, compute status from profiles
-    if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
-      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-      const totalSlots = item.totalSlots || profiles.length;
-      
-      if (totalSlots === 0) return item.status; // No slots = use persisted status
-      
-      // Check if any slot is free (not assigned and not needsUpdate)
-      const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
-      
-      // If profiles are empty, check if there are any assigned profiles in the database
-      if (profiles.length === 0) {
-        // No profiles means no slots are assigned, so it's AVAILABLE
-        return 'AVAILABLE';
-      }
-      
-      // If we have profiles but none are assigned, it's AVAILABLE
-      if (!profiles.some((p: any) => p.isAssigned)) {
-        return 'AVAILABLE';
-      }
-      
-      if (!hasFreeSlot) {
-        // All slots are either assigned or needsUpdate
-        return 'SOLD';
-      }
-      // Has at least one free slot
-      return 'AVAILABLE';
-    }
-    
-    // Regular inventory: use expiry-based logic (existing code)
-    const now = new Date();
-    const expiryDate = new Date(item.expiryDate);
-    // If truly past due, always show EXPIRED
-    if (expiryDate < now) return 'EXPIRED';
-    // If not expired anymore but status is still EXPIRED from earlier, coerce to AVAILABLE for display
-    if (item.status === 'EXPIRED') return 'AVAILABLE';
-    // Preserve other states (SOLD, AVAILABLE, NEEDS_UPDATE)
-    return item.status;
   };
 
   const statusBadge = (item: InventoryItem) => {
