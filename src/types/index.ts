@@ -22,7 +22,7 @@ export interface ProductPackage {
   customFields?: PackageCustomField[]; // Trường tùy chỉnh yêu cầu khi tạo đơn
   // Account-based config (managed at package level)
   isAccountBased?: boolean;
-  accountColumns?: InventoryAccountColumn[]; // definition + includeInOrderInfo flag
+  accountColumns?: InventoryAccountColumn[];
   defaultSlots?: number; // default profiles per inventory item
   createdAt: Date;
   updatedAt: Date;
@@ -66,7 +66,6 @@ export interface Order {
   expiryDate: Date; // Tự động tính từ ngày mua + thời hạn gói
   status: OrderStatus;
   paymentStatus: PaymentStatus; // Trạng thái thanh toán
-  orderInfo?: string; // Thông tin đơn hàng (serial/key/tài khoản...)
   notes?: string;
   createdBy: string; // ID nhân viên tạo đơn
   createdAt: Date;
@@ -112,7 +111,6 @@ export type InventoryStatus = 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'EXPIRED' | 'N
 export interface InventoryAccountColumn {
   id: string; // stable key
   title: string; // e.g., Email, Pass, Hướng dẫn
-  includeInOrderInfo?: boolean; // tick to auto import into orderInfo
 }
 
 export interface InventoryProfileSlot {
@@ -239,7 +237,6 @@ export interface OrderFormData {
   customerId: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
-  orderInfo?: string;
   notes?: string;
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh
   customPrice?: number; // Giá tùy chỉnh

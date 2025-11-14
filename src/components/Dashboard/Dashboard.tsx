@@ -175,7 +175,6 @@ const Dashboard: React.FC = () => {
           expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
-          orderInfo: r.order_info,
           notes: r.notes,
           inventoryItemId: r.inventory_item_id,
           inventoryProfileIds: r.inventory_profile_ids || undefined,

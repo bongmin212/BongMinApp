@@ -945,7 +945,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                 className="btn btn-sm btn-light"
                 onClick={() => setFormData(prev => ({
                   ...prev,
-                  accountColumns: [...(prev.accountColumns || []), { id: `col-${Date.now()}`, title: '', includeInOrderInfo: true }]
+                  accountColumns: [...(prev.accountColumns || []), { id: `col-${Date.now()}`, title: '' }]
                 }))}
                 disabled={sharedConfigLocked}
               >Thêm cột</button>
@@ -982,15 +982,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     disabled={sharedConfigLocked}
                   />
                   <div className="d-flex align-items-center gap-1">
-                    <input
-                      type="checkbox"
-                      checked={!!(col as any).includeInOrderInfo}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, includeInOrderInfo: e.target.checked } : c)
-                      }))}
-                      disabled={sharedConfigLocked}
-                    />
                     <span style={{ whiteSpace: 'nowrap' }}>Hiển thị</span>
                   </div>
                   <button

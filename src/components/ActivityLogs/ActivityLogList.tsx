@@ -327,7 +327,6 @@ const ActivityLogList: React.FC = () => {
         const labelMap: Record<string, string> = {
           purchaseDate: 'Ngày mua',
           expiryDate: 'Hết hạn',
-          orderInfo: 'Thông tin đơn',
           notes: 'Ghi chú',
           inventoryItemId: 'Liên kết kho',
           inventoryId: 'Liên kết kho',

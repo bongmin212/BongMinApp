@@ -94,7 +94,6 @@ create table public.orders (
   inventory_item_id uuid references public.inventory(id) on delete set null,
   inventory_profile_id text, -- for account-based inventory slot id
   purchase_date timestamptz not null,
-  order_info text,
   status text default 'PROCESSING',
   payment_status text default 'UNPAID',
   expiry_date timestamptz,
@@ -124,7 +123,6 @@ create table public.warranties (
   reason text,
   status text not null default 'PENDING',
   replacement_inventory_id uuid references public.inventory(id) on delete set null,
-  new_order_info text,
   created_by text,
   notes text,
   created_at timestamptz not null default now(),

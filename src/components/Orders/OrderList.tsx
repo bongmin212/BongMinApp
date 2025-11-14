@@ -282,7 +282,6 @@ const OrderList: React.FC = () => {
         packageId: r.package_id,
         status: r.status,
         paymentStatus: r.payment_status,
-        orderInfo: r.order_info,
         notes: r.notes,
         inventoryItemId: r.inventory_item_id,
         inventoryProfileIds: r.inventory_profile_ids || undefined,
@@ -989,10 +988,7 @@ const OrderList: React.FC = () => {
   };
 
   const buildFullOrderInfo = (order: Order): { lines: string[]; text: string } => {
-    let baseLines = String((order as any).orderInfo || '')
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    const baseLines: string[] = [];
     const pkg = getPackageInfo(order.packageId)?.package;
     const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
     if (pkg && Array.isArray(pkg.customFields) && pkg.customFields.length) {
@@ -1003,12 +999,6 @@ const OrderList: React.FC = () => {
         }
       });
     }
-    // Filter out unwanted info lines (internal-only): any Slot: ...
-    baseLines = baseLines.filter(line => {
-      const normalized = line.toLowerCase();
-      if (normalized.startsWith('slot:')) return false; // e.g., "Slot: Slot 1" or "Slot: 1/5"
-      return true;
-    });
     const text = baseLines.join('\n');
     return { lines: baseLines, text };
   };
@@ -1417,7 +1407,7 @@ const OrderList: React.FC = () => {
       let inventoryAccountData = '';
       if (linkedInventory && linkedInventory.is_account_based && linkedInventory.accountData) {
         const accountColumns = linkedInventory.accountColumns || [];
-        const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+        const displayColumns = accountColumns;
         inventoryAccountData = displayColumns.map((col: any) => {
           const value = (linkedInventory.accountData || {})[col.id] || '';
           return value ? `${col.title}: ${value}` : null;
@@ -1467,8 +1457,6 @@ const OrderList: React.FC = () => {
         cogs: o.cogs || '',
         salePrice: o.salePrice || '',
         
-        // Order information
-        orderInfo: o.orderInfo || '',
         notes: o.notes || '',
         customFields: customFieldsText,
         
@@ -1533,7 +1521,6 @@ const OrderList: React.FC = () => {
       { header: 'Giá bán snapshot', key: 'salePrice', width: 12 },
       
       // Order details
-      { header: 'Thông tin đơn hàng', key: 'orderInfo', width: 30 },
       { header: 'Ghi chú', key: 'notes', width: 20 },
       { header: 'Trường tùy chỉnh', key: 'customFields', width: 30 },
       
@@ -2168,7 +2155,7 @@ const OrderList: React.FC = () => {
             if (inv) {
               const packageInfo = packages.find(p => p.id === inv.packageId);
               const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              const displayColumns = accountColumns;
               if (displayColumns.length > 0) {
                 out.push('');
                 out.push('─────────────────────────────────────');
@@ -2467,7 +2454,7 @@ const OrderList: React.FC = () => {
                     if (inv) {
                       const packageInfo = packages.find(p => p.id === inv.packageId);
                       const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                      const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                      const displayColumns = accountColumns;
                       
                       if (displayColumns.length > 0) {
                         lines.push('- Thông tin đơn hàng:');
@@ -2636,7 +2623,7 @@ const OrderList: React.FC = () => {
                       
                       const packageInfo = packages.find(p => p.id === inv.packageId);
                       const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                      const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                      const displayColumns = accountColumns;
                       
                       if (displayColumns.length === 0) return null;
                       
@@ -2718,7 +2705,7 @@ const OrderList: React.FC = () => {
                   if (inv) {
                     const packageInfo = packages.find(p => p.id === inv.packageId);
                     const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                    const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+                    const displayColumns = accountColumns;
                     
                     if (displayColumns.length > 0) {
                       baseLines.push('', 'Thông tin đơn hàng:');

@@ -53,7 +53,6 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
           packageId: r.package_id,
           status: r.status,
           paymentStatus: r.payment_status,
-          orderInfo: r.order_info,
           notes: r.notes,
           inventoryItemId: r.inventory_item_id,
           inventoryProfileIds: r.inventory_profile_ids || undefined,
@@ -285,7 +284,6 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 			const product = products.find(p => p?.id === pkg?.productId);
 			const productName = (product?.name || '').toLowerCase();
 			const pkgName = String(pkg?.name || '').toLowerCase();
-			const orderInfo = String((o as any).orderInfo || '').toLowerCase();
 			const notes = String((o as any).notes || '').toLowerCase();
 			// Include custom field values in search (same behavior as Orders list)
 			const customFieldValues = ((o as any).customFieldValues || {}) as Record<string, string>;
@@ -335,7 +333,6 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 				customerCode.includes(q) ||
 				productName.includes(q) ||
 				pkgName.includes(q) ||
-				orderInfo.includes(q) ||
 				notes.includes(q) ||
 				customFieldsText.includes(q) ||
 				inventorySearchText.includes(q)
@@ -574,21 +571,11 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
           }
 
           // Update order with replacement inventory
-          const autoInfo = (() => {
-            if (!replacementItem) return null;
-            if (replacementItem.is_account_based) {
-              const itemForOrder = { ...replacementItem, packageId: replacementItem.package_id } as InventoryItem;
-              return Database.buildOrderInfoFromAccount(itemForOrder, replacementProfileIds.length > 0 ? replacementProfileIds : undefined);
-            }
-            return replacementItem.product_info || null;
-          })();
-
           await sb
             .from('orders')
             .update({
               inventory_item_id: resolvedReplacementId,
-              inventory_profile_ids: replacementProfileIds.length > 0 ? replacementProfileIds : null,
-              order_info: autoInfo
+              inventory_profile_ids: replacementProfileIds.length > 0 ? replacementProfileIds : null
             })
             .eq('id', resolvedOrderId);
         }
@@ -1093,7 +1080,6 @@ const WarrantyList: React.FC = () => {
       packageId: r.package_id,
       status: r.status,
       paymentStatus: r.payment_status,
-      orderInfo: r.order_info,
       notes: r.notes,
       inventoryItemId: r.inventory_item_id,
       inventoryProfileIds: r.inventory_profile_ids || undefined,
@@ -1716,7 +1702,6 @@ const handleDelete = (id: string) => {
 									packageId: data.package_id,
 									status: data.status,
 									paymentStatus: data.payment_status,
-									orderInfo: data.order_info,
 									notes: data.notes,
 									inventoryItemId: data.inventory_item_id,
 									inventoryProfileIds: data.inventory_profile_ids || undefined,
@@ -1808,7 +1793,7 @@ const handleDelete = (id: string) => {
             if (inv) {
               const packageInfo = packages.find(p => p.id === inv.packageId);
               const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              const displayColumns = accountColumns;
               if (displayColumns.length > 0) {
                 out.push('');
                 out.push('─────────────────────────────────────');

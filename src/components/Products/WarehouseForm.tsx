@@ -241,9 +241,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     return pkgColumns;
   }, [pkgColumns]);
 
-  // Filter columns that should be displayed in orders (includeInOrderInfo: true)
+  // Display all columns
   const displayColumns = useMemo<InventoryAccountColumn[]>(() => {
-    return pkgColumns.filter(col => col.includeInOrderInfo);
+    return pkgColumns;
   }, [pkgColumns]);
 
   // Debounce search inputs (300ms)
@@ -734,7 +734,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               </div>
               <div className="card-body">
                 {allColumns.map((col: InventoryAccountColumn) => {
-                  const isRequired = col.includeInOrderInfo;
+                  const isRequired = false;
                   return (
                     <div key={col.id} className="form-group">
                       <label className="form-label">

@@ -406,37 +406,7 @@ export class Database {
   }
 
   static refreshOrdersForInventory(inventoryId: string): void {
-    const inventory = this.getInventory().find(i => i.id === inventoryId);
-    if (!inventory) return;
-    const orders = this.getOrders();
-    let changed = false;
-    const nextOrders = orders.map(o => {
-      let isLinked = false;
-      if (o.inventoryItemId === inventoryId) {
-        isLinked = true;
-      } else if (inventory.isAccountBased && (inventory.profiles || []).some(p => p.assignedOrderId === o.id)) {
-        isLinked = true;
-      }
-      if (!isLinked) return o;
-
-      const nextInfo = (() => {
-        if (inventory.isAccountBased) {
-          const profile = (inventory.profiles || []).find(p => p.assignedOrderId === o.id);
-          // Use the order's package columns to avoid mismatch when inventory package changes
-          const inventoryForOrder = { ...inventory, packageId: o.packageId } as InventoryItem;
-          return this.buildOrderInfoFromAccount(inventoryForOrder, profile?.id ? [profile.id] : undefined);
-        }
-        return inventory.productInfo || '';
-      })();
-
-      if (String((o as any).orderInfo || '') !== String(nextInfo || '')) {
-        changed = true;
-        return { ...o, orderInfo: nextInfo, updatedAt: new Date() } as any;
-      }
-      return o;
-    });
-    if (changed) saveToStorage(STORAGE_KEYS.ORDERS, nextOrders);
-    if (changed) nextOrders.forEach(o => mirrorUpdate('orders', o.id, o));
+    // No longer needed - orderInfo has been removed
   }
 
   // Account-based inventory helpers
@@ -526,52 +496,6 @@ export class Database {
     if (changed) saveToStorage(STORAGE_KEYS.INVENTORY, next);
   }
 
-  static buildOrderInfoFromAccount(item: InventoryItem, chosenProfileIds?: string[]): string {
-    const lines: string[] = [];
-    // Always prefer latest package-level column definitions to avoid stale titles/flags
-    const pkg = this.getPackages().find(p => p.id === item.packageId);
-    const columns = (pkg?.accountColumns && pkg.accountColumns.length)
-      ? pkg.accountColumns
-      : (item.accountColumns || []);
-    const data = item.accountData || {};
-    
-    // Nếu có nhiều slot, hiển thị từng slot
-    if (chosenProfileIds && chosenProfileIds.length > 0) {
-      chosenProfileIds.forEach((profileId, index) => {
-        const profile = (item.profiles || []).find(p => p.id === profileId);
-        lines.push(`--- Slot ${index + 1}: ${profile?.label || profileId} ---`);
-        columns.forEach(col => {
-          if (col.includeInOrderInfo) {
-            const val = data[col.id] ?? '';
-            if (String(val).trim()) {
-              const valueStr = String(val);
-              if (valueStr.includes('\n')) {
-                lines.push(`${col.title}:`);
-                // preserve user-entered newlines per line
-                valueStr.split('\n').forEach((ln) => lines.push(ln));
-              } else {
-                lines.push(`${col.title}: ${valueStr}`);
-              }
-            }
-          }
-        });
-        lines.push(''); // blank line between slots
-      });
-      const usage = this.computeSlotUsage(item);
-      if (usage.total > 0) lines.push(`Tổng slot: ${chosenProfileIds.length} | Đã dùng: ${usage.used}/${usage.total}`);
-    } else {
-      // Fallback: không có slot được chọn
-      columns.forEach(col => {
-        if (col.includeInOrderInfo) {
-          const val = data[col.id] ?? '';
-          if (String(val).trim()) {
-            lines.push(`${col.title}: ${val}`);
-          }
-        }
-      });
-    }
-    return lines.join('\n');
-  }
 
   static deleteInventoryItem(id: string): boolean {
     const items = this.getInventory();

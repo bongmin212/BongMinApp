@@ -740,10 +740,7 @@ const WarehouseList: React.FC = () => {
   };
 
   const buildFullOrderInfo = (order: Order): { lines: string[]; text: string } => {
-    let baseLines = String((order as any).orderInfo || '')
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    const baseLines: string[] = [];
     const pkg = getPackageInfo(order.packageId).pkg;
     const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
     if (pkg && Array.isArray(pkg.customFields) && pkg.customFields.length) {
@@ -754,12 +751,6 @@ const WarehouseList: React.FC = () => {
         }
       });
     }
-    // Filter out internal-only info
-    baseLines = baseLines.filter(line => {
-      const normalized = line.toLowerCase();
-      if (normalized.startsWith('slot:')) return false;
-      return true;
-    });
     const text = baseLines.join('\n');
     return { lines: baseLines, text };
   };
@@ -801,15 +792,13 @@ const WarehouseList: React.FC = () => {
           const packageNameLower = (pkgInfo.pkg?.name || '').toLowerCase();
           const detailsLower = buildFullOrderInfo(o).text.toLowerCase();
           const notesLower = (o.notes ? String(o.notes) : '').toLowerCase();
-          const orderInfoLower = (o as any).orderInfo ? String((o as any).orderInfo).toLowerCase() : '';
           return (
             (o.code || '').toLowerCase().includes(norm) ||
             customerNameLower.includes(norm) ||
             productNameLower.includes(norm) ||
             packageNameLower.includes(norm) ||
             detailsLower.includes(norm) ||
-            notesLower.includes(norm) ||
-            orderInfoLower.includes(norm)
+            notesLower.includes(norm)
           );
         });
       })();
@@ -932,15 +921,13 @@ const WarehouseList: React.FC = () => {
           const packageNameLower = (pkgInfo.pkg?.name || '').toLowerCase();
           const detailsLower = buildFullOrderInfo(o).text.toLowerCase();
           const notesLower = (o.notes ? String(o.notes) : '').toLowerCase();
-          const orderInfoLower = (o as any).orderInfo ? String((o as any).orderInfo).toLowerCase() : '';
           return (
             (o.code || '').toLowerCase().includes(norm) ||
             customerNameLower.includes(norm) ||
             productNameLower.includes(norm) ||
             packageNameLower.includes(norm) ||
             detailsLower.includes(norm) ||
-            notesLower.includes(norm) ||
-            orderInfoLower.includes(norm)
+            notesLower.includes(norm)
           );
         });
       })();
@@ -1409,7 +1396,6 @@ const WarehouseList: React.FC = () => {
                 packageId: r.package_id,
                 status: r.status,
                 paymentStatus: r.payment_status,
-                orderInfo: r.order_info,
                 notes: r.notes,
                 inventoryItemId: r.inventory_item_id,
                 inventoryProfileIds: r.inventory_profile_ids || undefined,
@@ -2523,7 +2509,7 @@ const WarehouseList: React.FC = () => {
             if (inv) {
               const packageInfo = packages.find(p => p.id === inv.packageId);
               const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-              const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+              const displayColumns = accountColumns;
               if (displayColumns.length > 0) {
                 out.push('');
                 out.push('─────────────────────────────────────');

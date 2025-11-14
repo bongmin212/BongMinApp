@@ -25,7 +25,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     customerId: '',
     status: 'PROCESSING',
     paymentStatus: 'UNPAID',
-    orderInfo: '',
     notes: '',
     useCustomPrice: false,
     customPrice: 0,
@@ -123,7 +122,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         customerId: order.customerId,
         status: isExpired ? 'EXPIRED' : order.status,
         paymentStatus: (order as any).paymentStatus || 'UNPAID',
-        orderInfo: (order as any).orderInfo || '',
         notes: order.notes || '',
         useCustomPrice: order.useCustomPrice || false,
         customPrice: order.customPrice || 0,
@@ -163,7 +161,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             customerId: '',
             status: 'PROCESSING',
             paymentStatus: 'UNPAID',
-            orderInfo: '',
             notes: '',
             useCustomPrice: false,
             customPrice: 0,
@@ -182,7 +179,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             customerId: '',
             status: 'PROCESSING',
             paymentStatus: 'UNPAID',
-            orderInfo: '',
             notes: '',
             useCustomPrice: false,
             customPrice: 0,
@@ -645,15 +641,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
 
       const pickedInventory = selectedInventoryId ? availableInventory.find(i => i.id === selectedInventoryId) : undefined;
       const pkgConfig = packages.find(p => p.id === formData.packageId);
-      // Auto-import info from warehouse
-      const autoInfo = (() => {
-        if (!pickedInventory) return '';
-        if (pickedInventory.isAccountBased) {
-          // Rebuild using latest package columns to avoid drift
-          return Database.buildOrderInfoFromAccount({ ...pickedInventory, packageId: formData.packageId } as any, selectedProfileIds.length > 0 ? selectedProfileIds : undefined);
-        }
-        return pickedInventory.productInfo || '';
-      })();
 
       // Compute sale price snapshot - only for new orders or when package/customer changes
       const selectedCustomer = customers.find(c => c.id === formData.customerId);
@@ -686,7 +673,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         useCustomPrice: formData.useCustomPrice || false,
         customPrice: formData.useCustomPrice ? formData.customPrice : undefined,
         customFieldValues,
-        orderInfo: (autoInfo || '').trim(),
         // For existing orders, preserve current form status (e.g., EXPIRED)
         status: (order ? formData.status : (selectedInventoryId ? 'COMPLETED' : 'PROCESSING')) as OrderStatus,
         salePrice: finalSalePrice
@@ -702,7 +688,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           customerId: order.customerId,
           status: order.status,
           paymentStatus: (order as any).paymentStatus || 'UNPAID',
-          orderInfo: (order as any).orderInfo || '',
           notes: order.notes || '',
           expiryDate: order.expiryDate instanceof Date && !isNaN(order.expiryDate.getTime()) ? order.expiryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           inventoryItemId: order.inventoryItemId || '',
@@ -718,7 +703,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           customerId: orderData.customerId,
           status: orderData.status,
           paymentStatus: orderData.paymentStatus,
-          orderInfo: orderData.orderInfo || '',
           notes: orderData.notes || '',
           expiryDate: orderData.expiryDate instanceof Date && !isNaN(orderData.expiryDate.getTime()) ? orderData.expiryDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
           inventoryItemId: orderData.inventoryItemId || '',
@@ -740,7 +724,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               customerId: 'Khách hàng',
               status: 'Trạng thái',
               paymentStatus: 'Thanh toán',
-              orderInfo: 'Thông tin đơn',
               notes: 'Ghi chú',
               expiryDate: 'Ngày hết hạn',
               inventoryItemId: 'Liên kết kho',
@@ -763,7 +746,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             customer_id: orderData.customerId,
             status: orderData.status,
             payment_status: orderData.paymentStatus,
-            order_info: orderData.orderInfo || null,
             notes: orderData.notes || null,
             expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
             inventory_item_id: orderData.inventoryItemId || null,
@@ -801,7 +783,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               customerId: updateResult.customer_id,
               status: updateResult.status,
               paymentStatus: updateResult.payment_status,
-              orderInfo: updateResult.order_info,
               notes: updateResult.notes,
               inventoryItemId: updateResult.inventory_item_id,
               inventoryProfileIds: updateResult.inventory_profile_ids || undefined,
@@ -1030,7 +1011,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           customer_id: orderData.customerId,
           status: orderData.status,
           payment_status: orderData.paymentStatus,
-          order_info: orderData.orderInfo || null,
           notes: orderData.notes || null,
           expiry_date: orderData.expiryDate instanceof Date ? orderData.expiryDate.toISOString() : orderData.expiryDate,
           inventory_item_id: orderData.inventoryItemId || null,
@@ -1061,7 +1041,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           customerId: createData.customer_id,
           status: createData.status,
           paymentStatus: createData.payment_status,
-          orderInfo: createData.order_info,
           notes: createData.notes,
           inventoryItemId: createData.inventory_item_id,
           inventoryProfileIds: createData.inventory_profile_ids || undefined,

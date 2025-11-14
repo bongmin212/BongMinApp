@@ -51,7 +51,6 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
       packageId: r.package_id,
       status: r.status,
       paymentStatus: r.payment_status,
-      orderInfo: r.order_info,
       notes: r.notes,
       createdBy: r.created_by || 'system',
       inventoryItemId: r.inventory_item_id,
@@ -217,10 +216,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
   };
 
   const buildFullOrderInfo = (order: Order): { lines: string[]; text: string } => {
-    let baseLines = String((order as any).orderInfo || '')
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
+    const baseLines: string[] = [];
     const pkg = getPackageInfo(order.packageId)?.package;
     const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
     if (pkg && Array.isArray(pkg.customFields) && pkg.customFields.length) {
@@ -231,12 +227,6 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
         }
       });
     }
-    // Filter out unwanted info lines (internal-only): any Slot: ...
-    baseLines = baseLines.filter(line => {
-      const normalized = line.toLowerCase();
-      if (normalized.startsWith('slot:')) return false; // e.g., "Slot: Slot 1" or "Slot: 1/5"
-      return true;
-    });
     const text = baseLines.join('\n');
     return { lines: baseLines, text };
   };
@@ -507,7 +497,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
           if (inv) {
             const packageInfo = packages.find(p => p.id === inv.packageId);
             const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-            const displayColumns = accountColumns.filter((col: any) => col.includeInOrderInfo);
+            const displayColumns = accountColumns;
             if (displayColumns.length > 0) {
               out.push('');
               out.push('─────────────────────────────────────');
