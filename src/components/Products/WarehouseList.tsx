@@ -2308,6 +2308,13 @@ const WarehouseList: React.FC = () => {
         const pkg = packages.find(p => p.id === inv.packageId);
         const renewals = inventoryRenewals.filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
         
+        // Get the latest renewal's new expiry date if it's newer than current expiry
+        const latestRenewal = renewals.length > 0 ? renewals[0] : null;
+        const actualExpiryDate = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate) 
+          ? latestRenewal.newExpiryDate 
+          : inv.expiryDate;
+        const expiryDateMismatch = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate);
+        
         // Get account columns from package or inventory item
         const accountColumns = pkg?.accountColumns || inv.accountColumns || [];
         const accountData = inv.accountData || {};
@@ -2323,7 +2330,14 @@ const WarehouseList: React.FC = () => {
                 <div><strong>Sản phẩm:</strong> {product?.name || inv.productId}</div>
                 <div><strong>Gói:</strong> {pkg?.name || inv.packageId}</div>
                 <div><strong>Nhập:</strong> {formatDate(inv.purchaseDate)}</div>
-                <div><strong>Hết hạn:</strong> {formatDate(inv.expiryDate)}</div>
+                <div>
+                  <strong>Hết hạn:</strong> {formatDate(actualExpiryDate)}
+                  {expiryDateMismatch && (
+                    <span style={{ marginLeft: 8, color: '#dc3545', fontSize: '0.9em' }}>
+                      (Cần cập nhật: {formatDate(inv.expiryDate)} → {formatDate(actualExpiryDate)})
+                    </span>
+                  )}
+                </div>
                 <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
                 <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
                 <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === inv.paymentStatus)?.label || 'Chưa thanh toán'}</div>
@@ -2382,6 +2396,25 @@ const WarehouseList: React.FC = () => {
                 </div>
               </div>
               <div className="d-flex justify-content-end gap-2">
+                {expiryDateMismatch && (
+                  <button
+                    className="btn btn-warning"
+                    onClick={async () => {
+                      const sb = getSupabase();
+                      if (!sb) { notify('Không thể cập nhật hạn sử dụng', 'error'); return; }
+                      const expiryToUpdate = latestRenewal ? new Date(latestRenewal.newExpiryDate) : inv.expiryDate;
+                      const { error } = await sb.from('inventory').update({ expiry_date: expiryToUpdate.toISOString() }).eq('id', inv.id);
+                      if (!error) {
+                        notify('Đã cập nhật hạn sử dụng từ lịch sử gia hạn', 'success');
+                        refresh();
+                      } else {
+                        notify('Không thể cập nhật hạn sử dụng', 'error');
+                      }
+                    }}
+                  >
+                    🔧 Sửa hạn sử dụng
+                  </button>
+                )}
                 <button
                   className="btn btn-success"
                   onClick={() => { setViewingInventory(null); renewInventory(inv.id); }}
