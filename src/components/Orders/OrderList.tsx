@@ -1035,7 +1035,6 @@ const OrderList: React.FC = () => {
       // Search
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
-      const detailsTextLower = buildFullOrderInfo(order).text.toLowerCase();
       
       // Find linked inventory for this order
       const linkedInventory = (() => {
@@ -1076,9 +1075,7 @@ const OrderList: React.FC = () => {
         (customerCodeLower.get(order.customerId) || '').includes(normalizedSearch) ||
         (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
-        ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch) ||
         (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
-        detailsTextLower.includes(normalizedSearch) ||
         inventorySearchText.includes(normalizedSearch);
 
       if (!matchesSearch) return false;
@@ -1195,7 +1192,6 @@ const OrderList: React.FC = () => {
       // Search
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
-      const detailsTextLower = buildFullOrderInfo(order).text.toLowerCase();
       
       // Find linked inventory for this order
       const linkedInventory = (() => {
@@ -1236,9 +1232,7 @@ const OrderList: React.FC = () => {
         (customerCodeLower.get(order.customerId) || '').includes(normalizedSearch) ||
         (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
-        ((order as any).orderInfo || '').toLowerCase().includes(normalizedSearch) ||
         (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
-        detailsTextLower.includes(normalizedSearch) ||
         inventorySearchText.includes(normalizedSearch);
 
       if (!matchesSearch) return false;
