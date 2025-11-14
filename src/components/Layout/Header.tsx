@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { IconMoon, IconSun, IconLogout } from '../Icons';
-import NotificationPanel from '../Notifications/NotificationPanel';
+// import NotificationPanel from '../Notifications/NotificationPanel';
 
 const Header: React.FC = () => {
   const { state, logout, isManager } = useAuth();
@@ -44,11 +44,11 @@ const Header: React.FC = () => {
           </div>
           
           <div className="d-flex align-items-center gap-3">
-            <div style={{ 
+            {/* <div style={{ 
               animation: 'fadeInUp 0.6s ease-out 0.5s both'
             }}>
               <NotificationPanel />
-            </div>
+            </div> */}
             <button
               onClick={toggleTheme}
               className="theme-toggle interactive"
