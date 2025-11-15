@@ -667,11 +667,18 @@ const OrderList: React.FC = () => {
         
         try {
           // Release inventory using direct Supabase query with error handling (same as OrderForm)
+          let inventoryUpdateSuccess = false;
           if (invLinked.is_account_based || (Array.isArray(invLinked.profiles) && invLinked.profiles.length > 0)) {
             // Release account-based slots or slot-based inventory
             const profiles = invLinked.profiles || [];
+            const orderProfileIds = (order as any).inventory_profile_ids || [];
+            
+            // Release all profiles assigned to this order (by assignedOrderId or by profile ID in inventory_profile_ids)
             const updatedProfiles = profiles.map((profile: any) => {
-              if (profile.assignedOrderId === order.id) {
+              const isAssignedToOrder = profile.assignedOrderId === order.id;
+              const isInOrderProfileIds = Array.isArray(orderProfileIds) && orderProfileIds.includes(profile.id);
+              
+              if (isAssignedToOrder || isInOrderProfileIds) {
                 return {
                   ...profile,
                   isAssigned: false,
@@ -691,7 +698,9 @@ const OrderList: React.FC = () => {
             if (updateError) {
               notify('Lỗi khi giải phóng slot kho hàng', 'error');
               console.error('Inventory update error:', updateError);
-              return;
+              // Still try to clear order link even if inventory update fails
+            } else {
+              inventoryUpdateSuccess = true;
             }
           } else {
             // Release classic inventory
@@ -704,11 +713,13 @@ const OrderList: React.FC = () => {
             if (updateError) {
               notify('Lỗi khi giải phóng kho hàng', 'error');
               console.error('Inventory update error:', updateError);
-              return;
+              // Still try to clear order link even if inventory update fails
+            } else {
+              inventoryUpdateSuccess = true;
             }
           }
           
-          // Clear order's inventory link
+          // Always clear order's inventory link, even if inventory update had errors
           const { error: orderUpdateError } = await sb.from('orders').update({ 
             inventory_item_id: null,
             inventory_profile_ids: null 
@@ -718,6 +729,10 @@ const OrderList: React.FC = () => {
             notify('Lỗi khi cập nhật đơn hàng', 'error');
             console.error('Order update error:', orderUpdateError);
             return;
+          }
+          
+          if (!inventoryUpdateSuccess) {
+            notify('Đã xóa liên kết đơn hàng nhưng có lỗi khi cập nhật kho hàng', 'warning');
           }
           
           // Log activity
@@ -2212,6 +2227,9 @@ const OrderList: React.FC = () => {
               notify('Không thể copy vào clipboard', 'error');
             }
           }}
+          onOrderUpdated={async () => {
+            await loadData();
+          }}
         />
       )}
 
@@ -2961,11 +2979,18 @@ const OrderList: React.FC = () => {
                     }
                     
                     // Release inventory using direct Supabase query with error handling (same as OrderForm)
+                    let inventoryUpdateSuccess = false;
                     if (invItem.is_account_based || (Array.isArray(invItem.profiles) && invItem.profiles.length > 0)) {
                       // Release account-based slots or slot-based inventory
                       const profiles = invItem.profiles || [];
+                      const orderProfileIds = (order as any).inventory_profile_ids || [];
+                      
+                      // Release all profiles assigned to this order (by assignedOrderId or by profile ID in inventory_profile_ids)
                       const updatedProfiles = profiles.map((profile: any) => {
-                        if (profile.assignedOrderId === order.id) {
+                        const isAssignedToOrder = profile.assignedOrderId === order.id;
+                        const isInOrderProfileIds = Array.isArray(orderProfileIds) && orderProfileIds.includes(profile.id);
+                        
+                        if (isAssignedToOrder || isInOrderProfileIds) {
                           return {
                             ...profile,
                             isAssigned: false,
@@ -2985,7 +3010,9 @@ const OrderList: React.FC = () => {
                       if (updateError) {
                         notify('Lỗi khi giải phóng slot kho hàng', 'error');
                         console.error('Inventory update error:', updateError);
-                        return;
+                        // Still try to clear order link even if inventory update fails
+                      } else {
+                        inventoryUpdateSuccess = true;
                       }
                     } else {
                       // Release classic inventory
@@ -2998,11 +3025,13 @@ const OrderList: React.FC = () => {
                       if (updateError) {
                         notify('Lỗi khi giải phóng kho hàng', 'error');
                         console.error('Inventory update error:', updateError);
-                        return;
+                        // Still try to clear order link even if inventory update fails
+                      } else {
+                        inventoryUpdateSuccess = true;
                       }
                     }
                     
-                    // Clear order's inventory link
+                    // Always clear order's inventory link, even if inventory update had errors
                     const { error: orderUpdateError } = await sb.from('orders').update({ 
                       inventory_item_id: null,
                       inventory_profile_ids: null 
@@ -3012,6 +3041,10 @@ const OrderList: React.FC = () => {
                       notify('Lỗi khi cập nhật đơn hàng', 'error');
                       console.error('Order update error:', orderUpdateError);
                       return;
+                    }
+                    
+                    if (!inventoryUpdateSuccess) {
+                      notify('Đã xóa liên kết đơn hàng nhưng có lỗi khi cập nhật kho hàng', 'warning');
                     }
                     
                     // Log activity

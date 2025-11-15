@@ -185,12 +185,87 @@ const WarehouseList: React.FC = () => {
             fixedDetails.push(`${accountFixedCount} profile account-based`);
           }
           
+          // 3. Fix orders with inventory_item_id but no actual link
+          const { data: allOrders, error: ordersFetchError } = await sb
+            .from('orders')
+            .select('id, code, inventory_item_id, inventory_profile_ids');
+          
+          if (!ordersFetchError && allOrders) {
+            // Get all inventory items
+            const { data: allInventory, error: invFetchError } = await sb
+              .from('inventory')
+              .select('id, is_account_based, profiles, linked_order_id');
+            
+            if (!invFetchError && allInventory) {
+              const inventoryMap = new Map(allInventory.map((inv: any) => [inv.id, inv]));
+              let ordersFixedCount = 0;
+              const ordersToFix: string[] = [];
+              
+              for (const order of allOrders) {
+                if (!order.inventory_item_id) continue;
+                
+                const inv = inventoryMap.get(order.inventory_item_id);
+                if (!inv) {
+                  // Inventory item doesn't exist, clear the link
+                  ordersToFix.push(order.id);
+                  continue;
+                }
+                
+                // Check if there's an actual link
+                if (inv.is_account_based) {
+                  // For account-based, check if any profile is assigned to this order
+                  const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+                  const hasAssignedSlot = profiles.some((p: any) => 
+                    p.isAssigned && p.assignedOrderId === order.id
+                  );
+                  
+                  // Also check inventory_profile_ids
+                  const orderProfileIds = order.inventory_profile_ids;
+                  let hasValidProfileId = false;
+                  if (orderProfileIds && Array.isArray(orderProfileIds) && orderProfileIds.length > 0) {
+                    hasValidProfileId = orderProfileIds.some((profileId: string) => {
+                      const profile = profiles.find((p: any) => p.id === profileId);
+                      return profile && profile.isAssigned && profile.assignedOrderId === order.id;
+                    });
+                  }
+                  
+                  if (!hasAssignedSlot && !hasValidProfileId) {
+                    // No actual link, clear the order's inventory references
+                    ordersToFix.push(order.id);
+                  }
+                } else {
+                  // For classic inventory, check linked_order_id
+                  if (inv.linked_order_id !== order.id) {
+                    // No actual link, clear the order's inventory references
+                    ordersToFix.push(order.id);
+                  }
+                }
+              }
+              
+              if (ordersToFix.length > 0) {
+                const { error: ordersUpdateError } = await sb
+                  .from('orders')
+                  .update({ 
+                    inventory_item_id: null,
+                    inventory_profile_ids: null
+                  })
+                  .in('id', ordersToFix);
+                
+                if (!ordersUpdateError) {
+                  ordersFixedCount = ordersToFix.length;
+                  fixedCount += ordersFixedCount;
+                  fixedDetails.push(`${ordersFixedCount} đơn hàng`);
+                }
+              }
+            }
+          }
+          
           if (fixedCount === 0) {
             notify('Không tìm thấy slot nào bị kẹt', 'info');
             return;
           }
           
-          // 3. Log hoạt động
+          // 4. Log hoạt động
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ 
@@ -255,10 +330,27 @@ const WarehouseList: React.FC = () => {
       const { data: inv } = await sb.from('inventory').select('*').eq('id', inventoryId).single();
       if (!inv || !inv.is_account_based) return;
       const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
+      
+      // Find the order that has this profile ID
+      const profile = profiles.find((p: any) => p.id === profileId);
+      const orderId = profile?.assignedOrderId;
+      
       const nextProfiles = profiles.map((p: any) => (
         p.id === profileId ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
       ));
       await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
+      
+      // Clear the profile ID from the order's inventory_profile_ids if it exists
+      if (orderId) {
+        const { data: order } = await sb.from('orders').select('inventory_profile_ids').eq('id', orderId).single();
+        if (order && order.inventory_profile_ids && Array.isArray(order.inventory_profile_ids)) {
+          const updatedProfileIds = order.inventory_profile_ids.filter((id: string) => id !== profileId);
+          await sb.from('orders').update({ 
+            inventory_profile_ids: updatedProfileIds.length > 0 ? updatedProfileIds : null 
+          }).eq('id', orderId);
+        }
+      }
+      
       notify('Đã giải phóng slot', 'success');
       refresh();
     } catch {
@@ -2535,6 +2627,9 @@ const WarehouseList: React.FC = () => {
             } catch (e) {
               notify('Không thể copy vào clipboard', 'error');
             }
+          }}
+          onOrderUpdated={async () => {
+            await refresh();
           }}
         />
       )}

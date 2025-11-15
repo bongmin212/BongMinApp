@@ -26,6 +26,7 @@ interface OrderDetailsModalProps extends Getters, InventoryAccess {
 	formatPrice?: (n: number) => string;
 	onCopyInfo?: () => Promise<void> | void;
 	onOpenRenew?: () => void; // optional, only Orders list wires this
+	onOrderUpdated?: () => void | Promise<void>; // optional, callback when order is updated
 }
 
 const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
@@ -43,7 +44,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	formatPrice,
 	onCopyInfo,
 	onOpenRenew,
-	getOrderPrice: getOrderPriceProp
+	getOrderPrice: getOrderPriceProp,
+	onOrderUpdated
 }) => {
 	// Local warranties state to ensure live updates without hard refresh
 	const [warranties, setWarranties] = useState<any[]>([]);
@@ -119,21 +121,86 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	};
 
 	const findInventory = () => {
-		// First try to find by inventoryItemId if it exists
+		// First try to find by inventoryItemId if it exists, but verify actual link
 		if ((order as any).inventoryItemId) {
 			const found = inventory.find(i => i.id === (order as any).inventoryItemId);
-			if (found) return found;
+			if (found) {
+				// For account-based inventory, verify that at least one slot is assigned to this order
+				if (found.is_account_based || found.isAccountBased) {
+					const profiles = found.profiles || [];
+					const hasAssignedSlot = profiles.some((p: any) => 
+						p.isAssigned && p.assignedOrderId === order.id
+					);
+					if (hasAssignedSlot) return found;
+					// No assigned slot, but check if order has inventory_profile_ids that match
+					const orderProfileIds = (order as any).inventoryProfileIds;
+					if (orderProfileIds && Array.isArray(orderProfileIds) && orderProfileIds.length > 0) {
+						const hasValidProfile = orderProfileIds.some((profileId: string) => {
+							const profile = profiles.find((p: any) => p.id === profileId);
+							return profile && profile.isAssigned && profile.assignedOrderId === order.id;
+						});
+						if (hasValidProfile) return found;
+					}
+					// No valid link found, don't return this inventory
+					return null;
+				} else {
+					// For classic inventory, verify linked_order_id matches
+					if (found.linked_order_id === order.id || found.linkedOrderId === order.id) {
+						return found;
+					}
+					// No valid link found, don't return this inventory
+					return null;
+				}
+			}
 		}
 		// Fallback 1: find by linkedOrderId (classic single-item link)
 		const byLinked = inventory.find(i => i.linked_order_id === order.id || i.linkedOrderId === order.id);
 		if (byLinked) return byLinked;
-		// Fallback 2: account-based items where a profile is assigned to this order
+		// Fallback 2: account-based items where a profile is actually assigned to this order
+		// Check both: order has inventory_profile_ids AND the profiles are actually assigned
+		const orderProfileIds = (order as any).inventoryProfileIds;
+		if (orderProfileIds && Array.isArray(orderProfileIds) && orderProfileIds.length > 0) {
+			const found = inventory.find(i => {
+				if (!(i.is_account_based || i.isAccountBased)) return false;
+				const profiles = i.profiles || [];
+				// Check if any of the order's profile IDs actually exist and are assigned to this order
+				return orderProfileIds.some((profileId: string) => {
+					const profile = profiles.find((p: any) => p.id === profileId);
+					return profile && profile.isAssigned && profile.assignedOrderId === order.id;
+				});
+			});
+			if (found) return found;
+		}
+		// Fallback 3: account-based items where a profile is assigned to this order (without checking inventory_profile_ids)
 		return inventory.find(i => i.is_account_based || i.isAccountBased
-			? (i.profiles || []).some((p: any) => p.assignedOrderId === order.id)
+			? (i.profiles || []).some((p: any) => p.assignedOrderId === order.id && p.isAssigned)
 			: false);
 	};
 
 	const inv = findInventory();
+	
+	// Check if order has stuck inventory links (has inventory_item_id or inventory_profile_ids but no actual link)
+	const hasStuckInventoryLink = ((order as any).inventoryItemId || ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds) && (order as any).inventoryProfileIds.length > 0)) && !inv;
+	
+	const handleFixStuckInventoryLink = async () => {
+		const sb = getSupabase();
+		if (!sb) return;
+		
+		try {
+			await sb.from('orders').update({
+				inventory_item_id: null,
+				inventory_profile_ids: null
+			}).eq('id', order.id);
+			
+			if (onOrderUpdated) {
+				await onOrderUpdated();
+			}
+			// Close modal to force refresh
+			onClose();
+		} catch (error) {
+			console.error('Error fixing stuck inventory link:', error);
+		}
+	};
 
 	const renderInventoryCard = () => {
 		if (!inv) {
@@ -351,6 +418,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 						);
 					})()}
 				</div>
+				{hasStuckInventoryLink && (
+					<div className="alert alert-warning mt-2">
+						<strong>⚠️ Cảnh báo:</strong> Đơn hàng này có liên kết kho hàng trong database nhưng không tìm thấy slot nào được gán. 
+						<button className="btn btn-sm btn-warning mt-2" onClick={handleFixStuckInventoryLink}>
+							Fix liên kết kho hàng
+						</button>
+					</div>
+				)}
 				<div className="d-flex justify-content-end gap-2">
 					{onOpenRenew && (
 						<button className="btn btn-success" onClick={onOpenRenew}>Gia hạn</button>

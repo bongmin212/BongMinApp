@@ -1816,6 +1816,10 @@ const handleDelete = (id: string) => {
               notify('Không thể copy vào clipboard', 'error');
             }
           }}
+          onOrderUpdated={async () => {
+            // Order was updated, close modal to allow user to refresh if needed
+            // The modal will close automatically via onClose callback
+          }}
         />
       )}
     </div>

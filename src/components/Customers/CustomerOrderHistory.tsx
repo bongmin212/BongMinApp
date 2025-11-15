@@ -520,6 +520,9 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             notify('Không thể copy vào clipboard', 'error');
           }
         }}
+        onOrderUpdated={async () => {
+          await loadData();
+        }}
       />
     )}
 
