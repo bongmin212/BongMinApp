@@ -1059,6 +1059,18 @@ const OrderList: React.FC = () => {
         }
       }
       
+      // Build custom field values search text
+      let customFieldsSearchText = '';
+      const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
+      if (pkg && Array.isArray(pkg.customFields) && pkg.customFields.length) {
+        pkg.customFields.forEach(cf => {
+          const val = custom[cf.id];
+          if (val !== undefined && String(val).trim()) {
+            customFieldsSearchText += ' ' + String(val).toLowerCase();
+          }
+        });
+      }
+      
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
@@ -1066,7 +1078,8 @@ const OrderList: React.FC = () => {
         (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
         (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
-        inventorySearchText.includes(normalizedSearch);
+        inventorySearchText.includes(normalizedSearch) ||
+        customFieldsSearchText.includes(normalizedSearch);
 
       if (!matchesSearch) return false;
 
@@ -1216,6 +1229,18 @@ const OrderList: React.FC = () => {
         }
       }
       
+      // Build custom field values search text
+      let customFieldsSearchText = '';
+      const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
+      if (pkg && Array.isArray(pkg.customFields) && pkg.customFields.length) {
+        pkg.customFields.forEach(cf => {
+          const val = custom[cf.id];
+          if (val !== undefined && String(val).trim()) {
+            customFieldsSearchText += ' ' + String(val).toLowerCase();
+          }
+        });
+      }
+      
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
@@ -1223,7 +1248,8 @@ const OrderList: React.FC = () => {
         (product ? (productNameLower.get(product.id) || '') : '').includes(normalizedSearch) ||
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
         (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
-        inventorySearchText.includes(normalizedSearch);
+        inventorySearchText.includes(normalizedSearch) ||
+        customFieldsSearchText.includes(normalizedSearch);
 
       if (!matchesSearch) return false;
 
@@ -1585,7 +1611,7 @@ const OrderList: React.FC = () => {
   }, [filteredOrders, customerMap, packageMap, productMap]);
 
   const getSelectedTotal = useMemo(() => {
-    // Sum selected orders the same way as revenue: PAID + COMPLETED snapshot revenue
+    // Sum selected orders: PAID + COMPLETED uses snapshot revenue, UNPAID uses current price
     const getOrderSnapshotRevenue = (order: Order): number => {
       if (order.paymentStatus === 'REFUNDED') return 0;
       const salePrice = (order as any).salePrice;
@@ -1597,8 +1623,16 @@ const OrderList: React.FC = () => {
     let sum = 0;
     for (let i = 0; i < selectedIds.length; i++) {
       const order = filteredOrders.find(o => o.id === selectedIds[i]);
-      if (order && order.status === 'COMPLETED' && order.paymentStatus === 'PAID') {
+      if (!order) continue;
+      
+      if (order.paymentStatus === 'REFUNDED') {
+        continue; // Skip refunded orders
+      } else if (order.status === 'COMPLETED' && order.paymentStatus === 'PAID') {
+        // For paid completed orders, use snapshot revenue
         sum += getOrderSnapshotRevenue(order);
+      } else {
+        // For unpaid orders (any status), use current price
+        sum += getOrderPrice(order);
       }
     }
     return sum;

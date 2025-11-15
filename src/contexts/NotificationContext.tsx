@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   quietHours: null,
   rateLimitMinutes: 15,
   desktopEnabled: true,
-  soundEnabled: true,
+  soundEnabled: false,
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
