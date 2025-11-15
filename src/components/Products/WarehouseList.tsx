@@ -2488,19 +2488,13 @@ const WarehouseList: React.FC = () => {
               return isCTV ? (pkgInfo?.pkg?.ctvPrice || 0) : (pkgInfo?.pkg?.retailPrice || 0);
             })();
             const out: string[] = [];
-            out.push('═══════════════════════════════════════');
-            out.push('📋 THÔNG TIN ĐƠN HÀNG');
-            out.push('═══════════════════════════════════════');
+            out.push(`${o.code || '-'} | ${customerName}`);
             out.push('');
-            out.push(`Mã đơn hàng: ${o.code || '-'}`);
-            out.push(`Khách hàng: ${customerName}`);
-            out.push(`Sản phẩm: ${productName}`);
-            out.push(`Gói: ${packageName}`);
-            out.push(`Ngày mua: ${purchaseDate}`);
-            out.push(`Ngày hết hạn: ${expiryDate}`);
-            out.push(`Trạng thái: ${statusLabel}`);
-            out.push(`Thanh toán: ${paymentLabel}`);
-            out.push(`Giá: ${formatPrice(price)}`);
+            out.push(`${productName} | ${packageName}`);
+            out.push('');
+            out.push(`📅 ${purchaseDate} → ${expiryDate}`);
+            out.push('');
+            out.push(`💰 ${formatPrice(price)} | ${paymentLabel} | ${statusLabel}`);
             const inv = (() => {
               if (o.inventoryItemId) {
                 const found = items.find((i: any) => i.id === o.inventoryItemId);
@@ -2516,16 +2510,10 @@ const WarehouseList: React.FC = () => {
               const displayColumns = accountColumns;
               if (displayColumns.length > 0) {
                 out.push('');
-                out.push('─────────────────────────────────────');
-                out.push('🔐 THÔNG TIN TÀI KHOẢN');
-                out.push('─────────────────────────────────────');
-                out.push('');
                 displayColumns.forEach((col: any) => {
                   const value = (inv.accountData || {})[col.id] || '';
                   if (String(value).trim()) {
-                    out.push(`📌 ${col.title}:`);
-                    out.push(`   ${value}`);
-                    out.push('');
+                    out.push(`${col.title}: ${value}`);
                   }
                 });
               }
@@ -2533,16 +2521,10 @@ const WarehouseList: React.FC = () => {
             const customFieldValues = (o as any).customFieldValues || {};
             if (pkgInfo?.pkg?.customFields && Object.keys(customFieldValues).length > 0) {
               out.push('');
-              out.push('─────────────────────────────────────');
-              out.push('📝 THÔNG TIN THÊM');
-              out.push('─────────────────────────────────────');
-              out.push('');
               pkgInfo.pkg.customFields.forEach((cf: any) => {
                 const value = customFieldValues[cf.id];
                 if (value && String(value).trim()) {
-                  out.push(`📌 ${cf.title}:`);
-                  out.push(`   ${String(value).trim()}`);
-                  out.push('');
+                  out.push(`${cf.title}: ${String(value).trim()}`);
                 }
               });
             }
