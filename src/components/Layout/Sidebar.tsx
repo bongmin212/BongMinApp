@@ -1,7 +1,6 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-// import { useNotifications } from '../../contexts/NotificationContext';
-// import { getSupabase } from '../../utils/supabaseClient';
+import { useBadgeCounts } from '../../hooks/useBadgeCounts';
 import { IconBox, IconClipboard, IconUsers, IconCart, IconChart, IconTrendingUp, IconReceipt, IconPackage, IconShield } from '../Icons';
 
 interface SidebarProps {
@@ -11,31 +10,20 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
   const { isManager } = useAuth();
-  // const { notifications } = useNotifications();
+  const badgeCounts = useBadgeCounts();
 
-  // const sb = getSupabase();
-
-  // Calculate notification counts for each section
-  // const getNotificationCount = (sectionId: string) => {
-  //   const unreadNotifications = notifications.filter(n => !n.isRead);
-  //   
-  //   switch (sectionId) {
-  //     case 'orders':
-  //       return unreadNotifications.filter(n => 
-  //         ['EXPIRY_WARNING', 'NEW_ORDER', 'PAYMENT_REMINDER', 'PROCESSING_DELAY'].includes(n.type)
-  //       ).length;
-  //     case 'warehouse':
-  //       return unreadNotifications.filter(n => 
-  //         ['PROFILE_NEEDS_UPDATE'].includes(n.type)
-  //       ).length;
-  //     case 'warranties':
-  //       return unreadNotifications.filter(n => 
-  //         ['NEW_WARRANTY'].includes(n.type)
-  //       ).length;
-  //     default:
-  //       return 0;
-  //   }
-  // };
+  const getBadgeCount = (itemId: string): number => {
+    switch (itemId) {
+      case 'orders':
+        return badgeCounts.orders;
+      case 'warehouse':
+        return badgeCounts.warehouse;
+      case 'warranties':
+        return badgeCounts.warranties;
+      default:
+        return 0;
+    }
+  };
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <IconTrendingUp /> },
@@ -81,11 +69,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
                 >
                   {item.label}
                 </span>
-                {/* {item.notificationCount && item.notificationCount > 0 && (
-                  <span className="sidebar-notification-badge">
-                    {item.notificationCount > 99 ? '99+' : item.notificationCount}
-                  </span>
-                )} */}
+                {(() => {
+                  const count = getBadgeCount(item.id);
+                  return count > 0 && (
+                    <span className="sidebar-notification-badge">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  );
+                })()}
               </button>
             </li>
           ))}
