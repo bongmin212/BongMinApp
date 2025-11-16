@@ -532,7 +532,16 @@ const OrderList: React.FC = () => {
                   ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
                   : p
               ));
-              const { error: profileError } = await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', it.id);
+              
+              // Check if there are any free slots remaining
+              const hasFreeSlots = nextProfiles.some((p: any) => 
+                !p.isAssigned && !(p as any).needsUpdate
+              );
+              
+              const { error: profileError } = await sb.from('inventory').update({ 
+                profiles: nextProfiles,
+                status: hasFreeSlots ? 'AVAILABLE' : 'SOLD'
+              }).eq('id', it.id);
               
               if (profileError) {
                 notify('Lỗi khi cập nhật profile tài khoản', 'error');
@@ -690,8 +699,14 @@ const OrderList: React.FC = () => {
               return profile;
             });
             
+            // Check if there are any free slots remaining
+            const hasFreeSlots = updatedProfiles.some((p: any) => 
+              !p.isAssigned && !(p as any).needsUpdate
+            );
+            
             const { error: updateError } = await sb.from('inventory').update({
               profiles: updatedProfiles,
+              status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
               updated_at: new Date().toISOString()
             }).eq('id', invLinked.id);
             
@@ -748,6 +763,125 @@ const OrderList: React.FC = () => {
           notify('Đã trả slot về kho', 'success');
         } catch (error) {
           notify('Lỗi khi trả slot về kho', 'error');
+          console.error('Unexpected error:', error);
+        }
+      }
+    });
+  };
+
+  // Find orders with stuck inventory links (has inventory_item_id or inventory_profile_ids but no actual assigned slots)
+  const stuckInventoryLinks = useMemo(() => {
+    return orders.filter(order => {
+      const hasInventoryLink = (order as any).inventoryItemId || ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds) && (order as any).inventoryProfileIds.length > 0);
+      if (!hasInventoryLink) return false;
+      
+      // Try to find actual inventory link (same logic as OrderDetailsModal)
+      let inv = null;
+      
+      // First try by inventoryItemId
+      if ((order as any).inventoryItemId) {
+        const found = inventory.find(i => i.id === (order as any).inventoryItemId);
+        if (found) {
+          if (found.is_account_based || found.isAccountBased) {
+            const profiles = found.profiles || [];
+            const hasAssignedSlot = profiles.some((p: any) => 
+              p.isAssigned && p.assignedOrderId === order.id
+            );
+            if (hasAssignedSlot) inv = found;
+            else {
+              const orderProfileIds = (order as any).inventoryProfileIds;
+              if (orderProfileIds && Array.isArray(orderProfileIds) && orderProfileIds.length > 0) {
+                const hasValidProfile = orderProfileIds.some((profileId: string) => {
+                  const profile = profiles.find((p: any) => p.id === profileId);
+                  return profile && profile.isAssigned && profile.assignedOrderId === order.id;
+                });
+                if (hasValidProfile) inv = found;
+              }
+            }
+          } else {
+            if (found.linked_order_id === order.id || found.linkedOrderId === order.id) {
+              inv = found;
+            }
+          }
+        }
+      }
+      
+      // Fallback: find by linkedOrderId
+      if (!inv) {
+        const byLinked = inventory.find(i => i.linked_order_id === order.id || i.linkedOrderId === order.id);
+        if (byLinked) inv = byLinked;
+      }
+      
+      // Fallback: account-based items with assigned profiles
+      if (!inv) {
+        const orderProfileIds = (order as any).inventoryProfileIds;
+        if (orderProfileIds && Array.isArray(orderProfileIds) && orderProfileIds.length > 0) {
+          const found = inventory.find(i => {
+            if (!(i.is_account_based || i.isAccountBased)) return false;
+            const profiles = i.profiles || [];
+            return orderProfileIds.some((profileId: string) => {
+              const profile = profiles.find((p: any) => p.id === profileId);
+              return profile && profile.isAssigned && profile.assignedOrderId === order.id;
+            });
+          });
+          if (found) inv = found;
+        }
+      }
+      
+      // Fallback: account-based items where profile is assigned
+      if (!inv) {
+        inv = inventory.find(i => i.is_account_based || i.isAccountBased
+          ? (i.profiles || []).some((p: any) => p.assignedOrderId === order.id && p.isAssigned)
+          : false);
+      }
+      
+      // If has inventory link but no actual inventory found, it's stuck
+      return !inv;
+    });
+  }, [orders, inventory]);
+
+  const handleFixAllStuckInventoryLinks = async () => {
+    const stuckOrders = stuckInventoryLinks;
+    if (stuckOrders.length === 0) {
+      notify('Không có đơn hàng nào cần fix', 'info');
+      return;
+    }
+    
+    setConfirmState({
+      message: `Bạn có chắc chắn muốn fix ${stuckOrders.length} đơn hàng có liên kết kho hàng lỗi?`,
+      onConfirm: async () => {
+        const sb = getSupabase();
+        if (!sb) {
+          notify('Không thể kết nối database', 'error');
+          return;
+        }
+        
+        try {
+          const orderIds = stuckOrders.map(o => o.id);
+          const { error } = await sb.from('orders').update({
+            inventory_item_id: null,
+            inventory_profile_ids: null
+          }).in('id', orderIds);
+          
+          if (error) {
+            notify('Lỗi khi fix liên kết kho hàng', 'error');
+            console.error('Error fixing stuck inventory links:', error);
+            return;
+          }
+          
+          // Log activity
+          try {
+            await sb.from('activity_logs').insert({ 
+              employee_id: state.user?.id || null, 
+              action: 'Fix liên kết kho hàng lỗi (hàng loạt)', 
+              details: `orderIds=${orderIds.join(',')}; count=${orderIds.length}` 
+            });
+          } catch {}
+          
+          loadData();
+          notify(`Đã fix ${stuckOrders.length} đơn hàng có liên kết kho hàng lỗi`, 'success');
+        } catch (error) {
+          notify('Lỗi khi fix liên kết kho hàng', 'error');
           console.error('Unexpected error:', error);
         }
       }
@@ -1807,6 +1941,21 @@ const OrderList: React.FC = () => {
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="card-title">Danh sách đơn hàng</h2>
           <div className="d-flex gap-2">
+            {(() => {
+              const stuckCount = stuckInventoryLinks.length;
+              if (stuckCount > 0) {
+                return (
+                  <button 
+                    className="btn btn-warning" 
+                    onClick={handleFixAllStuckInventoryLinks}
+                    title={`Fix ${stuckCount} đơn hàng có liên kết kho hàng lỗi`}
+                  >
+                    Fix liên kết kho lỗi ({stuckCount})
+                  </button>
+                );
+              }
+              return null;
+            })()}
             <div className="text-right">
               <div>Tổng doanh thu: {formatPrice(getTotalRevenue())}</div>
               <small className="text-muted">({filteredOrders.filter(o => o.status === 'COMPLETED').length} đơn hoàn thành)</small>
@@ -3002,8 +3151,14 @@ const OrderList: React.FC = () => {
                         return profile;
                       });
                       
+                      // Check if there are any free slots remaining
+                      const hasFreeSlots = updatedProfiles.some((p: any) => 
+                        !p.isAssigned && !(p as any).needsUpdate
+                      );
+                      
                       const { error: updateError } = await sb.from('inventory').update({
                         profiles: updatedProfiles,
+                        status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
                       

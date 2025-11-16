@@ -838,8 +838,14 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         return profile;
                       });
                       
+                      // Check if there are any free slots remaining
+                      const hasFreeSlots = updatedProfiles.some((p: any) => 
+                        !p.isAssigned && !(p as any).needsUpdate
+                      );
+                      
                       const { error: updateError } = await sb2.from('inventory').update({
                         profiles: updatedProfiles,
+                        status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
                       
