@@ -32,4 +32,19 @@ export function rangeMonths(from: Date, to: Date): Date[] {
   return res;
 }
 
+export function normalizeExpiryDate(date?: Date | string | null): Date | null {
+  if (!date) return null;
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const isMidnight =
+    parsed.getHours() === 0 &&
+    parsed.getMinutes() === 0 &&
+    parsed.getSeconds() === 0 &&
+    parsed.getMilliseconds() === 0;
+  if (isMidnight) {
+    parsed.setHours(23, 59, 59, 999);
+  }
+  return parsed;
+}
+
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, InventoryPaymentStatus, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
+import { InventoryItem, Product, ProductPackage, Order, Customer, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, InventoryPaymentStatus, INVENTORY_PAYMENT_STATUSES_FULL, InventoryRenewal } from '../../types';
 import { Database } from '../../utils/database';
 import WarehouseForm from './WarehouseForm';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,6 +8,7 @@ import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
 import { getSupabase } from '../../utils/supabaseClient';
 import OrderDetailsModal from '../Orders/OrderDetailsModal';
+import { normalizeExpiryDate } from '../../utils/date';
 
 const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
   if (!Array.isArray(columns)) return [];
@@ -41,7 +42,7 @@ const WarehouseList: React.FC = () => {
   const [profilesModal, setProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [previousProfilesModal, setPreviousProfilesModal] = useState<null | { item: InventoryItem }>(null);
   const [viewingOrder, setViewingOrder] = useState<null | Order>(null);
-  const [inventoryRenewals, setInventoryRenewals] = useState<Array<{ id: string; inventoryId: string; months: number; amount: number; previousExpiryDate: Date; newExpiryDate: Date; note?: string; createdAt: Date }>>([]);
+  const [inventoryRenewals, setInventoryRenewals] = useState<InventoryRenewal[]>([]);
   const [renewState, setRenewState] = useState<null | {
     order: Order;
     packageId: string;
@@ -58,6 +59,7 @@ const WarehouseList: React.FC = () => {
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
+  const [latestRenewalMap, setLatestRenewalMap] = useState<Map<string, InventoryRenewal>>(new Map());
   // Load inventory renewals from Supabase for accurate history display
   useEffect(() => {
     (async () => {
@@ -73,11 +75,85 @@ const WarehouseList: React.FC = () => {
         newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(),
         note: r.note || undefined,
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        createdBy: r.created_by || r.createdBy || '',
       }));
       setInventoryRenewals(mapped);
     })();
   }, []);
 
+  useEffect(() => {
+    const map = new Map<string, InventoryRenewal>();
+    for (const renewal of inventoryRenewals) {
+      const existing = map.get(renewal.inventoryId);
+      if (!existing || new Date(renewal.newExpiryDate) > new Date(existing.newExpiryDate)) {
+        map.set(renewal.inventoryId, renewal);
+      }
+    }
+    setLatestRenewalMap(map);
+  }, [inventoryRenewals]);
+
+  const expiryMismatchItems = useMemo(() => {
+    if (!items.length || latestRenewalMap.size === 0) return [];
+    return items.filter(inv => {
+      const latest = latestRenewalMap.get(inv.id);
+      if (!latest) return false;
+      return new Date(latest.newExpiryDate) > new Date(inv.expiryDate);
+    });
+  }, [items, latestRenewalMap]);
+
+  const fixExpiryMismatches = () => {
+    if (expiryMismatchItems.length === 0) {
+      notify('Không có kho nào cần sửa hạn', 'info');
+      return;
+    }
+
+    setConfirmState({
+      message: `Cập nhật hạn sử dụng cho ${expiryMismatchItems.length} kho dựa trên lần gia hạn mới nhất?`,
+      onConfirm: async () => {
+        const sb = getSupabase();
+        if (!sb) { notify('Không thể cập nhật hạn sử dụng', 'error'); return; }
+        let success = 0;
+        let failed = 0;
+        const details: string[] = [];
+
+        for (const inv of expiryMismatchItems) {
+          const latest = latestRenewalMap.get(inv.id);
+          if (!latest) continue;
+          const expiryToUpdate = new Date(latest.newExpiryDate);
+          const { error } = await sb
+            .from('inventory')
+            .update({ expiry_date: expiryToUpdate.toISOString() })
+            .eq('id', inv.id);
+          if (!error) {
+            success++;
+            details.push(`${inv.code || inv.id}: ${new Date(inv.expiryDate).toISOString().split('T')[0]} -> ${expiryToUpdate.toISOString().split('T')[0]}`);
+          } else {
+            failed++;
+          }
+        }
+
+        if (success > 0) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: state.user?.id || null,
+              action: 'Fix hạn kho',
+              details: `count=${success}; items=${details.join(', ')}`
+            });
+          } catch {}
+          notify(
+            failed > 0
+              ? `Đã cập nhật hạn sử dụng cho ${success} kho, ${failed} lỗi`
+              : `Đã cập nhật hạn sử dụng cho ${success} kho`,
+            failed > 0 ? 'warning' : 'success'
+          );
+          refresh();
+        } else {
+          notify('Không thể cập nhật hạn sử dụng', 'error');
+        }
+      }
+    });
+  };
   const fixOrphanedSlots = async () => {
     const sb = getSupabase();
     if (!sb) return notify('Không thể kết nối database', 'error');
@@ -485,8 +561,8 @@ const WarehouseList: React.FC = () => {
       const toUnexpireIds: string[] = [];
 
       for (const r of raw) {
-        const expiry = r.expiry_date ? new Date(r.expiry_date) : null;
-        const isExpiredNow = !!expiry && expiry < now;
+        const expiry = normalizeExpiryDate(r.expiry_date);
+        const isExpiredNow = !!expiry && expiry.getTime() < now.getTime();
         const isSold = r.status === 'SOLD';
         const isExpiredStatus = r.status === 'EXPIRED';
 
@@ -852,52 +928,57 @@ const WarehouseList: React.FC = () => {
     return { lines: baseLines, text };
   };
 
-  const isExpiringSoon = (i: InventoryItem) => {
-    const t = new Date(i.expiryDate).getTime();
-    const now = Date.now();
-    return i.status !== 'SOLD' && t >= now && t <= now + 7 * 24 * 3600 * 1000;
-  };
+const EXPIRY_SOON_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
-  const getActualStatus = (item: InventoryItem) => {
-    // For account-based items, compute status from profiles
-    if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
-      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-      const totalSlots = item.totalSlots || profiles.length;
-      
-      if (totalSlots === 0) return item.status; // No slots = use persisted status
-      
-      // Check if any slot is free (not assigned and not needsUpdate)
-      const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
-      
-      // If profiles are empty, check if there are any assigned profiles in the database
-      if (profiles.length === 0) {
-        // No profiles means no slots are assigned, so it's AVAILABLE
-        return 'AVAILABLE';
-      }
-      
-      // If we have profiles but none are assigned, it's AVAILABLE
-      if (!profiles.some((p: any) => p.isAssigned)) {
-        return 'AVAILABLE';
-      }
-      
-      if (!hasFreeSlot) {
-        // All slots are either assigned or needsUpdate
-        return 'SOLD';
-      }
-      // Has at least one free slot
+const getExpiryTimestamp = (date: Date | string) => {
+  const normalized = normalizeExpiryDate(date);
+  return normalized ? normalized.getTime() : null;
+};
+
+const deriveBaseStatus = (item: InventoryItem) => {
+  // For account-based items, compute status from profiles only (ignore expiry override here)
+  if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
+    const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+    const totalSlots = item.totalSlots || profiles.length;
+
+    if (totalSlots === 0) return item.status;
+
+    const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
+
+    if (profiles.length === 0) {
       return 'AVAILABLE';
     }
-    
-    // Regular inventory: use expiry-based logic (existing code)
-    const now = new Date();
-    const expiryDate = new Date(item.expiryDate);
-    // If truly past due, always show EXPIRED
-    if (expiryDate < now) return 'EXPIRED';
-    // If not expired anymore but status is still EXPIRED from earlier, coerce to AVAILABLE for display
-    if (item.status === 'EXPIRED') return 'AVAILABLE';
-    // Preserve other states (SOLD, AVAILABLE, NEEDS_UPDATE)
-    return item.status;
-  };
+
+    if (!profiles.some((p: any) => p.isAssigned)) {
+      return 'AVAILABLE';
+    }
+
+    if (!hasFreeSlot) {
+      return 'SOLD';
+    }
+    return 'AVAILABLE';
+  }
+
+  // Regular inventory: fall back to stored status (but clear legacy EXPIRED flag)
+  if (item.status === 'EXPIRED') return 'AVAILABLE';
+  return item.status;
+};
+
+const getActualStatus = (item: InventoryItem) => {
+  const expiryTs = getExpiryTimestamp(item.expiryDate);
+  if (expiryTs !== null && expiryTs < Date.now()) {
+    return 'EXPIRED';
+  }
+  return deriveBaseStatus(item);
+};
+
+const isExpiringSoon = (i: InventoryItem) => {
+  const expiryTs = getExpiryTimestamp(i.expiryDate);
+  if (expiryTs === null) return false;
+  const now = Date.now();
+  if (expiryTs <= now) return false;
+  return expiryTs - now <= EXPIRY_SOON_WINDOW_MS;
+};
 
   // Base filtered list (without product/package filters) - used to determine available filter options
   const baseFilteredItems = useMemo(() => {
@@ -1574,6 +1655,11 @@ const WarehouseList: React.FC = () => {
               }, 'KetQuaLoc');
               exportInventoryXlsx(filteredItems, filename);
             }}>Xuất Excel (kết quả đã lọc)</button>
+            {expiryMismatchItems.length > 0 && (
+              <button className="btn btn-warning" onClick={fixExpiryMismatches} title="Cập nhật hạn sử dụng dựa trên lịch sử gia hạn">
+                🔧 Fix hạn kho ({expiryMismatchItems.length})
+              </button>
+            )}
             {hasStuckSlots && (
               <button className="btn btn-warning" onClick={fixOrphanedSlots} title="Fix các slot kho hàng bị kẹt">
                 🔧 Fix Slot Bị Kẹt
@@ -2238,7 +2324,8 @@ const WarehouseList: React.FC = () => {
                           previousExpiryDate: currentExpiry,
                           newExpiryDate: newExpiry,
                           note: renewalDialog.note,
-                          createdAt: new Date()
+                          createdAt: new Date(),
+                          createdBy: state.user?.id || 'system'
                         }
                       ]));
                     }
@@ -2353,7 +2440,8 @@ const WarehouseList: React.FC = () => {
                           previousExpiryDate: currentExpiry,
                           newExpiryDate: newExpiry,
                           note: bulkRenewalDialog.note,
-                          createdAt: new Date()
+                          createdAt: new Date(),
+                          createdBy: state.user?.id || 'system'
                         }
                       ]));
                       successCount++;

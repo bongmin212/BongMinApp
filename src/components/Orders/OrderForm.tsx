@@ -4,6 +4,7 @@ import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { normalizeExpiryDate } from '../../utils/date';
 
 
 interface OrderFormProps {
@@ -455,8 +456,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     
     const profiles = Array.isArray(inv?.profiles) ? (inv as any).profiles : [];
     const now = new Date();
-    const expiresAt = inv.expiryDate ? new Date(inv.expiryDate) : undefined;
-    const inventoryExpired = expiresAt ? expiresAt < now : false;
+    const expiresAt = inv.expiryDate ? normalizeExpiryDate(inv.expiryDate) : undefined;
+    const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
     const allowed = profiles.filter((p: any) => {
       if (!p || typeof p !== 'object') return false;
       if (inventoryExpired) {
@@ -569,8 +570,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         newErrors["inventory"] = 'Kho hàng đã chọn không tồn tại';
       } else {
         const now = new Date();
-        const expiresAt = inv.expiryDate ? new Date(inv.expiryDate) : undefined;
-        const inventoryExpired = expiresAt ? expiresAt < now : false;
+        const expiresAt = inv.expiryDate ? normalizeExpiryDate(inv.expiryDate) : undefined;
+        const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
         const isEditingLinked = !!order && order.inventoryItemId === inv.id;
         if (inventoryExpired && !isEditingLinked) {
           newErrors["inventory"] = 'Kho hàng này đã hết hạn';
@@ -2013,8 +2014,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                             {item.isAccountBased && (() => {
                               // Filter available slots
                               const now = new Date();
-                              const expiresAt = item.expiryDate ? new Date(item.expiryDate) : undefined;
-                              const inventoryExpired = expiresAt ? expiresAt < now : false;
+                              const expiresAt = item.expiryDate ? normalizeExpiryDate(item.expiryDate) : undefined;
+                              const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
                               const availableSlots = (item.profiles || [])
                                 .filter(p => {
                                   // Show slot if inventory not expired and slot is free (or assigned to this order) and not needsUpdate
