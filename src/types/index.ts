@@ -111,6 +111,7 @@ export type InventoryStatus = 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'EXPIRED' | 'N
 export interface InventoryAccountColumn {
   id: string; // stable key
   title: string; // e.g., Email, Pass, Hướng dẫn
+  isVisible?: boolean; // allow toggling column visibility in orders
 }
 
 export interface InventoryProfileSlot {

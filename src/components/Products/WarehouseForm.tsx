@@ -740,7 +740,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                       <label className="form-label">
                         {col.title} 
                         {isRequired && <span className="text-danger"> *</span>}
-                        {!isRequired && <span className="text-muted small"> (không hiển thị trong đơn hàng)</span>}
+                        {!isRequired && <span className="text-muted small"></span>}
                       </label>
                       <textarea
                         className="form-control"

@@ -945,7 +945,10 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                 className="btn btn-sm btn-light"
                 onClick={() => setFormData(prev => ({
                   ...prev,
-                  accountColumns: [...(prev.accountColumns || []), { id: `col-${Date.now()}`, title: '' }]
+                  accountColumns: [
+                    ...(prev.accountColumns || []),
+                    { id: `col-${Date.now()}`, title: '', isVisible: true }
+                  ]
                 }))}
                 disabled={sharedConfigLocked}
               >Thêm cột</button>
@@ -981,9 +984,19 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
                     }))}
                     disabled={sharedConfigLocked}
                   />
-                  <div className="d-flex align-items-center gap-1">
-                    <span style={{ whiteSpace: 'nowrap' }}>Hiển thị</span>
-                  </div>
+                  <label className="d-flex align-items-center gap-2 mb-0" style={{ whiteSpace: 'nowrap' }}>
+                    <input
+                      type="checkbox"
+                      className="form-check-input"
+                      checked={(col as any).isVisible !== false}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        accountColumns: (prev.accountColumns || []).map(c => c.id === col.id ? { ...c, isVisible: e.target.checked } : c)
+                      }))}
+                      disabled={sharedConfigLocked}
+                    />
+                    <span>Hiển thị</span>
+                  </label>
                   <button
                     type="button"
                     className="btn btn-sm btn-danger"

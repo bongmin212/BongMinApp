@@ -9,6 +9,11 @@ import DateRangeInput from '../Shared/DateRangeInput';
 import { getSupabase } from '../../utils/supabaseClient';
 import OrderDetailsModal from '../Orders/OrderDetailsModal';
 
+const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
+  if (!Array.isArray(columns)) return [];
+  return columns.filter(col => col && col.isVisible !== false);
+};
+
 const WarehouseList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
@@ -2599,7 +2604,7 @@ const WarehouseList: React.FC = () => {
             if (inv) {
               const packageInfo = packages.find(p => p.id === inv.packageId);
               const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-              const displayColumns = accountColumns;
+              const displayColumns = filterVisibleAccountColumns(accountColumns);
               if (displayColumns.length > 0) {
                 out.push('');
                 displayColumns.forEach((col: any) => {

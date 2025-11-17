@@ -5,6 +5,11 @@ import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useToast } from '../../contexts/ToastContext';
 
+const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
+  if (!Array.isArray(columns)) return [];
+  return columns.filter(col => col && col.isVisible !== false);
+};
+
 interface CustomerOrderHistoryProps {
   customer: Customer;
   onClose: () => void;
@@ -491,7 +496,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
           if (inv) {
             const packageInfo = packages.find(p => p.id === inv.packageId);
             const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-            const displayColumns = accountColumns;
+            const displayColumns = filterVisibleAccountColumns(accountColumns);
             if (displayColumns.length > 0) {
               out.push('');
               displayColumns.forEach((col: any) => {

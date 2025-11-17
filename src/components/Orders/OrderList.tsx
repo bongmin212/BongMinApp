@@ -10,6 +10,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 
+const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
+  if (!Array.isArray(columns)) return [];
+  return columns.filter(col => col && col.isVisible !== false);
+};
 
 const OrderList: React.FC = () => {
   const { state } = useAuth();
@@ -1582,7 +1586,7 @@ const OrderList: React.FC = () => {
       let inventoryAccountData = '';
       if (linkedInventory && linkedInventory.is_account_based && linkedInventory.accountData) {
         const accountColumns = linkedInventory.accountColumns || [];
-        const displayColumns = accountColumns;
+        const displayColumns = filterVisibleAccountColumns(accountColumns);
         inventoryAccountData = displayColumns.map((col: any) => {
           const value = (linkedInventory.accountData || {})[col.id] || '';
           return value ? `${col.title}: ${value}` : null;
@@ -2347,7 +2351,7 @@ const OrderList: React.FC = () => {
             if (inv) {
               const packageInfo = packages.find(p => p.id === inv.packageId);
               const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
-              const displayColumns = accountColumns;
+              const displayColumns = filterVisibleAccountColumns(accountColumns);
               if (displayColumns.length > 0) {
                 out.push('');
                 displayColumns.forEach((col: any) => {
@@ -2637,7 +2641,7 @@ const OrderList: React.FC = () => {
                     if (inv) {
                       const packageInfo = packages.find(p => p.id === inv.packageId);
                       const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                      const displayColumns = accountColumns;
+                      const displayColumns = filterVisibleAccountColumns(accountColumns);
                       
                       if (displayColumns.length > 0) {
                         lines.push('- Thông tin đơn hàng:');
@@ -2806,7 +2810,7 @@ const OrderList: React.FC = () => {
                       
                       const packageInfo = packages.find(p => p.id === inv.packageId);
                       const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                      const displayColumns = accountColumns;
+                      const displayColumns = filterVisibleAccountColumns(accountColumns);
                       
                       if (displayColumns.length === 0) return null;
                       
@@ -2888,7 +2892,7 @@ const OrderList: React.FC = () => {
                   if (inv) {
                     const packageInfo = packages.find(p => p.id === inv.packageId);
                     const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                    const displayColumns = accountColumns;
+                    const displayColumns = filterVisibleAccountColumns(accountColumns);
                     
                     if (displayColumns.length > 0) {
                       baseLines.push('', 'Thông tin đơn hàng:');
