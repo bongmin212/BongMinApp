@@ -829,8 +829,14 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                     {!!form.replacementInventoryId && (() => {
                       const item = inventoryItems.find(i => i.id === form.replacementInventoryId);
                       if (!item) return null;
-                      const product = products.find(p => p.id === item.productId);
-                      const pkg = packages.find(p => p.id === item.packageId);
+                      const productId = item.productId || (item as any).product_id;
+                      const packageId = item.packageId || (item as any).package_id;
+                      const product = products.find(p => p.id === productId);
+                      const pkg = packages.find(p => p.id === packageId);
+                      const isSharedPool = product?.sharedInventoryPool;
+                      const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
+                      const purchaseDate = item.purchaseDate || (item as any).purchase_date;
+                      const expiryDate = item.expiryDate || (item as any).expiry_date;
                       
                       return (
                         <>
@@ -840,13 +846,11 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                               <h6 className="mb-0">Thông tin kho hàng</h6>
                             </div>
                             <div className="card-body">
-                              <div><strong>Sản phẩm:</strong> {product?.name || item.productId}</div>
-                              <div><strong>Gói:</strong> {pkg?.name || item.packageId}</div>
+                              <div><strong>Sản phẩm:</strong> {product?.name || productId || 'Không xác định'}</div>
+                              <div><strong>Gói/Pool:</strong> {packageName}</div>
                               <div><strong>Mã kho:</strong> {item.code}</div>
-                              <div><strong>Nhập:</strong> {new Date(item.purchaseDate).toLocaleDateString('vi-VN')}</div>
-                              {item.expiryDate && (
-                                <div><strong>Hết hạn:</strong> {new Date(item.expiryDate).toLocaleDateString('vi-VN')}</div>
-                              )}
+                              <div><strong>Nhập:</strong> {purchaseDate ? new Date(purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
+                              <div><strong>Hết hạn:</strong> {expiryDate ? new Date(expiryDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
                               <div><strong>Nguồn:</strong> {item.sourceNote || '-'}</div>
                               {typeof item.purchasePrice === 'number' && (
                                 <div><strong>Giá mua:</strong> {item.purchasePrice.toLocaleString('vi-VN')} VND</div>
@@ -863,9 +867,25 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                                   </pre>
                                 </div>
                               )}
-                              {item.notes && (
-                                <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {item.notes}</div>
-                              )}
+                              <div style={{ marginTop: 6 }}>
+                                <strong>Ghi chú nội bộ:</strong>
+                                {item.notes ? (
+                                  <pre style={{ 
+                                    whiteSpace: 'pre-wrap', 
+                                    margin: '4px 0 0 0', 
+                                    padding: '8px', 
+                                    backgroundColor: 'var(--bg-tertiary)', 
+                                    color: 'var(--text-primary)',
+                                    borderRadius: '4px',
+                                    fontSize: '14px',
+                                    border: '1px solid var(--border-color)'
+                                  }}>
+                                    {item.notes}
+                                  </pre>
+                                ) : (
+                                  <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
+                                )}
+                              </div>
                               
                               {/* Account Information Section */}
                               {item.isAccountBased && item.accountColumns && item.accountColumns.length > 0 && (

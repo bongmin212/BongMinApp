@@ -1849,10 +1849,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       // Get product info for display - Updated to remove status and payment
                       const productInfo = item.productInfo ? item.productInfo.split('\n')[0] : '';
                       const displayProductInfo = productInfo.length > 50 ? productInfo.substring(0, 50) + '...' : productInfo;
+                      const notePreview = item.notes ? item.notes.replace(/\s+/g, ' ').trim() : '';
+                      const displayNote = notePreview.length > 40 ? `${notePreview.slice(0, 40)}...` : notePreview;
                       
                       return (
                         <option key={item.id} value={item.id} disabled={isExpired && item.id !== selectedInventoryId}>
-                          #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
+                          #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}{displayNote ? ` | Ghi chú: ${displayNote}` : ''}
                         </option>
                       );
                     })}
@@ -1956,11 +1958,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                     <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
                                   </div>
                                 )}
-                                {item.notes && (
-                                  <div className="mb-2">
-                                    <strong>Ghi chú:</strong> <small className="text-muted">{item.notes}</small>
-                                  </div>
-                                )}
+                                <div className="mb-2">
+                                  <strong>Ghi chú:</strong>
+                                  {item.notes ? (
+                                    <div className="mt-1 p-2 bg-light rounded small" style={{ whiteSpace: 'pre-wrap' }}>
+                                      {item.notes}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted ms-1">Không có</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                             

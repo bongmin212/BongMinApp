@@ -335,12 +335,12 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                     <div className="customer-card-label">Giá</div>
                     <div className="customer-card-value">{formatPrice(getOrderPrice(order))}</div>
                   </div>
-                  {(order.notes && String(order.notes).trim()) ? (
-                    <div className="customer-card-row">
-                      <div className="customer-card-label">Ghi chú</div>
-                      <div className="customer-card-value">{String(order.notes)}</div>
+                  <div className="customer-card-row">
+                    <div className="customer-card-label">Ghi chú</div>
+                    <div className="customer-card-value">
+                      {order.notes && String(order.notes).trim() ? String(order.notes) : 'Không có'}
                     </div>
-                  ) : null}
+                  </div>
                   <div className="customer-card-actions">
                     <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
                   </div>
@@ -409,7 +409,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                         </span>
                       </td>
                       <td style={cellStyle}>{formatPrice(getOrderPrice(order))}</td>
-                      <td style={cellStyle}>{order.notes || '-'}</td>
+                      <td style={cellStyle}>{order.notes && String(order.notes).trim() ? order.notes : 'Không có'}</td>
                       <td style={cellStyle}>
                         <button
                           onClick={() => setViewingOrder(order)}

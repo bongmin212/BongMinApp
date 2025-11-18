@@ -210,11 +210,13 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				</div>
 			);
 		}
-		const product = products.find(p => p.id === inv.productId);
-		const packageInfo = packages.find((p: any) => p.id === inv.packageId);
+		const productId = inv.productId || inv.product_id;
+		const packageId = inv.packageId || inv.package_id;
+		const product = products.find(p => p.id === productId);
+		const packageInfo = packages.find((p: any) => p.id === packageId);
 		const productName = product?.name || 'Không xác định';
-		const packageName = packageInfo?.name || 'Không xác định';
 		const isSharedPool = product?.sharedInventoryPool;
+		const packageName = packageInfo?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
 			const linkedSlots: string[] = Array.isArray(inv.profiles)
 				? (inv.profiles as any[])
 					.filter(p => p.assignedOrderId === order.id)
@@ -241,7 +243,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				</div>
 				<div className="card-body">
 					<div><strong>Sản phẩm:</strong> {productName}</div>
-					<div><strong>Gói:</strong> {packageName}</div>
+					<div><strong>Gói/Pool:</strong> {packageName}</div>
 					<div><strong>Mã kho:</strong> {inv.code}</div>
 					<div><strong>Nhập:</strong> {inv.purchaseDate ? new Date(inv.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
 					{inv.expiryDate && (
@@ -263,9 +265,24 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							</pre>
 						</div>
 					)}
-					{inv.notes && (
-						<div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {inv.notes}</div>
-					)}
+					<div style={{ marginTop: 6 }}>
+						<strong>Ghi chú nội bộ:</strong>
+						{inv.notes ? (
+							<pre style={{ 
+								whiteSpace: 'pre-wrap', 
+								margin: '4px 0 0 0', 
+								padding: '8px', 
+								backgroundColor: 'var(--bg-tertiary)', 
+								borderRadius: '4px', 
+								fontSize: '14px',
+								border: '1px solid var(--border-color)'
+							}}>
+								{inv.notes}
+							</pre>
+						) : (
+							<span style={{ marginLeft: 4 }} className="text-muted">Không có</span>
+						)}
+					</div>
 					{accountColumns.length > 0 && (
 						<div style={{ marginTop: 12 }}>
 							<strong>Thông tin tài khoản:</strong>
@@ -362,9 +379,9 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Thanh toán:</strong> {getPaymentLabel ? (getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán') : paymentLabel}</div>
 					<div><strong>Giá đơn hàng:</strong> {formatPrice ? formatPrice(getOrderPrice()) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getOrderPrice())}</div>
 
+					<div><strong>Ghi chú:</strong> {order.notes && String(order.notes).trim() ? order.notes : 'Không có'}</div>
 					{renderInventoryCard()}
 					{renderCustomFields()}
-					{order.notes && <div><strong>Ghi chú:</strong> {order.notes}</div>}
 					{(() => {
 						const list = warranties;
 						return (

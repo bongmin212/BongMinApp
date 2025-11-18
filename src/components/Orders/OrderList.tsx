@@ -2995,6 +2995,14 @@ const OrderList: React.FC = () => {
               {(() => {
                 const invItem = inventory.find((i: any) => i.id === returnConfirmState.inventoryId);
                 if (!invItem) return null;
+                const productId = invItem.productId || invItem.product_id;
+                const packageId = invItem.packageId || invItem.package_id;
+                const product = productMap.get(productId) || products.find(p => p.id === productId);
+                const pkg = packageMap.get(packageId) || packages.find(p => p.id === packageId);
+                const isSharedPool = product?.sharedInventoryPool;
+                const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
+                const purchaseDate = invItem.purchaseDate || invItem.purchase_date;
+                const expiryDate = invItem.expiryDate || invItem.expiry_date;
                 
                 return (
                   <div className="card mb-3">
@@ -3002,10 +3010,10 @@ const OrderList: React.FC = () => {
                       <h6 className="mb-0">Thông tin kho hàng</h6>
                     </div>
                     <div className="card-body">
-                      <div><strong>Sản phẩm:</strong> {productMap.get(invItem.productId)?.name || invItem.productId}</div>
-                      <div><strong>Gói:</strong> {packageMap.get(invItem.packageId)?.name || invItem.packageId}</div>
-                      <div><strong>Nhập:</strong> {new Date(invItem.purchaseDate).toLocaleDateString('vi-VN')}</div>
-                      <div><strong>Hết hạn:</strong> {new Date(invItem.expiryDate).toLocaleDateString('vi-VN')}</div>
+                      <div><strong>Sản phẩm:</strong> {product?.name || productId || 'Không xác định'}</div>
+                      <div><strong>Gói/Pool:</strong> {packageName}</div>
+                      <div><strong>Nhập:</strong> {purchaseDate ? new Date(purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
+                      <div><strong>Hết hạn:</strong> {expiryDate ? new Date(expiryDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
                       <div><strong>Nguồn:</strong> {invItem.sourceNote || '-'}</div>
                       <div><strong>Giá mua:</strong> {typeof invItem.purchasePrice === 'number' ? `${invItem.purchasePrice.toLocaleString('vi-VN')} ${invItem.currency || 'VND'}` : '-'}</div>
                       <div><strong>Thanh toán:</strong> {invItem.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
@@ -3018,7 +3026,25 @@ const OrderList: React.FC = () => {
                         ) : null;
                       })()}
                       {invItem.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin sản phẩm:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{invItem.productInfo}</pre></div>}
-                      {invItem.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {invItem.notes}</div>}
+                      <div style={{ marginTop: 6 }}>
+                        <strong>Ghi chú nội bộ:</strong>
+                        {invItem.notes ? (
+                          <pre style={{ 
+                            whiteSpace: 'pre-wrap', 
+                            margin: '4px 0 0 0', 
+                            padding: '8px', 
+                            backgroundColor: 'var(--bg-tertiary)', 
+                            color: 'var(--text-primary)',
+                            borderRadius: '4px',
+                            fontSize: '14px',
+                            border: '1px solid var(--border-color)'
+                          }}>
+                            {invItem.notes}
+                          </pre>
+                        ) : (
+                          <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
+                        )}
+                      </div>
                       
                       {/* Account Information Section */}
                       {invItem.isAccountBased && invItem.accountColumns && invItem.accountColumns.length > 0 && (

@@ -226,6 +226,23 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   }, [selectedProduct, products, packages]);
 
   const selectedPkg = useMemo(() => packages.find(p => p.id === formData.packageId), [packages, formData.packageId]);
+
+  // Ensure account-based inventory always has a positive slot count
+  useEffect(() => {
+    if (!selectedPkg) return;
+    if (selectedPkg.isAccountBased) {
+      setFormData(prev => {
+        if (prev.totalSlots && prev.totalSlots > 0) return prev;
+        const fallback = Math.max(
+          1,
+          Number(prev.totalSlots ?? item?.totalSlots ?? selectedPkg.defaultSlots ?? 1)
+        );
+        return { ...prev, totalSlots: fallback };
+      });
+    } else {
+      setFormData(prev => (prev.totalSlots ? { ...prev, totalSlots: undefined } : prev));
+    }
+  }, [selectedPkg, item]);
   const pkgColumns = useMemo<InventoryAccountColumn[]>(() => {
     // Always use columns from selected package, even if empty (to reflect deletions)
     // Only fallback to item columns if no package is selected
@@ -609,7 +626,25 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               <select
                 className="form-control"
                 value={formData.packageId}
-                onChange={(e) => setFormData(prev => ({ ...prev, packageId: e.target.value }))}
+                onChange={(e) => {
+                  const nextPackageId = e.target.value;
+                  const nextPackage = packages.find(pkg => pkg.id === nextPackageId);
+                  setFormData(prev => ({
+                    ...prev,
+                    packageId: nextPackageId,
+                    totalSlots: nextPackage?.isAccountBased
+                      ? Math.max(
+                          1,
+                          Number(
+                            nextPackage?.defaultSlots ??
+                              prev.totalSlots ??
+                              item?.totalSlots ??
+                              1
+                          )
+                        )
+                      : undefined
+                  }));
+                }}
                 disabled={!selectedProduct || isLockedProduct}
               >
                 <option value="">Chọn gói</option>

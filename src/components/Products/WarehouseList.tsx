@@ -2479,8 +2479,12 @@ const isExpiringSoon = (i: InventoryItem) => {
 
       {viewingInventory && (() => {
         const inv = items.find(x => x.id === viewingInventory.id) || viewingInventory;
-        const product = products.find(p => p.id === inv.productId);
-        const pkg = packages.find(p => p.id === inv.packageId);
+        const productId = inv.productId || (inv as any).product_id;
+        const packageId = inv.packageId || (inv as any).package_id;
+        const product = products.find(p => p.id === productId);
+        const pkg = packages.find(p => p.id === packageId);
+        const isSharedPool = product?.sharedInventoryPool;
+        const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
         const renewals = inventoryRenewals.filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
         
         // Get the latest renewal's new expiry date if it's newer than current expiry
@@ -2502,8 +2506,8 @@ const isExpiringSoon = (i: InventoryItem) => {
                 <button className="close" onClick={() => setViewingInventory(null)}>×</button>
               </div>
               <div className="mb-3">
-                <div><strong>Sản phẩm:</strong> {product?.name || inv.productId}</div>
-                <div><strong>Gói:</strong> {pkg?.name || inv.packageId}</div>
+                <div><strong>Sản phẩm:</strong> {product?.name || productId || 'Không xác định'}</div>
+                <div><strong>Gói/Pool:</strong> {packageName}</div>
                 <div><strong>Nhập:</strong> {formatDate(inv.purchaseDate)}</div>
                 <div>
                   <strong>Hết hạn:</strong> {formatDate(actualExpiryDate)}
@@ -2524,8 +2528,31 @@ const isExpiringSoon = (i: InventoryItem) => {
                     </div>
                   ) : null;
                 })()}
-                {inv.productInfo && <div style={{ marginTop: 6 }}><strong>Thông tin sản phẩm:</strong><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre></div>}
-                {inv.notes && <div style={{ marginTop: 6 }}><strong>Ghi chú nội bộ:</strong> {inv.notes}</div>}
+                {inv.productInfo && (
+                  <div style={{ marginTop: 6 }}>
+                    <strong>Thông tin sản phẩm:</strong>
+                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre>
+                  </div>
+                )}
+                <div style={{ marginTop: 6 }}>
+                  <strong>Ghi chú nội bộ:</strong>
+                  {inv.notes ? (
+                    <pre style={{ 
+                      whiteSpace: 'pre-wrap', 
+                      margin: '4px 0 0 0', 
+                      padding: '8px', 
+                      backgroundColor: 'var(--bg-tertiary)', 
+                      color: 'var(--text-primary)',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      border: '1px solid var(--border-color)'
+                    }}>
+                      {inv.notes}
+                    </pre>
+                  ) : (
+                    <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
+                  )}
+                </div>
                 
                 {/* Account Information Section */}
                 {accountColumns.length > 0 && (
