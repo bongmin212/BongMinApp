@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import DateRangeInput from '../Shared/DateRangeInput';
 import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, CUSTOMER_SOURCES } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
@@ -9,6 +10,7 @@ import OrderDetailsModal from './OrderDetailsModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
   if (!Array.isArray(columns)) return [];
@@ -56,6 +58,13 @@ const OrderList: React.FC = () => {
     useCustomExpiry: boolean;
     customExpiryDate?: Date;
   }>(null);
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const getMobileViewportHeight = () => {
+    if (typeof window === 'undefined') return 480;
+    return Math.max(320, window.innerHeight - 240);
+  };
+  const [mobileListHeight, setMobileListHeight] = useState<number>(() => getMobileViewportHeight());
+  const MOBILE_CARD_HEIGHT = 360;
 
   // Mark renewal message sent (Supabase-backed)
   const markRenewalMessageSent = async (orderId: string) => {
@@ -170,6 +179,13 @@ const OrderList: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const handleResize = () => setMobileListHeight(getMobileViewportHeight());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMobile]);
 
   // Listen for packages updates from PackageForm
   useEffect(() => {
@@ -1745,34 +1761,33 @@ const OrderList: React.FC = () => {
       : packageInfo.package.retailPrice;
   };
 
-  const getTotalRevenue = useMemo(() => {
-    // Align with Dashboard: only COMPLETED + PAID, use sale_price snapshot minus refund
-    const getOrderSnapshotRevenue = (order: Order): number => {
-      if (order.paymentStatus === 'REFUNDED') return 0;
-      const salePrice = (order as any).salePrice;
-      if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) return 0;
-      const refundAmount = (order as any).refundAmount || 0;
-      const netRevenue = Math.max(0, salePrice - refundAmount);
-      return netRevenue;
-    };
-    const paidCompleted = filteredOrders.filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID');
+  const getOrderSnapshotRevenue = useCallback((order: Order): number => {
+    if (order.paymentStatus === 'REFUNDED') return 0;
+    const salePrice = (order as any).salePrice;
+    if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) return 0;
+    const refundAmount = (order as any).refundAmount || 0;
+    const netRevenue = Math.max(0, salePrice - refundAmount);
+    return netRevenue;
+  }, []);
+
+  const { totalRevenue, revenueOrderCount } = useMemo(() => {
     let sum = 0;
-    for (let i = 0; i < paidCompleted.length; i++) {
-      sum += getOrderSnapshotRevenue(paidCompleted[i]);
+    let count = 0;
+    for (let i = 0; i < filteredOrders.length; i++) {
+      const order = filteredOrders[i];
+      const statusEligible = order.status === 'COMPLETED' || order.status === 'EXPIRED';
+      const paid = order.paymentStatus === 'PAID';
+      if (!statusEligible || !paid) continue;
+      const revenue = getOrderSnapshotRevenue(order);
+      if (revenue <= 0) continue;
+      sum += revenue;
+      count += 1;
     }
-    return () => sum;
-  }, [filteredOrders, customerMap, packageMap, productMap]);
+    return { totalRevenue: sum, revenueOrderCount: count };
+  }, [filteredOrders, getOrderSnapshotRevenue]);
 
   const getSelectedTotal = useMemo(() => {
-    // Sum selected orders: PAID + COMPLETED uses snapshot revenue, UNPAID uses current price
-    const getOrderSnapshotRevenue = (order: Order): number => {
-      if (order.paymentStatus === 'REFUNDED') return 0;
-      const salePrice = (order as any).salePrice;
-      if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) return 0;
-      const refundAmount = (order as any).refundAmount || 0;
-      const netRevenue = Math.max(0, salePrice - refundAmount);
-      return netRevenue;
-    };
+    // Sum selected orders: paid completed/expired use snapshot revenue, unpaid uses current price
     let sum = 0;
     for (let i = 0; i < selectedIds.length; i++) {
       const order = filteredOrders.find(o => o.id === selectedIds[i]);
@@ -1780,7 +1795,7 @@ const OrderList: React.FC = () => {
       
       if (order.paymentStatus === 'REFUNDED') {
         continue; // Skip refunded orders
-      } else if (order.status === 'COMPLETED' && order.paymentStatus === 'PAID') {
+      } else if ((order.status === 'COMPLETED' || order.status === 'EXPIRED') && order.paymentStatus === 'PAID') {
         // For paid completed orders, use snapshot revenue
         sum += getOrderSnapshotRevenue(order);
       } else {
@@ -1789,7 +1804,7 @@ const OrderList: React.FC = () => {
       }
     }
     return sum;
-  }, [selectedIds, filteredOrders, customerMap, packageMap, productMap]);
+  }, [selectedIds, filteredOrders, getOrderSnapshotRevenue, customerMap, packageMap, productMap]);
 
   const roundDownToThousand = (value: number) => {
     return Math.max(0, Math.floor(value / 1000) * 1000);
@@ -1924,6 +1939,84 @@ const OrderList: React.FC = () => {
     });
   }, [customerMap, packageMap, productMap]);
 
+  const OrderMobileCard: React.FC<{ order: Order }> = React.useMemo(() => {
+    return React.memo(function Card({ order }: { order: Order }) {
+      return (
+        <div className="order-card">
+          <div className="order-card-header">
+            <div className="d-flex align-items-center gap-2">
+              <div className="order-card-title">{order.code}</div>
+            </div>
+            <div className="order-card-subtitle">{formatDate(order.purchaseDate)}</div>
+          </div>
+
+          <div className="order-card-row">
+            <div className="order-card-label">Khách</div>
+            <div className="order-card-value">{getCustomerName(order.customerId)}</div>
+          </div>
+          <div className="order-card-row">
+            <div className="order-card-label">Sản phẩm</div>
+            <div className="order-card-value">{getPackageInfo(order.packageId)?.product?.name || '-'}</div>
+          </div>
+          <div className="order-card-row">
+            <div className="order-card-label">Gói</div>
+            <div className="order-card-value">{getPackageInfo(order.packageId)?.package.name || '-'}</div>
+          </div>
+          <div className="order-card-row">
+            <div className="order-card-label">Hết hạn</div>
+            <div className="order-card-value">{formatDate(order.expiryDate)}</div>
+          </div>
+          <div className="order-card-row">
+            <div className="order-card-label">Trạng thái</div>
+            <div className="order-card-value">
+              <span className={`status-badge ${getStatusClass(order.status)}`}>{getStatusLabel(order.status)}</span>
+            </div>
+          </div>
+          <div className="order-card-row">
+            <div className="order-card-label">Thanh toán</div>
+            <div className="order-card-value">
+              <span className={`status-badge ${getPaymentClass(order.paymentStatus)}`}>{getPaymentLabel(order.paymentStatus)}</span>
+            </div>
+          </div>
+          <div className="order-card-row">
+            <div className="order-card-label">Giá</div>
+            <div className="order-card-value">{formatPrice(getOrderPrice(order))}</div>
+          </div>
+
+          <div className="order-card-actions">
+            <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
+            {order.paymentStatus === 'REFUNDED' ? (
+              <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
+                Đã hoàn: {formatPrice((order as any).refundAmount || 0)}
+              </div>
+            ) : (
+              <button
+                onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
+                className="btn btn-warning"
+              >
+                Tính tiền hoàn
+              </button>
+            )}
+            <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
+            {new Date(order.expiryDate) < new Date() && !isSlotReturned(order) && (
+              <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot</button>
+            )}
+          </div>
+        </div>
+      );
+    });
+  }, [customerMap, packageMap, productMap]);
+
+  const renderMobileItem = React.useCallback(({ index, style }: ListChildComponentProps) => {
+    const order = filteredOrders[index];
+    if (!order) return null;
+    return (
+      <div style={{ ...style, padding: '0 4px 12px' }}>
+        <OrderMobileCard order={order} />
+      </div>
+    );
+  }, [filteredOrders, OrderMobileCard]);
+
   const resetFilters = () => {
     setSearchTerm('');
     setDebouncedSearchTerm('');
@@ -1961,34 +2054,38 @@ const OrderList: React.FC = () => {
               return null;
             })()}
             <div className="text-right">
-              <div>Tổng doanh thu: {formatPrice(getTotalRevenue())}</div>
-              <small className="text-muted">({filteredOrders.filter(o => o.status === 'COMPLETED').length} đơn hoàn thành)</small>
+              <div>Tổng doanh thu: {formatPrice(totalRevenue)}</div>
+              <small className="text-muted">({revenueOrderCount} đơn đã bán)</small>
             </div>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('DonHang', {
-                debouncedSearchTerm,
-                filterStatus,
-                filterPayment,
-                dateFrom,
-                dateTo,
-                expiryFilter,
-                onlyExpiringNotSent
-              }, 'TrangHienTai');
-              exportOrdersXlsx(paginatedOrders, filename);
-            }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('DonHang', {
-                debouncedSearchTerm,
-                filterStatus,
-                filterPayment,
-                dateFrom,
-                dateTo,
-                expiryFilter,
-                onlyExpiringNotSent
-              }, 'KetQuaLoc');
-              exportOrdersXlsx(filteredOrders, filename);
-            }}>Xuất Excel (kết quả đã lọc)</button>
-            {selectedIds.length > 0 && (
+            {!isMobile && (
+              <>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('DonHang', {
+                    debouncedSearchTerm,
+                    filterStatus,
+                    filterPayment,
+                    dateFrom,
+                    dateTo,
+                    expiryFilter,
+                    onlyExpiringNotSent
+                  }, 'TrangHienTai');
+                  exportOrdersXlsx(paginatedOrders, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('DonHang', {
+                    debouncedSearchTerm,
+                    filterStatus,
+                    filterPayment,
+                    dateFrom,
+                    dateTo,
+                    expiryFilter,
+                    onlyExpiringNotSent
+                  }, 'KetQuaLoc');
+                  exportOrdersXlsx(filteredOrders, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+              </>
+            )}
+            {selectedIds.length > 0 && !isMobile && (
             <div className="d-flex gap-2 align-items-center">
               <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
               <span className="badge bg-info">Tổng tiền: {formatPrice(getSelectedTotal)}</span>
@@ -2155,75 +2252,19 @@ const OrderList: React.FC = () => {
         <div className="text-center py-4">
           <p>Không có đơn hàng nào</p>
         </div>
-      ) : (
-        <>
-        {/* Mobile cards */}
+      ) : isMobile ? (
         <div className="orders-mobile">
-          {paginatedOrders.map((order) => (
-            <div key={order.id} className="order-card">
-              <div className="order-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(order.id)}
-                    onChange={(e) => handleToggleSelect(order.id, e.target.checked)}
-                  />
-                  <div className="order-card-title">{order.code}</div>
-                </div>
-                <div className="order-card-subtitle">{formatDate(order.purchaseDate)}</div>
-              </div>
-
-              <div className="order-card-row">
-                <div className="order-card-label">Khách</div>
-                <div className="order-card-value">{getCustomerName(order.customerId)}</div>
-              </div>
-              <div className="order-card-row">
-                <div className="order-card-label">Sản phẩm</div>
-                <div className="order-card-value">{getPackageInfo(order.packageId)?.product?.name || '-'}</div>
-              </div>
-              <div className="order-card-row">
-                <div className="order-card-label">Gói</div>
-                <div className="order-card-value">{getPackageInfo(order.packageId)?.package.name || '-'}</div>
-              </div>
-              <div className="order-card-row">
-                <div className="order-card-label">Hết hạn</div>
-                <div className="order-card-value">{formatDate(order.expiryDate)}</div>
-              </div>
-              <div className="order-card-row">
-                <div className="order-card-label">Trạng thái</div>
-                <div className="order-card-value"><span className="status-badge">{getStatusLabel(order.status)}</span></div>
-              </div>
-              <div className="order-card-row">
-                <div className="order-card-label">Thanh toán</div>
-                <div className="order-card-value"><span className="status-badge">{getPaymentLabel(order.paymentStatus)}</span></div>
-              </div>
-              <div className="order-card-row">
-                <div className="order-card-label">Giá</div>
-                <div className="order-card-value">{formatPrice(getOrderPrice(order))}</div>
-              </div>
-
-              <div className="order-card-actions">
-                <button onClick={() => setViewingOrder(order)} className="btn btn-light">Xem</button>
-                {order.paymentStatus === 'REFUNDED' ? (
-                  <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
-                    Đã hoàn: {formatPrice((order as any).refundAmount || 0)}
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
-                    className="btn btn-warning"
-                  >Tính tiền hoàn</button>
-                )}
-                <button onClick={() => handleEdit(order)} className="btn btn-secondary">Sửa</button>
-                {new Date(order.expiryDate) < new Date() && !isSlotReturned(order) && (
-                  <button onClick={() => handleReturnSlot(order.id)} className="btn btn-danger" title="Trả slot về kho (không xóa đơn)">Trả slot</button>
-                )}
-              </div>
-            </div>
-          ))}
+          <FixedSizeList
+            className="orders-mobile-list"
+            height={mobileListHeight}
+            itemCount={filteredOrders.length}
+            itemSize={MOBILE_CARD_HEIGHT}
+            width="100%"
+          >
+            {renderMobileItem}
+          </FixedSizeList>
         </div>
-
-        {/* Desktop table */}
+      ) : (
         <div className="table-responsive orders-table">
           <table className="table">
             <thead>
@@ -2254,31 +2295,32 @@ const OrderList: React.FC = () => {
             </tbody>
           </table>
         </div>
-        </>
       )}
 
-      <div className="d-flex justify-content-between align-items-center mt-3">
-        <div>
-          <select
-            className="form-control"
-            style={{ width: 100 }}
-            value={limit}
-            onChange={(e) => { setLimit(parseInt(e.target.value, 10)); setPage(1); }}
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-          </select>
+      {!isMobile && (
+        <div className="d-flex justify-content-between align-items-center mt-3">
+          <div>
+            <select
+              className="form-control"
+              style={{ width: 100 }}
+              value={limit}
+              onChange={(e) => { setLimit(parseInt(e.target.value, 10)); setPage(1); }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <button className="btn btn-light" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>«</button>
+            <span>Trang {currentPage} / {totalPages}</span>
+            <button className="btn btn-light" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>»</button>
+          </div>
+          <div>
+            <span className="text-muted">Tổng: {total}</span>
+          </div>
         </div>
-        <div className="d-flex align-items-center gap-2">
-          <button className="btn btn-light" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>«</button>
-          <span>Trang {currentPage} / {totalPages}</span>
-          <button className="btn btn-light" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>»</button>
-        </div>
-        <div>
-          <span className="text-muted">Tổng: {total}</span>
-        </div>
-      </div>
+      )}
 
       {showForm && (
         <OrderForm

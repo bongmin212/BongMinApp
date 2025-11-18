@@ -8,6 +8,9 @@ import Header from './components/Layout/Header';
 import Sidebar from './components/Layout/Sidebar';
 import ActivityLogList from './components/ActivityLogs/ActivityLogList';
 import { getSupabase } from './utils/supabaseClient';
+import useMediaQuery from './hooks/useMediaQuery';
+import MobileNav from './components/Layout/MobileNav';
+import usePrefersReducedMotion from './hooks/usePrefersReducedMotion';
 const ProductList = lazy(() => import('./components/Products/ProductList'));
 const PackageList = lazy(() => import('./components/Products/PackageList'));
 const WarehouseList = lazy(() => import('./components/Products/WarehouseList'));
@@ -21,6 +24,8 @@ const ExpenseList = lazy(() => import('./components/Expenses/ExpenseList'));
 const AppContent: React.FC = () => {
   const { state } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const onNav = (e: any) => {
@@ -38,6 +43,10 @@ const AppContent: React.FC = () => {
       window.removeEventListener('app:search', onSearch as any);
     };
   }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle('reduce-motion', prefersReducedMotion);
+  }, [prefersReducedMotion]);
 
   if (!state.isAuthenticated) {
     return <LoginForm />;
@@ -70,17 +79,28 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div>
+    <div className={`app-shell ${isMobile ? 'app-shell-mobile' : ''}`}>
       <Header />
       <div className="container">
-        <div className="layout">
-          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-          <div className="main-content">
-            <Suspense fallback={<div>Đang tải...</div>}>
-              {renderContent()}
-            </Suspense>
+        {isMobile ? (
+          <>
+            <div className="main-content main-content-mobile">
+              <Suspense fallback={<div>Đang tải...</div>}>
+                {renderContent()}
+              </Suspense>
+            </div>
+            <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+          </>
+        ) : (
+          <div className="layout">
+            <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+            <div className="main-content">
+              <Suspense fallback={<div>Đang tải...</div>}>
+                {renderContent()}
+              </Suspense>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

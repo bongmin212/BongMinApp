@@ -5,9 +5,11 @@ import { IconPlus, IconEdit, IconTrash, IconReceipt } from '../Icons';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const ExpenseList: React.FC = () => {
   const { notify } = useToast();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -286,35 +288,39 @@ const ExpenseList: React.FC = () => {
               <div>Tổng chi: {formatCurrency(getTotalExpense)}</div>
               <small className="text-muted">({total} mục)</small>
             </div>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('ChiPhi', {
-                debouncedSearchQuery,
-                filterType,
-                dateFrom,
-                dateTo,
-                minAmount,
-                maxAmount,
-                page,
-                limit
-              }, 'TrangHienTai');
-              exportExpensesXlsx(pageItems, filename);
-            }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('ChiPhi', {
-                debouncedSearchQuery,
-                filterType,
-                dateFrom,
-                dateTo,
-                minAmount,
-                maxAmount,
-                total: filteredExpenses.length
-              }, 'KetQuaLoc');
-              exportExpensesXlsx(filteredExpenses, filename);
-            }}>Xuất Excel (kết quả đã lọc)</button>
-            {selectedIds.length > 0 && (
+            {!isMobile && (
               <>
-                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
-                <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('ChiPhi', {
+                    debouncedSearchQuery,
+                    filterType,
+                    dateFrom,
+                    dateTo,
+                    minAmount,
+                    maxAmount,
+                    page,
+                    limit
+                  }, 'TrangHienTai');
+                  exportExpensesXlsx(pageItems, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('ChiPhi', {
+                    debouncedSearchQuery,
+                    filterType,
+                    dateFrom,
+                    dateTo,
+                    minAmount,
+                    maxAmount,
+                    total: filteredExpenses.length
+                  }, 'KetQuaLoc');
+                  exportExpensesXlsx(filteredExpenses, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+                {selectedIds.length > 0 && (
+                  <>
+                    <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+                    <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
+                  </>
+                )}
               </>
             )}
             <button 
@@ -412,11 +418,6 @@ const ExpenseList: React.FC = () => {
             <div key={expense.id} className="expense-card">
               <div className="expense-card-header">
                 <div className="d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(expense.id)}
-                    onChange={(e) => toggleSelect(expense.id, e.target.checked)}
-                  />
                   <div className="expense-card-title">{expense.code}</div>
                 </div>
                 <div className="expense-card-subtitle">{formatDate(expense.date)}</div>

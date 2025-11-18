@@ -3,9 +3,11 @@ import { ActivityLog, Employee, Order, Customer, Product, ProductPackage, ORDER_
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const ActivityLogList: React.FC = () => {
   const { isManager, state } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -567,27 +569,29 @@ const ActivityLogList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div>
-            <div className="d-flex gap-2">
-              <button className="btn btn-light" onClick={() => {
-                const filename = generateExportFilename('NhatKyHoatDong', {
-                  debouncedSearchTerm,
-                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
-                  page,
-                  limit
-                }, 'TrangHienTai');
-                exportLogsXlsx(pageItems, filename);
-              }}>Xuất Excel (trang hiện tại)</button>
-              <button className="btn btn-light" onClick={() => {
-                const filename = generateExportFilename('NhatKyHoatDong', {
-                  debouncedSearchTerm,
-                  selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
-                  total: filteredLogs.length
-                }, 'KetQuaLoc');
-                exportLogsXlsx(filteredLogs, filename);
-              }}>Xuất Excel (kết quả đã lọc)</button>
+          {!isMobile && (
+            <div>
+              <div className="d-flex gap-2">
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('NhatKyHoatDong', {
+                    debouncedSearchTerm,
+                    selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
+                    page,
+                    limit
+                  }, 'TrangHienTai');
+                  exportLogsXlsx(pageItems, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('NhatKyHoatDong', {
+                    debouncedSearchTerm,
+                    selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
+                    total: filteredLogs.length
+                  }, 'KetQuaLoc');
+                  exportLogsXlsx(filteredLogs, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+              </div>
             </div>
-          </div>
+          )}
           <div>
             <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>

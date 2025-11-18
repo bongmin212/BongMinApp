@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
 import OrderDetailsModal from './OrderDetailsModal';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
   if (!Array.isArray(columns)) return [];
@@ -1012,6 +1013,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 const WarrantyList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [warranties, setWarranties] = useState<Warranty[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1482,28 +1484,32 @@ const handleDelete = (id: string) => {
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="card-title">Đơn bảo hành</h2>
           <div className="d-flex gap-2">
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('BaoHanh', {
-                debouncedSearchTerm,
-                searchStatus,
-                dateFrom,
-                dateTo,
-                page,
-                limit
-              }, 'TrangHienTai');
-              exportWarrantiesXlsx(pageItems, filename);
-            }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('BaoHanh', {
-                debouncedSearchTerm,
-                searchStatus,
-                dateFrom,
-                dateTo,
-                total: filteredWarranties.length
-              }, 'KetQuaLoc');
-              exportWarrantiesXlsx(filteredWarranties, filename);
-            }}>Xuất Excel (kết quả đã lọc)</button>
-            {selectedIds.length > 0 && (
+            {!isMobile && (
+              <>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('BaoHanh', {
+                    debouncedSearchTerm,
+                    searchStatus,
+                    dateFrom,
+                    dateTo,
+                    page,
+                    limit
+                  }, 'TrangHienTai');
+                  exportWarrantiesXlsx(pageItems, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('BaoHanh', {
+                    debouncedSearchTerm,
+                    searchStatus,
+                    dateFrom,
+                    dateTo,
+                    total: filteredWarranties.length
+                  }, 'KetQuaLoc');
+                  exportWarrantiesXlsx(filteredWarranties, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+              </>
+            )}
+            {selectedIds.length > 0 && !isMobile && (
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
@@ -1562,11 +1568,6 @@ const handleDelete = (id: string) => {
             <div key={w.id} className="warranty-card">
               <div className="warranty-card-header">
                 <div className="d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(w.id)}
-                    onChange={(e) => toggleSelect(w.id, e.target.checked)}
-                  />
                   <div className="warranty-card-title">{w.code || `BH${index + 1}`}</div>
                 </div>
                 <div className="warranty-card-subtitle">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</div>

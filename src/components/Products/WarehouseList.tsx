@@ -9,6 +9,7 @@ import DateRangeInput from '../Shared/DateRangeInput';
 import { getSupabase } from '../../utils/supabaseClient';
 import OrderDetailsModal from '../Orders/OrderDetailsModal';
 import { normalizeExpiryDate } from '../../utils/date';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
   if (!Array.isArray(columns)) return [];
@@ -17,6 +18,7 @@ const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) =
 
 const WarehouseList: React.FC = () => {
   const { state } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { notify } = useToast();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1631,30 +1633,34 @@ const isExpiringSoon = (i: InventoryItem) => {
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="card-title">Danh sách kho hàng</h2>
           <div className="d-flex gap-2">
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('KhoHang', {
-                searchTerm: debouncedSearchTerm,
-                filterStatus,
-                filterPaymentStatus,
-                dateFrom,
-                dateTo,
-                onlyAccounts,
-                onlyFreeSlots
-              }, 'TrangHienTai');
-              exportInventoryXlsx(pageItems, filename);
-            }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('KhoHang', {
-                searchTerm: debouncedSearchTerm,
-                filterStatus,
-                filterPaymentStatus,
-                dateFrom,
-                dateTo,
-                onlyAccounts,
-                onlyFreeSlots
-              }, 'KetQuaLoc');
-              exportInventoryXlsx(filteredItems, filename);
-            }}>Xuất Excel (kết quả đã lọc)</button>
+            {!isMobile && (
+              <>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('KhoHang', {
+                    searchTerm: debouncedSearchTerm,
+                    filterStatus,
+                    filterPaymentStatus,
+                    dateFrom,
+                    dateTo,
+                    onlyAccounts,
+                    onlyFreeSlots
+                  }, 'TrangHienTai');
+                  exportInventoryXlsx(pageItems, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('KhoHang', {
+                    searchTerm: debouncedSearchTerm,
+                    filterStatus,
+                    filterPaymentStatus,
+                    dateFrom,
+                    dateTo,
+                    onlyAccounts,
+                    onlyFreeSlots
+                  }, 'KetQuaLoc');
+                  exportInventoryXlsx(filteredItems, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+              </>
+            )}
             {expiryMismatchItems.length > 0 && (
               <button className="btn btn-warning" onClick={fixExpiryMismatches} title="Cập nhật hạn sử dụng dựa trên lịch sử gia hạn">
                 🔧 Fix hạn kho ({expiryMismatchItems.length})
@@ -1665,7 +1671,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                 🔧 Fix Slot Bị Kẹt
               </button>
             )}
-            {selectedIds.length > 0 && (
+            {selectedIds.length > 0 && !isMobile && (
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>
@@ -1811,11 +1817,6 @@ const isExpiringSoon = (i: InventoryItem) => {
             <div key={item.id} className="warehouse-card">
               <div className="warehouse-card-header">
                 <div className="d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(item.id)}
-                    onChange={(e) => toggleSelect(item.id, e.target.checked)}
-                  />
                   <div className="warehouse-card-title">{item.code || `KHO${index + 1}`}</div>
                 </div>
                 <div className="warehouse-card-subtitle">{formatDate(item.purchaseDate)}</div>

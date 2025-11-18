@@ -7,10 +7,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { getSupabase } from '../../utils/supabaseClient';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const PackageList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const [packages, setPackages] = useState<ProductPackage[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -385,27 +387,31 @@ const PackageList: React.FC = () => {
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="card-title">Danh sách gói sản phẩm</h2>
           <div className="d-flex gap-2">
-            {selectedIds.length > 0 && (
+            {selectedIds.length > 0 && !isMobile && (
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn ({selectedIds.length})</button>
               </>
             )}
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('GoiSanPham', { 
-                searchTerm,
-                page,
-                limit
-              }, 'TrangHienTai');
-              exportPackagesXlsx(pageItems, filename);
-            }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('GoiSanPham', { 
-                searchTerm,
-                total: filteredPackages.length
-              }, 'KetQuaLoc');
-              exportPackagesXlsx(filteredPackages, filename);
-            }}>Xuất Excel (kết quả đã lọc)</button>
+            {!isMobile && (
+              <>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('GoiSanPham', { 
+                    searchTerm,
+                    page,
+                    limit
+                  }, 'TrangHienTai');
+                  exportPackagesXlsx(pageItems, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('GoiSanPham', { 
+                    searchTerm,
+                    total: filteredPackages.length
+                  }, 'KetQuaLoc');
+                  exportPackagesXlsx(filteredPackages, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+              </>
+            )}
             <button
               onClick={handleCreate}
               className="btn btn-primary"
@@ -442,11 +448,6 @@ const PackageList: React.FC = () => {
             <div key={pkg.id} className="package-card">
               <div className="package-card-header">
                 <div className="d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(pkg.id)}
-                    onChange={(e) => toggleSelect(pkg.id, e.target.checked)}
-                  />
                   <div className="package-card-title">{pkg.name}</div>
                 </div>
                 <div className="package-card-subtitle">{pkg.code || `PK${index + 1}`}</div>

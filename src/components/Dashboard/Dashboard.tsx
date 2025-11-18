@@ -14,6 +14,7 @@ interface DashboardStats {
   totalPackages: number;
   totalCustomers: number;
   totalOrders: number;
+  soldOrderCount: number;
   totalRevenue: number;
   monthlyRevenue: number;
   revenueGrowth: number;
@@ -52,6 +53,7 @@ const Dashboard: React.FC = () => {
     totalPackages: 0,
     totalCustomers: 0,
     totalOrders: 0,
+    soldOrderCount: 0,
     totalRevenue: 0,
     monthlyRevenue: 0,
     revenueGrowth: 0,
@@ -277,8 +279,16 @@ const Dashboard: React.FC = () => {
         return Math.max(0, adjustedCOGS);
       };
 
+      const isRevenueOrder = (order: Order): boolean => {
+        if (order.paymentStatus !== 'PAID') return false;
+        return order.status === 'COMPLETED' || order.status === 'EXPIRED';
+      };
+
+      const revenueOrders = orders.filter(isRevenueOrder);
+      const soldOrderCount = revenueOrders.length;
+
       const totalRevenue = orders
-        .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID')
+        .filter(order => isRevenueOrder(order))
         .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
 
       const now = new Date();
@@ -290,8 +300,7 @@ const Dashboard: React.FC = () => {
       const monthlyRevenue = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
-          return order.status === 'COMPLETED' && 
-                 order.paymentStatus === 'PAID' &&
+          return isRevenueOrder(order) &&
                  orderDate.getMonth() === targetMonth &&
                  orderDate.getFullYear() === targetYear;
         })
@@ -304,8 +313,7 @@ const Dashboard: React.FC = () => {
       const lastMonthRevenue = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
-          return order.status === 'COMPLETED' && 
-                 order.paymentStatus === 'PAID' &&
+          return isRevenueOrder(order) &&
                  orderDate.getMonth() === lastMonth &&
                  orderDate.getFullYear() === lastMonthYear;
         })
@@ -316,15 +324,14 @@ const Dashboard: React.FC = () => {
 
       // Calculate total profit using order.cogs (COGS from inventory, adjusted for refunds)
       const totalProfit = orders
-        .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID')
+        .filter(order => isRevenueOrder(order))
         .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
 
       // Calculate monthly profit using order.cogs (adjusted for refunds)
       const monthlyProfit = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
-          return order.status === 'COMPLETED' && 
-                 order.paymentStatus === 'PAID' &&
+          return isRevenueOrder(order) &&
                  orderDate.getMonth() === targetMonth &&
                  orderDate.getFullYear() === targetYear;
         })
@@ -334,8 +341,7 @@ const Dashboard: React.FC = () => {
       const lastMonthProfit = orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
-          return order.status === 'COMPLETED' && 
-                 order.paymentStatus === 'PAID' &&
+          return isRevenueOrder(order) &&
                  orderDate.getMonth() === lastMonth &&
                  orderDate.getFullYear() === lastMonthYear;
         })
@@ -365,8 +371,7 @@ const Dashboard: React.FC = () => {
       orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
-          return order.status === 'COMPLETED' && 
-                 order.paymentStatus === 'PAID' &&
+          return isRevenueOrder(order) &&
                  orderDate.getMonth() === targetMonth &&
                  orderDate.getFullYear() === targetYear &&
                  order.inventoryItemId;
@@ -425,7 +430,7 @@ const Dashboard: React.FC = () => {
       // Đếm số slot đã bán cho mỗi inventory item (từ orders)
       const allSoldSlots: Record<string, number> = {};
       orders
-        .filter(order => order.status === 'COMPLETED' && order.paymentStatus === 'PAID' && order.inventoryItemId)
+        .filter(order => isRevenueOrder(order) && order.inventoryItemId)
         .forEach(order => {
           if (order.inventoryItemId) {
             allSoldSlots[order.inventoryItemId] = (allSoldSlots[order.inventoryItemId] || 0) + 1;
@@ -524,8 +529,7 @@ const Dashboard: React.FC = () => {
       const idx: Record<string, TrendsPoint> = {};
       const initial: TrendsPoint[] = months.map(m => ({ key: toMonthKey(m), revenue: 0, profit: 0, expenses: 0 }));
       initial.forEach(p => { idx[p.key] = p; });
-      const paidCompleted = orders.filter(o => o.status === 'COMPLETED' && o.paymentStatus === 'PAID');
-      for (const o of paidCompleted) {
+      for (const o of revenueOrders) {
         const k = toMonthKey(new Date(o.purchaseDate.getFullYear(), o.purchaseDate.getMonth(), 1));
         const b = idx[k];
         if (b) {
@@ -630,8 +634,8 @@ const Dashboard: React.FC = () => {
         const key = pid || `product_${prodId}`;
         
         // Chỉ tính doanh thu và lãi từ orders đã thanh toán (getOrderSnapshotPrice đã xử lý refund)
-        const isPaidCompleted = o.status === 'COMPLETED' && o.paymentStatus === 'PAID';
-        if (isPaidCompleted && pkgAggMap[key]) {
+        const isPaidRevenue = isRevenueOrder(o);
+        if (isPaidRevenue && pkgAggMap[key]) {
           const price = getOrderSnapshotPrice(o);
           const profit = price - getAdjustedCOGS(o);
           pkgAggMap[key].revenue += price;
@@ -665,8 +669,8 @@ const Dashboard: React.FC = () => {
         customerAggMap[cid].orders += 1;
         
         // Tính doanh thu và lãi từ orders đã thanh toán (getOrderSnapshotPrice đã xử lý refund)
-        const isPaidCompleted = o.status === 'COMPLETED' && o.paymentStatus === 'PAID';
-        if (isPaidCompleted) {
+        const isPaidRevenue = isRevenueOrder(o);
+        if (isPaidRevenue) {
           const price = getOrderSnapshotPrice(o);
           const profit = price - getAdjustedCOGS(o);
           customerAggMap[cid].revenue += price;
@@ -680,6 +684,7 @@ const Dashboard: React.FC = () => {
         totalPackages: packages.length,
         totalCustomers: customers.length,
         totalOrders: orders.length,
+        soldOrderCount,
         totalRevenue,
         monthlyRevenue,
         revenueGrowth,
@@ -834,6 +839,7 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Tổng doanh thu</h3>
                 <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
+              <div className="sales-subtitle">({stats.soldOrderCount} đơn đã bán)</div>
               </div>
 
               <div className="sales-card">

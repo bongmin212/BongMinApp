@@ -8,9 +8,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 // removed export button
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
+import useMediaQuery from '../../hooks/useMediaQuery';
 
 const CustomerList: React.FC = () => {
   const { state } = useAuth();
+  const isMobile = useMediaQuery('(max-width: 768px)');
   const { notify } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -356,31 +358,35 @@ const CustomerList: React.FC = () => {
         <div className="d-flex justify-content-between align-items-center">
           <h2 className="card-title">Danh sách khách hàng</h2>
           <div className="d-flex gap-2">
-            {selectedIds.length > 0 && (
+            {selectedIds.length > 0 && !isMobile && (
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button onClick={handleBulkDelete} className="btn btn-danger">Xóa đã chọn ({selectedIds.length})</button>
               </>
             )}
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('KhachHang', {
-                debouncedSearchTerm,
-                filterType,
-                filterSource,
-                page,
-                limit
-              }, 'TrangHienTai');
-              exportCustomersXlsx(paginatedCustomers, filename);
-            }}>Xuất Excel (trang hiện tại)</button>
-            <button className="btn btn-light" onClick={() => {
-              const filename = generateExportFilename('KhachHang', {
-                debouncedSearchTerm,
-                filterType,
-                filterSource,
-                total: filteredCustomers.length
-              }, 'KetQuaLoc');
-              exportCustomersXlsx(filteredCustomers, filename);
-            }}>Xuất Excel (kết quả đã lọc)</button>
+            {!isMobile && (
+              <>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('KhachHang', {
+                    debouncedSearchTerm,
+                    filterType,
+                    filterSource,
+                    page,
+                    limit
+                  }, 'TrangHienTai');
+                  exportCustomersXlsx(paginatedCustomers, filename);
+                }}>Xuất Excel (trang hiện tại)</button>
+                <button className="btn btn-light" onClick={() => {
+                  const filename = generateExportFilename('KhachHang', {
+                    debouncedSearchTerm,
+                    filterType,
+                    filterSource,
+                    total: filteredCustomers.length
+                  }, 'KetQuaLoc');
+                  exportCustomersXlsx(filteredCustomers, filename);
+                }}>Xuất Excel (kết quả đã lọc)</button>
+              </>
+            )}
             <button
               onClick={handleCreate}
               className="btn btn-primary"
@@ -448,11 +454,6 @@ const CustomerList: React.FC = () => {
             <div key={customer.id} className="customer-card">
               <div className="customer-card-header">
                 <div className="d-flex align-items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.includes(customer.id)}
-                    onChange={(e) => handleToggleSelect(customer.id, e.target.checked)}
-                  />
                   <div className="customer-card-title">{customer.name}</div>
                 </div>
                 <div className="customer-card-subtitle">{customer.code || `KH${index + 1}`}</div>

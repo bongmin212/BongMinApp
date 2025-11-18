@@ -1439,6 +1439,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               <div style={{ flex: 1 }}>
                 <input
                   type="text"
+                  inputMode="search"
                   className="form-control mb-2"
                   placeholder="Tìm khách theo tên/SĐT/email/mã..."
                   value={customerSearch}
@@ -1558,6 +1559,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       <label className="form-label">Số điện thoại</label>
                       <input
                         type="tel"
+                        inputMode="tel"
+                        pattern="[0-9]*"
                         className="form-control"
                         value={newCustomerData.phone}
                         onChange={(e) => setNewCustomerData(prev => ({
@@ -1655,6 +1658,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </label>
             <input
               type="text"
+              inputMode="search"
               className="form-control mb-2"
               placeholder="Tìm sản phẩm theo tên/mã..."
               value={productSearch}
@@ -1807,6 +1811,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   <label className="form-label">Chọn hàng trong kho (không bắt buộc)</label>
                   <input
                     type="text"
+                  inputMode="search"
                     className="form-control mb-2"
                     placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
                     value={inventorySearch}
@@ -2137,6 +2142,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     <label className="form-label">Giá bán tùy chỉnh (₫)</label>
                     <input
                       type="number"
+                      inputMode="decimal"
                       className="form-control"
                       value={formData.customPrice || ''}
                       onChange={(e) => setFormData(prev => ({

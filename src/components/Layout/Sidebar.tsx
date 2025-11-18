@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useBadgeCounts } from '../../hooks/useBadgeCounts';
-import { IconBox, IconClipboard, IconUsers, IconCart, IconChart, IconTrendingUp, IconReceipt, IconPackage, IconShield } from '../Icons';
+import { getNavItems } from './navigation';
 
 interface SidebarProps {
   activeTab: string;
@@ -25,18 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
     }
   };
 
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <IconTrendingUp /> },
-    { id: 'orders', label: 'Đơn hàng', icon: <IconCart /> },
-    { id: 'customers', label: 'Khách hàng', icon: <IconUsers /> },
-    { id: 'products', label: 'Sản phẩm', icon: <IconBox /> },
-    { id: 'packages', label: 'Gói sản phẩm', icon: <IconPackage /> },
-    { id: 'warehouse', label: 'Kho hàng', icon: <IconClipboard /> },
-    { id: 'warranties', label: 'Bảo hành', icon: <IconShield /> },
-    { id: 'expenses', label: 'Chi phí', icon: <IconReceipt /> },
-    // Chỉ còn Lịch sử hoạt động cho quản lý
-    ...(isManager() ? [ { id: 'activity-logs', label: 'Lịch sử hoạt động', icon: <IconChart /> } ] : [])
-  ];
+  const menuItems = getNavItems(isManager());
 
   return (
     <div className="sidebar">
