@@ -1,5 +1,6 @@
-const CACHE_VERSION = 'bongmin-app-v2';
+const CACHE_VERSION = 'bongmin-app-v3';
 const APP_SHELL = ['/', '/manifest.json', '/logo.png'];
+const NETWORK_ONLY_HOSTS = ['supabase.co', 'supabase.in', 'supabase.net'];
 
 const cacheAppShell = async () => {
   const cache = await caches.open(CACHE_VERSION);
@@ -54,8 +55,14 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+  const isNetworkOnly = NETWORK_ONLY_HOSTS.some(host => url.hostname.endsWith(host));
   const isHtmlRequest = request.mode === 'navigate';
   const isAssetRequest = /\.(js|css)$/.test(url.pathname);
+
+  if (isNetworkOnly) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   if (isHtmlRequest || isAssetRequest) {
     event.respondWith(networkFirst(request));
