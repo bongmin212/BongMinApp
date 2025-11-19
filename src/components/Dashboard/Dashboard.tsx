@@ -285,7 +285,7 @@ const Dashboard: React.FC = () => {
       };
 
       const revenueOrders = orders.filter(isRevenueOrder);
-      const soldOrderCount = revenueOrders.length;
+      const soldOrderCount = orders.length;
 
       const totalRevenue = orders
         .filter(order => isRevenueOrder(order))

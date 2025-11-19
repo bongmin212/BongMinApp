@@ -1770,21 +1770,24 @@ const OrderList: React.FC = () => {
     return netRevenue;
   }, []);
 
-  const { totalRevenue, revenueOrderCount } = useMemo(() => {
+  const { totalRevenue } = useMemo(() => {
     let sum = 0;
-    let count = 0;
     for (let i = 0; i < filteredOrders.length; i++) {
       const order = filteredOrders[i];
       const statusEligible = order.status === 'COMPLETED' || order.status === 'EXPIRED';
+      if (!statusEligible) continue;
+
       const paid = order.paymentStatus === 'PAID';
-      if (!statusEligible || !paid) continue;
+      if (!paid) continue;
+
       const revenue = getOrderSnapshotRevenue(order);
       if (revenue <= 0) continue;
+
       sum += revenue;
-      count += 1;
     }
-    return { totalRevenue: sum, revenueOrderCount: count };
+    return { totalRevenue: sum };
   }, [filteredOrders, getOrderSnapshotRevenue]);
+  const totalOrderCount = filteredOrders.length;
 
   const getSelectedTotal = useMemo(() => {
     // Sum selected orders: paid completed/expired use snapshot revenue, unpaid uses current price
@@ -2055,7 +2058,7 @@ const OrderList: React.FC = () => {
             })()}
             <div className="text-right">
               <div>Tổng doanh thu: {formatPrice(totalRevenue)}</div>
-              <small className="text-muted">({revenueOrderCount} đơn đã bán)</small>
+              <small className="text-muted">({totalOrderCount} đơn đã bán)</small>
             </div>
             {!isMobile && (
               <>
