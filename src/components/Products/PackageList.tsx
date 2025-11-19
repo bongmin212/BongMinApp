@@ -9,11 +9,16 @@ import { getSupabase } from '../../utils/supabaseClient';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import useMediaQuery from '../../hooks/useMediaQuery';
 
+type PackageWithUsage = ProductPackage & {
+  hasLinkedOrders?: boolean;
+  hasLinkedInventory?: boolean;
+};
+
 const PackageList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const [packages, setPackages] = useState<ProductPackage[]>([]);
+  const [packages, setPackages] = useState<PackageWithUsage[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingPackage, setEditingPackage] = useState<ProductPackage | null>(null);
@@ -21,6 +26,35 @@ const PackageList: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
+
+  const canDeletePackage = (pkg?: PackageWithUsage | null) => !!pkg && !pkg.hasLinkedOrders && !pkg.hasLinkedInventory;
+  const getUsageLabel = (pkg: PackageWithUsage) => {
+    const reasons: string[] = [];
+    if (pkg.hasLinkedOrders) reasons.push('đơn hàng');
+    if (pkg.hasLinkedInventory) reasons.push('kho hàng');
+    if (reasons.length === 0) return '';
+    return `Đang gắn với ${reasons.join(' & ')}`;
+  };
+
+  const fetchPackageUsageMap = async (packageIds: string[], client?: ReturnType<typeof getSupabase>) => {
+    if (!packageIds.length) return {} as Record<string, { hasLinkedOrders: boolean; hasLinkedInventory: boolean }>;
+    const sbClient = client ?? getSupabase();
+    if (!sbClient) return {} as Record<string, { hasLinkedOrders: boolean; hasLinkedInventory: boolean }>;
+    const ordersRes = await sbClient.from('orders').select('package_id').in('package_id', packageIds);
+    if (ordersRes.error) console.error('Không thể lấy orders để kiểm tra gói', ordersRes.error);
+    const inventoryRes = await sbClient.from('inventory').select('package_id').in('package_id', packageIds);
+    if (inventoryRes.error) console.error('Không thể lấy inventory để kiểm tra gói', inventoryRes.error);
+    const orderPackageIds = new Set((ordersRes.data || []).map((o: any) => o.package_id).filter(Boolean));
+    const inventoryPackageIds = new Set((inventoryRes.data || []).map((i: any) => i.package_id).filter(Boolean));
+    const usageMap: Record<string, { hasLinkedOrders: boolean; hasLinkedInventory: boolean }> = {};
+    packageIds.forEach(id => {
+      usageMap[id] = {
+        hasLinkedOrders: orderPackageIds.has(id),
+        hasLinkedInventory: inventoryPackageIds.has(id)
+      };
+    });
+    return usageMap;
+  };
 
   useEffect(() => {
     loadData();
@@ -58,7 +92,18 @@ const PackageList: React.FC = () => {
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Product[];
-    setPackages(allPackages);
+    const usageMap = await fetchPackageUsageMap(allPackages.map(p => p.id), sb);
+    const decoratedPackages = allPackages.map(pkg => ({
+      ...pkg,
+      hasLinkedOrders: usageMap[pkg.id]?.hasLinkedOrders || false,
+      hasLinkedInventory: usageMap[pkg.id]?.hasLinkedInventory || false
+    }));
+    setPackages(decoratedPackages);
+    setSelectedIds(prev => prev.filter(id => {
+      const usage = usageMap[id];
+      if (!usage) return true;
+      return !(usage.hasLinkedInventory || usage.hasLinkedOrders);
+    }));
     setProducts(allProducts);
   };
 
@@ -90,11 +135,23 @@ const PackageList: React.FC = () => {
 
   const handleDelete = (id: string) => {
     const target = packages.find(p => p.id === id);
+    if (!target) return;
+    if (!canDeletePackage(target)) {
+      notify('Gói sản phẩm đang gắn với đơn hàng hoặc kho hàng, không thể xóa', 'warning');
+      return;
+    }
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa gói sản phẩm này?',
       onConfirm: async () => {
         const sb = getSupabase();
         if (!sb) return notify('Không thể xóa gói sản phẩm', 'error');
+        const usageMap = await fetchPackageUsageMap([id], sb);
+        const usage = usageMap[id];
+        if (usage?.hasLinkedOrders || usage?.hasLinkedInventory) {
+          notify('Gói sản phẩm đang gắn với đơn hàng hoặc kho hàng, không thể xóa', 'error');
+          loadData();
+          return;
+        }
         const { error } = await sb.from('packages').delete().eq('id', id);
         if (!error) {
           // Update local storage immediately
@@ -168,26 +225,59 @@ const PackageList: React.FC = () => {
   };
 
   const toggleSelectAll = (checked: boolean, ids: string[]) => {
+    const eligibleIds = ids.filter(id => canDeletePackage(packages.find(p => p.id === id)));
+    if (eligibleIds.length === 0) {
+      if (checked) notify('Các gói đã chọn đang được sử dụng nên không thể xóa', 'warning');
+      return;
+    }
     if (checked) {
-      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+      setSelectedIds(prev => Array.from(new Set([...prev, ...eligibleIds])));
     } else {
-      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+      setSelectedIds(prev => prev.filter(id => !eligibleIds.includes(id)));
     }
   };
-  const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
+  const toggleSelect = (id: string, checked: boolean) => {
+    const pkg = packages.find(p => p.id === id);
+    if (!canDeletePackage(pkg)) {
+      if (checked) notify('Gói sản phẩm đang gắn với đơn hàng hoặc kho hàng, không thể xóa', 'warning');
+      return;
+    }
+    setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
+  };
   const bulkDelete = () => {
     if (selectedIds.length === 0) return;
-    const targets = packages.filter(p => selectedIds.includes(p.id));
+    const deletableIds = selectedIds.filter(id => canDeletePackage(packages.find(p => p.id === id)));
+    const blockedCount = selectedIds.length - deletableIds.length;
+    if (blockedCount > 0) {
+      notify(`${blockedCount} gói đang được sử dụng nên không thể xóa`, 'warning');
+      setSelectedIds(deletableIds);
+    }
+    if (deletableIds.length === 0) {
+      notify('Không còn gói nào có thể xóa', 'warning');
+      return;
+    }
+    const targets = packages.filter(p => deletableIds.includes(p.id));
     setConfirmState({
-      message: `Xóa ${selectedIds.length} gói sản phẩm đã chọn?`,
+      message: `Xóa ${deletableIds.length} gói sản phẩm đã chọn?`,
       onConfirm: async () => {
         const sb = getSupabase();
         if (!sb) return notify('Không thể xóa gói sản phẩm', 'error');
-        const { error } = await sb.from('packages').delete().in('id', selectedIds);
+        const usageMap = await fetchPackageUsageMap(deletableIds, sb);
+        const lockedNow = deletableIds.filter(id => {
+          const usage = usageMap[id];
+          return usage?.hasLinkedOrders || usage?.hasLinkedInventory;
+        });
+        if (lockedNow.length > 0) {
+          notify('Một số gói vừa phát sinh liên kết, thử lại sau', 'error');
+          setSelectedIds(prev => prev.filter(id => !lockedNow.includes(id)));
+          loadData();
+          return;
+        }
+        const { error } = await sb.from('packages').delete().in('id', deletableIds);
         if (!error) {
           // Update local storage immediately
           const currentPackages = Database.getPackages();
-          Database.setPackages(currentPackages.filter(p => !selectedIds.includes(p.id)));
+          Database.setPackages(currentPackages.filter(p => !deletableIds.includes(p.id)));
           
           // Update related inventory items to remove package references
           try {
@@ -198,12 +288,12 @@ const PackageList: React.FC = () => {
                 is_account_based: false,
                 total_slots: null
               })
-              .in('package_id', selectedIds);
+              .in('package_id', deletableIds);
             
             // Update local storage inventory items
             const currentInventory = Database.getInventory();
             const updatedInventory = currentInventory.map(item => {
-              if (selectedIds.includes(item.packageId)) {
+              if (deletableIds.includes(item.packageId)) {
                 return {
                   ...item,
                   packageId: '',
@@ -232,7 +322,7 @@ const PackageList: React.FC = () => {
           employee_id: state.user?.id || null,
           action: 'Xóa hàng loạt gói',
           details: [
-            `ids=${selectedIds.join(',')}`,
+            `ids=${deletableIds.join(',')}`,
             `codes=${targets.map(t => t.code).filter(Boolean).join(',')}`,
             `names=${targets.map(t => t.name).filter(Boolean).join(',')}`
           ].filter(Boolean).join('; ')
@@ -380,6 +470,7 @@ const PackageList: React.FC = () => {
       return (a.code || '').localeCompare(b.code || '');
     });
   const pageItems = sortedPackages.slice(start, start + limit);
+  const selectablePageIds = pageItems.filter(pkg => canDeletePackage(pkg)).map(pkg => pkg.id);
 
   return (
     <div className="card">
@@ -485,12 +576,18 @@ const PackageList: React.FC = () => {
                 >
                   Sửa
                 </button>
-                <button
-                  onClick={() => handleDelete(pkg.id)}
-                  className="btn btn-danger"
-                >
-                  Xóa
-                </button>
+                {canDeletePackage(pkg) ? (
+                  <button
+                    onClick={() => handleDelete(pkg.id)}
+                    className="btn btn-danger"
+                  >
+                    Xóa
+                  </button>
+                ) : (
+                  <span className="badge bg-light text-dark" title={getUsageLabel(pkg)}>
+                    Đang dùng
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -504,8 +601,9 @@ const PackageList: React.FC = () => {
                 <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
-                    checked={pageItems.length > 0 && pageItems.every(p => selectedIds.includes(p.id))}
-                    onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(p => p.id))}
+                    checked={selectablePageIds.length > 0 && selectablePageIds.every(id => selectedIds.includes(id))}
+                    disabled={selectablePageIds.length === 0}
+                    onChange={(e) => toggleSelectAll(e.target.checked, selectablePageIds)}
                   />
                 </th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã gói</th>
@@ -522,7 +620,13 @@ const PackageList: React.FC = () => {
               {pageItems.map((pkg, index) => (
                 <tr key={pkg.id}>
                   <td>
-                    <input type="checkbox" checked={selectedIds.includes(pkg.id)} onChange={(e) => toggleSelect(pkg.id, e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(pkg.id)}
+                      disabled={!canDeletePackage(pkg)}
+                      title={canDeletePackage(pkg) ? undefined : 'Gói đang được sử dụng, không thể xóa'}
+                      onChange={(e) => toggleSelect(pkg.id, e.target.checked)}
+                    />
                   </td>
                   <td>{pkg.code || `PK${index + 1}`}</td>
                   <td>
@@ -543,12 +647,22 @@ const PackageList: React.FC = () => {
                       >
                         Sửa
                       </button>
-                      <button
-                        onClick={() => handleDelete(pkg.id)}
-                        className="btn btn-danger btn-sm"
-                      >
-                        Xóa
-                      </button>
+                      {canDeletePackage(pkg) ? (
+                        <button
+                          onClick={() => handleDelete(pkg.id)}
+                          className="btn btn-danger btn-sm"
+                        >
+                          Xóa
+                        </button>
+                      ) : (
+                        <span
+                          className="badge bg-light text-dark align-self-center"
+                          title={getUsageLabel(pkg)}
+                          style={{ cursor: 'not-allowed' }}
+                        >
+                          Đang dùng
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -609,3 +723,4 @@ const PackageList: React.FC = () => {
 };
 
 export default PackageList;
+

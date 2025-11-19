@@ -10,11 +10,16 @@ import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import useMediaQuery from '../../hooks/useMediaQuery';
 
+type ProductWithUsage = Product & {
+  hasLinkedOrders?: boolean;
+  hasLinkedInventory?: boolean;
+};
+
 const ProductList: React.FC = () => {
   const { state } = useAuth();
   const { notify } = useToast();
   const isMobile = useMediaQuery('(max-width: 768px)');
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductWithUsage[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -25,6 +30,56 @@ const ProductList: React.FC = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
   const [formKey, setFormKey] = useState(0);
+  const canDeleteProduct = (product?: ProductWithUsage | null) => !!product && !product.hasLinkedOrders && !product.hasLinkedInventory;
+  const getUsageLabel = (product: ProductWithUsage) => {
+    const reasons: string[] = [];
+    if (product.hasLinkedOrders) reasons.push('đơn hàng');
+    if (product.hasLinkedInventory) reasons.push('kho hàng');
+    if (reasons.length === 0) return '';
+    return `Đang gắn với ${reasons.join(' & ')}`;
+  };
+
+  const fetchProductUsageMap = async (productIds: string[], client?: ReturnType<typeof getSupabase>) => {
+    if (!productIds.length) return {} as Record<string, { hasLinkedOrders: boolean; hasLinkedInventory: boolean }>;
+    const sbClient = client ?? getSupabase();
+    if (!sbClient) return {} as Record<string, { hasLinkedOrders: boolean; hasLinkedInventory: boolean }>;
+    const packagesRes = await sbClient.from('packages').select('id, product_id').in('product_id', productIds);
+    const inventoryRes = await sbClient.from('inventory').select('id, product_id').in('product_id', productIds);
+    if (packagesRes.error) {
+      console.error('Không thể lấy packages để kiểm tra liên kết sản phẩm', packagesRes.error);
+    }
+    if (inventoryRes.error) {
+      console.error('Không thể lấy inventory để kiểm tra liên kết sản phẩm', inventoryRes.error);
+    }
+    const packages = Array.isArray(packagesRes.data) ? packagesRes.data : [];
+    const inventory = Array.isArray(inventoryRes.data) ? inventoryRes.data : [];
+    const packageIds = packages.map((pkg: any) => pkg.id).filter(Boolean);
+    let orderPackages = new Set<string>();
+    if (packageIds.length > 0) {
+      const ordersRes = await sbClient.from('orders').select('package_id').in('package_id', packageIds);
+      if (ordersRes.error) {
+        console.error('Không thể lấy orders để kiểm tra liên kết sản phẩm', ordersRes.error);
+      }
+      const orderRows = Array.isArray(ordersRes.data) ? ordersRes.data : [];
+      orderPackages = new Set(orderRows.map((o: any) => o.package_id).filter(Boolean));
+    }
+    const usageMap: Record<string, { hasLinkedOrders: boolean; hasLinkedInventory: boolean }> = {};
+    const inventoryByProduct = new Set(inventory.map((inv: any) => inv.product_id).filter(Boolean));
+    const packagesByProduct = new Map<string, string[]>();
+    packages.forEach((pkg: any) => {
+      if (!pkg.product_id) return;
+      const list = packagesByProduct.get(pkg.product_id) || [];
+      list.push(pkg.id);
+      packagesByProduct.set(pkg.product_id, list);
+    });
+    productIds.forEach(pid => {
+      const pkgIds = packagesByProduct.get(pid) || [];
+      const hasLinkedOrders = pkgIds.some(pkgId => orderPackages.has(pkgId));
+      const hasLinkedInventory = inventoryByProduct.has(pid);
+      usageMap[pid] = { hasLinkedOrders, hasLinkedInventory };
+    });
+    return usageMap;
+  };
 
   useEffect(() => {
     loadProducts();
@@ -97,7 +152,18 @@ const ProductList: React.FC = () => {
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       })) as Product[];
-      setProducts(pageProducts);
+      const usageMap = await fetchProductUsageMap(pageProducts.map(p => p.id), sb);
+      const decoratedProducts = pageProducts.map(product => ({
+        ...product,
+        hasLinkedOrders: usageMap[product.id]?.hasLinkedOrders || false,
+        hasLinkedInventory: usageMap[product.id]?.hasLinkedInventory || false
+      }));
+      setProducts(decoratedProducts);
+      setSelectedIds(prev => prev.filter(id => {
+        const usage = usageMap[id];
+        if (!usage) return true;
+        return !(usage.hasLinkedInventory || usage.hasLinkedOrders);
+      }));
       setTotal(count || 0);
     } finally {
       setLoading(false);
@@ -139,12 +205,25 @@ const ProductList: React.FC = () => {
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
 
   const handleDelete = (id: string) => {
+    const target = products.find(p => p.id === id);
+    if (!target) return;
+    if (!canDeleteProduct(target)) {
+      notify('Sản phẩm đang gắn với đơn hàng hoặc kho hàng, không thể xóa', 'warning');
+      return;
+    }
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa sản phẩm này?',
       onConfirm: () => {
         (async () => {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa sản phẩm', 'error');
+          const usageMap = await fetchProductUsageMap([id], sb);
+          const usage = usageMap[id];
+          if (usage?.hasLinkedOrders || usage?.hasLinkedInventory) {
+            notify('Sản phẩm đang gắn với đơn hàng hoặc kho hàng, không thể xóa', 'error');
+            loadProducts();
+            return;
+          }
           const snapshot = products.find(p => p.id === id);
           const { error } = await sb.from('products').delete().eq('id', id);
           if (!error) {
@@ -176,34 +255,71 @@ const ProductList: React.FC = () => {
   };
 
   const handleToggleSelectAll = (checked: boolean, ids: string[]) => {
+    const eligibleIds = ids.filter(id => {
+      const product = products.find(p => p.id === id);
+      return canDeleteProduct(product);
+    });
+    if (eligibleIds.length === 0) {
+      if (checked) notify('Các sản phẩm đã chọn đang được sử dụng nên không thể xóa', 'warning');
+      return;
+    }
     if (checked) {
-      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+      setSelectedIds(prev => Array.from(new Set([...prev, ...eligibleIds])));
     } else {
-      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+      setSelectedIds(prev => prev.filter(id => !eligibleIds.includes(id)));
     }
   };
 
   const handleToggleSelect = (id: string, checked: boolean) => {
+    const product = products.find(p => p.id === id);
+    if (!canDeleteProduct(product)) {
+      if (checked) notify('Sản phẩm đang gắn với đơn hàng hoặc kho hàng, không thể xóa', 'warning');
+      return;
+    }
     setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   };
 
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
-    const count = selectedIds.length;
+    const deletableIds = selectedIds.filter(id => {
+      const product = products.find(p => p.id === id);
+      return canDeleteProduct(product);
+    });
+    const blockedCount = selectedIds.length - deletableIds.length;
+    if (blockedCount > 0) {
+      notify(`${blockedCount} sản phẩm đang được sử dụng nên không thể xóa`, 'warning');
+      setSelectedIds(deletableIds);
+    }
+    if (deletableIds.length === 0) {
+      notify('Không còn sản phẩm nào có thể xóa', 'warning');
+      return;
+    }
+    const count = deletableIds.length;
     setConfirmState({
       message: `Xóa ${count} sản phẩm đã chọn?`,
       onConfirm: () => {
         (async () => {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa sản phẩm', 'error');
-          const snapshots = products.filter(p => selectedIds.includes(p.id));
+          const usageMap = await fetchProductUsageMap(deletableIds, sb);
+          const lockedNow = deletableIds.filter(id => {
+            const usage = usageMap[id];
+            return usage?.hasLinkedOrders || usage?.hasLinkedInventory;
+          });
+          if (lockedNow.length > 0) {
+            notify('Một số sản phẩm vừa phát sinh liên kết, hãy thử lại sau', 'error');
+            setSelectedIds(prev => prev.filter(id => !lockedNow.includes(id)));
+            loadProducts();
+            return;
+          }
+          const snapshots = products.filter(p => deletableIds.includes(p.id));
           const names = snapshots.map(p => p.name).filter(Boolean).join(',').slice(0, 200);
           const codes = snapshots.map(p => p.code).filter(Boolean).join(',').slice(0, 200);
-          const { error } = await sb.from('products').delete().in('id', selectedIds);
+          const { error } = await sb.from('products').delete().in('id', deletableIds);
           if (!error) {
             // Update local storage immediately
             const currentProducts = Database.getProducts();
-            Database.setProducts(currentProducts.filter(p => !selectedIds.includes(p.id)));
+            Database.setProducts(currentProducts.filter(p => !deletableIds.includes(p.id)));
             
             // Force refresh form if it's open
             if (showForm && !editingProduct) {
@@ -216,7 +332,7 @@ const ProductList: React.FC = () => {
             
             try {
               const sb2 = getSupabase();
-              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt sản phẩm', details: `ids=${selectedIds.join(',')}; names=${names}; codes=${codes}` });
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt sản phẩm', details: `ids=${deletableIds.join(',')}; names=${names}; codes=${codes}` });
             } catch {}
             setSelectedIds([]);
             loadProducts();
@@ -261,6 +377,7 @@ const ProductList: React.FC = () => {
       return (a.code || '').localeCompare(b.code || '');
     });
   const paginatedProducts = sortedProducts;
+  const selectablePageIds = paginatedProducts.filter(p => canDeleteProduct(p)).map(p => p.id);
 
   const exportProductsXlsx = (items: Product[], filename: string) => {
     const rows = items.map((p, idx) => ({
@@ -412,12 +529,18 @@ const ProductList: React.FC = () => {
                 >
                   Sửa
                 </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="btn btn-danger"
-                >
-                  Xóa
-                </button>
+                {canDeleteProduct(product) ? (
+                  <button
+                    onClick={() => handleDelete(product.id)}
+                    className="btn btn-danger"
+                  >
+                    Xóa
+                  </button>
+                ) : (
+                  <span className="badge bg-light text-dark" title={getUsageLabel(product)}>
+                    Đang dùng
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -431,8 +554,9 @@ const ProductList: React.FC = () => {
                 <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
-                    checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedIds.includes(p.id))}
-                    onChange={(e) => handleToggleSelectAll(e.target.checked, paginatedProducts.map(p => p.id))}
+                    checked={selectablePageIds.length > 0 && selectablePageIds.every(id => selectedIds.includes(id))}
+                    disabled={selectablePageIds.length === 0}
+                    onChange={(e) => handleToggleSelectAll(e.target.checked, selectablePageIds)}
                   />
                 </th>
                 <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã sản phẩm</th>
@@ -449,6 +573,8 @@ const ProductList: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(product.id)}
+                      disabled={!canDeleteProduct(product)}
+                      title={canDeleteProduct(product) ? undefined : 'Sản phẩm đang được sử dụng, không thể xóa'}
                       onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
                     />
                   </td>
@@ -495,12 +621,22 @@ const ProductList: React.FC = () => {
                       >
                         Sửa
                       </button>
-                      <button
-                        onClick={() => handleDelete(product.id)}
-                        className="btn btn-danger btn-sm"
-                      >
-                        Xóa
-                      </button>
+                      {canDeleteProduct(product) ? (
+                        <button
+                          onClick={() => handleDelete(product.id)}
+                          className="btn btn-danger btn-sm"
+                        >
+                          Xóa
+                        </button>
+                      ) : (
+                        <span
+                          className="badge bg-light text-dark align-self-center"
+                          title={getUsageLabel(product)}
+                          style={{ cursor: 'not-allowed' }}
+                        >
+                          Đang dùng
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>

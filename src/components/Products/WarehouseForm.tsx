@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
+import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES_FULL, InventoryItem } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -39,6 +39,20 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const typedItem = item as InventoryItem | undefined;
+  const countAssignedSlots = (inv?: InventoryItem | null) => {
+    if (!inv?.isAccountBased || !Array.isArray(inv.profiles)) return 0;
+    return inv.profiles.filter(slot => slot && (slot.isAssigned || !!slot.assignedOrderId)).length;
+  };
+  const getDeleteBlockedReason = (inv?: InventoryItem | null) => {
+    if (!inv) return '';
+    if (inv.linkedOrderId) return 'Kho đang liên kết với đơn hàng';
+    if (inv.status !== 'AVAILABLE') return 'Chỉ xóa được kho ở trạng thái Sẵn có';
+    if (countAssignedSlots(inv) > 0) return 'Kho tài khoản vẫn còn slot được gán';
+    return '';
+  };
+  const deleteBlockedReason = typedItem ? getDeleteBlockedReason(typedItem) : '';
+  const canDeleteInventory = !!typedItem && !deleteBlockedReason;
 
   useEffect(() => {
     (async () => {
@@ -796,15 +810,21 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             </div>
           )}
 
-          <div className="d-flex justify-content-between align-items-center gap-2">
-            {item && item.status === 'AVAILABLE' && (
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => setConfirmDeleteVisible(true)}
-              >
-                Xóa
-              </button>
+          <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            {typedItem && (
+              canDeleteInventory ? (
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => setConfirmDeleteVisible(true)}
+                >
+                  Xóa
+                </button>
+              ) : (
+                <span className="text-muted small" title={deleteBlockedReason || undefined}>
+                  Không thể xóa: {deleteBlockedReason || 'Kho chưa sẵn sàng'}
+                </span>
+              )
             )}
             <div className="d-flex gap-2">
               <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
@@ -814,7 +834,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
         </form>
       </div>
     </div>
-    {confirmDeleteVisible && item && (
+    {confirmDeleteVisible && typedItem && canDeleteInventory && (
       <div className="modal" role="dialog" aria-modal>
         <div className="modal-content" style={{ maxWidth: 420 }}>
           <div className="modal-header">
@@ -830,7 +850,26 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 try {
                   const sb = getSupabase();
                   if (!sb) { notify('Không thể xóa kho', 'error'); return; }
-                  const snapshot = Database.getInventory().find((i: any) => i.id === item.id) || null;
+                  const snapshot = Database.getInventory().find((i: InventoryItem) => i.id === typedItem.id) || null;
+                  const { data: latest } = await sb
+                    .from('inventory')
+                    .select('id, status, linked_order_id, is_account_based, profiles')
+                    .eq('id', typedItem.id)
+                    .maybeSingle();
+                  const normalized: InventoryItem = {
+                    ...(snapshot || typedItem),
+                    status: latest?.status ?? (snapshot?.status ?? typedItem.status),
+                    linkedOrderId: latest?.linked_order_id ?? (snapshot?.linkedOrderId ?? typedItem.linkedOrderId),
+                    isAccountBased: Boolean(latest?.is_account_based ?? snapshot?.isAccountBased ?? typedItem.isAccountBased),
+                    profiles: Array.isArray(latest?.profiles) ? latest?.profiles : (snapshot?.profiles || typedItem.profiles)
+                  } as InventoryItem;
+                  const latestReason = getDeleteBlockedReason(normalized);
+                  if (latestReason) {
+                    notify(latestReason, 'error');
+                    setConfirmDeleteVisible(false);
+                    onSuccess();
+                    return;
+                  }
                   const { error } = await sb.from('inventory').delete().eq('id', item.id);
                   if (error) { notify('Không thể xóa kho', 'error'); return; }
                   const currentInventory = Database.getInventory();

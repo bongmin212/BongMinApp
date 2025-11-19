@@ -62,6 +62,19 @@ const WarehouseList: React.FC = () => {
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
   const [latestRenewalMap, setLatestRenewalMap] = useState<Map<string, InventoryRenewal>>(new Map());
+  const countAssignedSlots = (item?: InventoryItem | null) => {
+    if (!item?.isAccountBased || !Array.isArray(item.profiles)) return 0;
+    return item.profiles.filter(slot => slot && (slot.isAssigned || !!slot.assignedOrderId)).length;
+  };
+  const hasActiveSlots = (item?: InventoryItem | null) => countAssignedSlots(item) > 0;
+  const getDeleteBlockedReason = (item?: InventoryItem | null) => {
+    if (!item) return 'Kho không tồn tại';
+    if (item.linkedOrderId) return 'Kho đang liên kết với đơn hàng';
+    if (item.status !== 'AVAILABLE') return 'Chỉ xóa được kho ở trạng thái Sẵn có';
+    if (hasActiveSlots(item)) return 'Kho account-based vẫn còn slot đang được sử dụng';
+    return '';
+  };
+  const canDeleteInventoryItem = (item?: InventoryItem | null) => getDeleteBlockedReason(item) === '';
   // Load inventory renewals from Supabase for accurate history display
   useEffect(() => {
     (async () => {
@@ -93,6 +106,14 @@ const WarehouseList: React.FC = () => {
     }
     setLatestRenewalMap(map);
   }, [inventoryRenewals]);
+
+  useEffect(() => {
+    if (!items.length) {
+      setSelectedIds([]);
+      return;
+    }
+    setSelectedIds(prev => prev.filter(id => canDeleteInventoryItem(items.find(i => i.id === id))));
+  }, [items]);
 
   const expiryMismatchItems = useMemo(() => {
     if (!items.length || latestRenewalMap.size === 0) return [];
@@ -1217,6 +1238,7 @@ const isExpiringSoon = (i: InventoryItem) => {
       return (a.code || '').localeCompare(b.code || '');
     });
   const pageItems = sortedItems.slice(start, start + limit);
+  const deletablePageIds = pageItems.filter(i => canDeleteInventoryItem(i)).map(i => i.id);
 
   const exportInventoryXlsx = (items: InventoryItem[], filename: string) => {
     const rows = items.map((i, idx) => {
@@ -1374,18 +1396,35 @@ const isExpiringSoon = (i: InventoryItem) => {
   };
 
   const toggleSelectAll = (checked: boolean, ids: string[]) => {
+    const eligibleIds = ids.filter(id => canDeleteInventoryItem(items.find(i => i.id === id)));
     if (checked) {
-      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+      if (eligibleIds.length === 0) {
+        notify('Các kho được chọn vẫn còn slot hoặc chưa sẵn sàng để xóa', 'warning');
+        return;
+      }
+      setSelectedIds(prev => Array.from(new Set([...prev, ...eligibleIds])));
     } else {
-      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+      setSelectedIds(prev => prev.filter(id => !eligibleIds.includes(id)));
     }
   };
-  const toggleSelect = (id: string, checked: boolean) => setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
+  const toggleSelect = (id: string, checked: boolean) => {
+    const item = items.find(i => i.id === id);
+    if (checked && !canDeleteInventoryItem(item)) {
+      notify(getDeleteBlockedReason(item), 'warning');
+      return;
+    }
+    setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
+  };
   const bulkDelete = () => {
-    const deletable = pageItems.filter(i => i.status === 'AVAILABLE').map(i => i.id).filter(id => selectedIds.includes(id));
+    const deletable = pageItems.filter(i => selectedIds.includes(i.id) && canDeleteInventoryItem(i)).map(i => i.id);
+    const blocked = pageItems.filter(i => selectedIds.includes(i.id) && !canDeleteInventoryItem(i)).map(i => i.id);
+    if (blocked.length > 0) {
+      notify(`${blocked.length} kho chưa thể xóa (còn slot hoặc đang liên kết)`, 'warning');
+      setSelectedIds(prev => prev.filter(id => !blocked.includes(id)));
+    }
     if (deletable.length === 0) return;
     setConfirmState({
-      message: `Xóa ${deletable.length} mục kho (chỉ mục Sẵn có)?`,
+      message: `Xóa ${deletable.length} mục kho (chỉ kho trống & không slot đang dùng)?`,
       onConfirm: async () => {
         const sb = getSupabase();
         if (!sb) return notify('Không thể xóa kho', 'error');
@@ -1408,7 +1447,7 @@ const isExpiringSoon = (i: InventoryItem) => {
             const codes = deletable.map(id => pageItems.find(i => i.id === id)?.code).filter(Boolean);
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt kho', details: `codes=${codes.join(',')}` });
           } catch {}
-          setSelectedIds([]);
+          setSelectedIds(prev => prev.filter(id => !deletable.includes(id)));
           refresh();
           notify('Đã xóa mục kho đã chọn', 'success');
         } else {
@@ -1456,12 +1495,39 @@ const isExpiringSoon = (i: InventoryItem) => {
   };
 
   const remove = (id: string) => {
+    const target = items.find(i => i.id === id);
+    const reason = getDeleteBlockedReason(target);
+    if (reason) {
+      notify(reason, 'warning');
+      return;
+    }
     setConfirmState({
       message: 'Xóa mục này khỏi kho?',
       onConfirm: async () => {
         const sb = getSupabase();
         if (!sb) return notify('Không thể xóa mục này khỏi kho', 'error');
         const snapshot = items.find(i => i.id === id) || null;
+        const { data: latest } = await sb
+          .from('inventory')
+          .select('id, status, linked_order_id, is_account_based, profiles')
+          .eq('id', id)
+          .maybeSingle();
+        if (latest) {
+          const normalized = {
+            ...(snapshot || {} as InventoryItem),
+            id: latest.id,
+            status: latest.status,
+            linkedOrderId: latest.linked_order_id || undefined,
+            isAccountBased: latest.is_account_based,
+            profiles: Array.isArray(latest.profiles) ? latest.profiles : snapshot?.profiles
+          } as InventoryItem;
+          const latestReason = getDeleteBlockedReason(normalized);
+          if (latestReason) {
+            notify(latestReason, 'error');
+            refresh();
+            return;
+          }
+        }
         const { error } = await sb.from('inventory').delete().eq('id', id);
         if (!error) {
           // Update local storage immediately
@@ -1952,8 +2018,9 @@ const isExpiringSoon = (i: InventoryItem) => {
                 <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
-                    checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
-                    onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
+                    checked={deletablePageIds.length > 0 && deletablePageIds.every(id => selectedIds.includes(id))}
+                    disabled={deletablePageIds.length === 0}
+                    onChange={(e) => toggleSelectAll(e.target.checked, deletablePageIds)}
                   />
                 </th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
@@ -1974,7 +2041,13 @@ const isExpiringSoon = (i: InventoryItem) => {
               {pageItems.map((i, index) => (
                 <tr key={i.id}>
                   <td>
-                    <input type="checkbox" checked={selectedIds.includes(i.id)} onChange={(e) => toggleSelect(i.id, e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(i.id)}
+                      disabled={!canDeleteInventoryItem(i)}
+                      title={canDeleteInventoryItem(i) ? undefined : getDeleteBlockedReason(i)}
+                      onChange={(e) => toggleSelect(i.id, e.target.checked)}
+                    />
                   </td>
                   <td className="text-truncate" title={i.code || `KHO${index + 1}`}>{i.code || `KHO${index + 1}`}</td>
                   <td className="text-truncate" title={productMap.get(i.productId) || i.productId}>{productMap.get(i.productId) || i.productId}</td>
@@ -3046,5 +3119,6 @@ const isExpiringSoon = (i: InventoryItem) => {
 };
 
 export default WarehouseList;
+
 
 
