@@ -1315,7 +1315,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       const phone = String(c.phone || '').toLowerCase();
       const email = String(c.email || '').toLowerCase();
       const code = String(c.code || '').toLowerCase();
-      return name.includes(q) || phone.includes(q) || email.includes(q) || code.includes(q);
+      const notes = String(c.notes || '').toLowerCase();
+      const sourceDetail = String(c.sourceDetail || '').toLowerCase();
+      const type = String(c.type || '').toLowerCase();
+      const source = String(c.source || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || email.includes(q) || code.includes(q) || 
+             notes.includes(q) || sourceDetail.includes(q) || type.includes(q) || source.includes(q);
     });
   }, [customers, debouncedCustomerSearch]);
 
@@ -1441,7 +1446,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   type="text"
                   inputMode="search"
                   className="form-control mb-2"
-                  placeholder="Tìm khách theo tên/SĐT/email/mã..."
+                  placeholder="Tìm kiếm theo tên, SĐT, email, mã, ghi chú, nguồn..."
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                 />
