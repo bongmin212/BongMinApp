@@ -11,11 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import useMediaQuery from '../../hooks/useMediaQuery';
-
-const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
-  if (!Array.isArray(columns)) return [];
-  return columns.filter(col => col && col.isVisible !== false);
-};
+import { filterVisibleAccountColumns } from '../../utils/accountColumns';
 
 const OrderList: React.FC = () => {
   const { state } = useAuth();
@@ -1095,6 +1091,25 @@ const OrderList: React.FC = () => {
     return { package: pkg, product };
   };
 
+  const getOrderAccountColumns = useCallback((orderPackageId?: string, linkedInventory?: any) => {
+    if (orderPackageId) {
+      const orderPackage = packageMap.get(orderPackageId);
+      if (orderPackage?.accountColumns && orderPackage.accountColumns.length > 0) {
+        return orderPackage.accountColumns;
+      }
+    }
+    if (linkedInventory?.accountColumns && linkedInventory.accountColumns.length > 0) {
+      return linkedInventory.accountColumns;
+    }
+    if (linkedInventory?.packageId) {
+      const inventoryPackage = packageMap.get(linkedInventory.packageId);
+      if (inventoryPackage?.accountColumns && inventoryPackage.accountColumns.length > 0) {
+        return inventoryPackage.accountColumns;
+      }
+    }
+    return [];
+  }, [packageMap]);
+
   const getStatusLabel = (status: OrderStatus) => {
     return ORDER_STATUSES.find(s => s.value === status)?.label || status;
   };
@@ -1601,9 +1616,9 @@ const OrderList: React.FC = () => {
       // Build inventory account data
       let inventoryAccountData = '';
       if (linkedInventory && linkedInventory.is_account_based && linkedInventory.accountData) {
-        const accountColumns = linkedInventory.accountColumns || [];
-        const displayColumns = filterVisibleAccountColumns(accountColumns);
-        inventoryAccountData = displayColumns.map((col: any) => {
+        const accountColumns = getOrderAccountColumns(o.packageId, linkedInventory);
+        const columns = Array.isArray(accountColumns) ? accountColumns : [];
+        inventoryAccountData = columns.map((col: any) => {
           const value = (linkedInventory.accountData || {})[col.id] || '';
           return value ? `${col.title}: ${value}` : null;
         }).filter(Boolean).join('; ');
@@ -2394,8 +2409,7 @@ const OrderList: React.FC = () => {
               return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
             })();
             if (inv) {
-              const packageInfo = packages.find(p => p.id === inv.packageId);
-              const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
+              const accountColumns = getOrderAccountColumns(o.packageId, inv);
               const displayColumns = filterVisibleAccountColumns(accountColumns);
               if (displayColumns.length > 0) {
                 out.push('');
@@ -2684,8 +2698,7 @@ const OrderList: React.FC = () => {
                     })();
                     
                     if (inv) {
-                      const packageInfo = packages.find(p => p.id === inv.packageId);
-                      const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                      const accountColumns = getOrderAccountColumns(o.packageId, inv);
                       const displayColumns = filterVisibleAccountColumns(accountColumns);
                       
                       if (displayColumns.length > 0) {
@@ -2853,17 +2866,16 @@ const OrderList: React.FC = () => {
                       
                       if (!inv) return null;
                       
-                      const packageInfo = packages.find(p => p.id === inv.packageId);
-                      const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
-                      const displayColumns = filterVisibleAccountColumns(accountColumns);
+                      const accountColumns = getOrderAccountColumns(o.packageId, inv);
+                      const columns = Array.isArray(accountColumns) ? accountColumns : [];
                       
-                      if (displayColumns.length === 0) return null;
+                      if (columns.length === 0) return null;
                       
                       return (
                         <div style={{ marginTop: '8px' }}>
                           <strong>Thông tin đơn hàng:</strong>
                           <div style={{ marginTop: '4px' }}>
-                            {displayColumns.map((col: any) => {
+                            {columns.map((col: any) => {
                               const value = (inv.accountData || {})[col.id] || '';
                               if (!value.trim()) return null;
                               return (
@@ -2935,8 +2947,7 @@ const OrderList: React.FC = () => {
                   })();
                   
                   if (inv) {
-                    const packageInfo = packages.find(p => p.id === inv.packageId);
-                    const accountColumns = packageInfo?.accountColumns || inv.accountColumns || [];
+                    const accountColumns = getOrderAccountColumns(o.packageId, inv);
                     const displayColumns = filterVisibleAccountColumns(accountColumns);
                     
                     if (displayColumns.length > 0) {

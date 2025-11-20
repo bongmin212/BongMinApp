@@ -223,18 +223,19 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					.map(p => (p.label || p.id))
 				: [];
 		const accountColumns = (() => {
+			const orderPackage = pkgInfo?.package;
+			if (orderPackage?.accountColumns && orderPackage.accountColumns.length > 0) {
+				return orderPackage.accountColumns;
+			}
 			if (inv.accountColumns && inv.accountColumns.length > 0) {
 				return inv.accountColumns;
 			}
 			if (packageInfo?.accountColumns && packageInfo.accountColumns.length > 0) {
 				return packageInfo.accountColumns;
 			}
-			const pkg = pkgInfo?.package;
-			if (pkg?.accountColumns && pkg.accountColumns.length > 0) {
-				return pkg.accountColumns;
-			}
 			return [];
 		})();
+		const displayColumns = Array.isArray(accountColumns) ? accountColumns : [];
 		const accountData = inv.accountData || {};
 		return (
 			<div className="card mt-2">
@@ -283,11 +284,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							<span style={{ marginLeft: 4 }} className="text-muted">Không có</span>
 						)}
 					</div>
-					{accountColumns.length > 0 && (
+					{displayColumns.length > 0 && (
 						<div style={{ marginTop: 12 }}>
 							<strong>Thông tin tài khoản:</strong>
 							<div style={{ marginTop: 6 }}>
-								{accountColumns.map((col: any) => {
+								{displayColumns.map((col: any) => {
 									const value = accountData[col.id] || '';
 									return (
 										<div key={col.id} style={{ marginBottom: 8 }}>

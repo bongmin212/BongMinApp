@@ -4,11 +4,7 @@ import OrderDetailsModal from '../Orders/OrderDetailsModal';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useToast } from '../../contexts/ToastContext';
-
-const filterVisibleAccountColumns = (columns?: Array<{ isVisible?: boolean }>) => {
-  if (!Array.isArray(columns)) return [];
-  return columns.filter(col => col && col.isVisible !== false);
-};
+import { filterVisibleAccountColumns, resolveAccountColumns } from '../../utils/accountColumns';
 
 interface CustomerOrderHistoryProps {
   customer: Customer;
@@ -494,8 +490,11 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
           })();
           if (inv) {
-            const packageInfo = packages.find(p => p.id === inv.packageId);
-            const accountColumns = (packageInfo as any)?.accountColumns || inv.accountColumns || [];
+            const accountColumns = resolveAccountColumns({
+              orderPackageId: o.packageId,
+              inventoryItem: inv,
+              packages
+            });
             const displayColumns = filterVisibleAccountColumns(accountColumns);
             if (displayColumns.length > 0) {
               out.push('');
