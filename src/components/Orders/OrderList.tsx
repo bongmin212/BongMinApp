@@ -2681,9 +2681,6 @@ const OrderList: React.FC = () => {
                   lines.push(`- Gói: ${packageName}`);
                   lines.push(`- Ngày mua: ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`);
                   lines.push(`- Ngày hết hạn: ${new Date(o.expiryDate).toLocaleDateString('vi-VN')}`);
-                  lines.push(`- Trạng thái: ${getStatusLabel(o.status)}`);
-                  lines.push(`- Thanh toán: ${getPaymentLabel(o.paymentStatus || 'UNPAID')}`);
-                  lines.push(`- Giá hiện tại: ${formatPrice(getOrderPrice(o))}`);
                   
                   // Append filtered warehouse fields under a header
                   {
