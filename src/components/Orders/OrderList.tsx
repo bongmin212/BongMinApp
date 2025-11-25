@@ -42,6 +42,8 @@ const OrderList: React.FC = () => {
     order: Order;
     errorDate: string;
     amount: number;
+    useCustomAmount?: boolean;
+    customAmount?: number;
   }>(null);
   const [renewState, setRenewState] = useState<null | {
     order: Order;
@@ -2831,7 +2833,7 @@ const OrderList: React.FC = () => {
                 const price = getOrderPrice(o);
                 const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
                 const errorDate = new Date(refundState.errorDate).toLocaleDateString('vi-VN');
-                const refundAmount = refundState.amount;
+                const refundAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
                 const cycle = getApplicableCycle(o, refundState.errorDate);
                 const cycleStartLabel = cycle.cycleStart.toLocaleDateString('vi-VN');
                 const cycleEndLabel = cycle.cycleEnd.toLocaleDateString('vi-VN');
@@ -2906,8 +2908,44 @@ const OrderList: React.FC = () => {
                 </div>
                 <div className="col-5">
                   <label className="form-label">Tiền hoàn (ước tính)</label>
-                  <div className="alert alert-success mb-0">{formatPrice(refundState.amount)}</div>
+                  <div className="alert alert-success mb-0">{formatPrice(refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount)}</div>
                 </div>
+              </div>
+              <div className="mt-3">
+                <div className="form-check mb-2">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="useCustomRefund"
+                    checked={refundState.useCustomAmount || false}
+                    onChange={(e) => {
+                      setRefundState(prev => prev ? {
+                        ...prev,
+                        useCustomAmount: e.target.checked,
+                        customAmount: e.target.checked ? (prev.customAmount || prev.amount) : undefined
+                      } : prev);
+                    }}
+                  />
+                  <label className="form-check-label" htmlFor="useCustomRefund">
+                    Nhập tiền hoàn tùy chỉnh
+                  </label>
+                </div>
+                {refundState.useCustomAmount && (
+                  <div>
+                    <label className="form-label">Số tiền hoàn tùy chỉnh</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={refundState.customAmount ?? refundState.amount}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        setRefundState(prev => prev ? { ...prev, customAmount: value } : prev);
+                      }}
+                      min="0"
+                      step="1000"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div className="d-flex justify-content-end gap-2">
@@ -2929,7 +2967,7 @@ const OrderList: React.FC = () => {
                     `Người mua: ${customerName}`,
                     `Ngày mua: ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`,
                     `Ngày lỗi: ${new Date(refundState.errorDate).toLocaleDateString('vi-VN')}`,
-                    `Số tiền hoàn: ${formatPrice(refundState.amount)}`
+                    `Số tiền hoàn: ${formatPrice(refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount)}`
                   ];
                   
                   // Get filtered warehouse fields for copy
@@ -2988,17 +3026,18 @@ const OrderList: React.FC = () => {
                 onClick={async () => {
                   const o = refundState.order;
                   const nowIso = new Date().toISOString();
-                  const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED', refundAmount: refundState.amount, refundAt: nowIso } as any);
+                  const finalAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
+                  const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED', refundAmount: finalAmount, refundAt: nowIso } as any);
                   try {
                     const sb2 = getSupabase();
                     if (sb2) {
                       await sb2.from('orders').update({
                         payment_status: 'REFUNDED',
                         status: 'CANCELLED',
-                        refund_amount: refundState.amount,
+                        refund_amount: finalAmount,
                         refund_at: nowIso
                       }).eq('id', o.id);
-                      await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${refundState.amount}` });
+                      await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}` });
                     }
                   } catch {}
                   setRefundState(null);
