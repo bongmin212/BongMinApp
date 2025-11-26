@@ -243,9 +243,6 @@ const Dashboard: React.FC = () => {
 
       // Calculate stats - chỉ dùng sale_price từ order
       const getOrderSnapshotPrice = (order: Order): number => {
-        // Exclude fully refunded orders from revenue
-        if (order.paymentStatus === 'REFUNDED') return 0;
-        
         // Chỉ dùng sale_price từ order, không dùng fallback
         const salePrice = (order as any).salePrice;
         if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) {
@@ -253,6 +250,7 @@ const Dashboard: React.FC = () => {
         }
         
         // Nếu có refundAmount, trừ khỏi salePrice để có doanh thu thực tế
+        // Nếu đã hoàn tiền một phần, vẫn tính phần còn lại vào doanh thu
         const refundAmount = (order as any).refundAmount || 0;
         const netRevenue = Math.max(0, salePrice - refundAmount);
         
@@ -280,8 +278,20 @@ const Dashboard: React.FC = () => {
       };
 
       const isRevenueOrder = (order: Order): boolean => {
-        if (order.paymentStatus !== 'PAID') return false;
-        return order.status === 'COMPLETED' || order.status === 'EXPIRED';
+        // Chỉ tính orders đã thanh toán (PAID) hoặc đã hoàn tiền một phần (REFUNDED nhưng có netRevenue > 0)
+        if (order.paymentStatus === 'UNPAID') return false;
+        
+        // Nếu đã hoàn tiền, chỉ tính nếu còn netRevenue > 0 (hoàn tiền một phần)
+        // Đơn đã hoàn tiền một phần có thể có status = CANCELLED nhưng vẫn tính vào doanh thu
+        if (order.paymentStatus === 'REFUNDED') {
+          const netRevenue = getOrderSnapshotPrice(order);
+          return netRevenue > 0;
+        }
+        
+        // Với đơn PAID, chỉ tính orders đã hoàn thành hoặc hết hạn
+        if (order.status !== 'COMPLETED' && order.status !== 'EXPIRED') return false;
+        
+        return true;
       };
 
       const revenueOrders = orders.filter(isRevenueOrder);
