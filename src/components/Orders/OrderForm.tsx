@@ -2121,6 +2121,13 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 </div>
               );
             }
+            if (order && !hasAvailable) {
+              return (
+                <div className="alert alert-warning">
+                  Kho hàng cho gói này hiện đã hết. Bạn vẫn có thể cập nhật đơn, nhưng cần nhập thêm kho hoặc chọn gói khác nếu muốn cấp hàng.
+                </div>
+              );
+            }
             return null;
           })()}
 
