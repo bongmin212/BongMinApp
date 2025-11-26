@@ -254,6 +254,16 @@ const OrderList: React.FC = () => {
         const isCompleted = r.status === 'COMPLETED';
         const isExpiredStatus = r.status === 'EXPIRED';
         const isCancelled = r.status === 'CANCELLED';
+        const isRefunded = r.payment_status === 'REFUNDED';
+
+        // Skip refunded orders - they should always be CANCELLED
+        if (isRefunded) {
+          // Ensure refunded orders have CANCELLED status
+          if (!isCancelled) {
+            await sb.from('orders').update({ status: 'CANCELLED' }).eq('id', r.id);
+          }
+          continue;
+        }
 
         // Mark to EXPIRED when past due and COMPLETED (not CANCELLED)
         if (isExpiredNow && isCompleted && !isExpiredStatus && !isCancelled) {
@@ -293,12 +303,17 @@ const OrderList: React.FC = () => {
         newExpiryDate: x.newExpiryDate ? new Date(x.newExpiryDate) : (x.new_expiry_date ? new Date(x.new_expiry_date) : undefined),
         createdAt: x.createdAt ? new Date(x.createdAt) : (x.created_at ? new Date(x.created_at) : undefined)
       }));
+      // Ensure refunded orders have CANCELLED status
+      const normalizedStatus = r.payment_status === 'REFUNDED' && r.status !== 'CANCELLED' 
+        ? 'CANCELLED' 
+        : r.status;
+      
       return {
         id: r.id,
         code: r.code,
         customerId: r.customer_id,
         packageId: r.package_id,
-        status: r.status,
+        status: normalizedStatus,
         paymentStatus: r.payment_status,
         notes: r.notes,
         inventoryItemId: r.inventory_item_id,
