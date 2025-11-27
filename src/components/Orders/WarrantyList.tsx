@@ -25,6 +25,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
   const [inventorySearch, setInventorySearch] = useState('');
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   
   // Check if this is view-only mode (warranty exists and is not PENDING)
   const isViewOnly = warranty && warranty.status !== 'PENDING';
@@ -220,6 +221,41 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
     const pkg = packages.find(p => p.id === o.packageId);
     const product = products.find(p => p?.id === pkg?.productId)?.name || '';
     return `#${o.code || '-'} | ${customer} - ${product} / ${pkg?.name || ''} - ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`;
+  };
+
+  const getCustomerName = (customerId: string) => customers.find(c => c.id === customerId)?.name || 'Không xác định';
+  const getCustomerCode = (customerId: string) => customers.find(c => c.id === customerId)?.code || '';
+  const getPackageInfo = (packageId: string): { package?: ProductPackage; product?: Product } | null => {
+    const pkg = packages.find(p => p.id === packageId);
+    if (!pkg) return null;
+    const product = products.find(pr => pr.id === pkg.productId);
+    return { package: pkg, product };
+  };
+  const getStatusLabel = (status: OrderStatus | string) => ORDER_STATUSES.find(s => s.value === status)?.label || String(status || '');
+  const getPaymentLabel = (status: PaymentStatus | string) => PAYMENT_STATUSES.find(s => s.value === status)?.label || String(status || '');
+  const formatDate = (value: Date) => {
+    if (!value) return 'Không xác định';
+    return (value instanceof Date ? value : new Date(value)).toLocaleDateString('vi-VN');
+  };
+  const formatPrice = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value || 0);
+  const getOrderPrice = (o: Order) => {
+    if ((o as any).useCustomPrice && typeof (o as any).customPrice === 'number' && (o as any).customPrice > 0) {
+      return (o as any).customPrice;
+    }
+    if (typeof (o as any).salePrice === 'number' && (o as any).salePrice > 0) {
+      return (o as any).salePrice;
+    }
+    const pkgInfo = packages.find(p => p.id === o.packageId);
+    if (!pkgInfo) return 0;
+    return pkgInfo.retailPrice || pkgInfo.ctvPrice || 0;
+  };
+  const handleViewSelectedOrder = () => {
+    const selected = orders.find(o => o.id === form.orderId);
+    if (!selected) {
+      notify('Không tìm thấy đơn hàng đã chọn.', 'warning');
+      return;
+    }
+    setViewingOrder(selected);
   };
 
   const getInventoryLabel = (item: InventoryItem) => {
@@ -746,14 +782,30 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                       <option key={o.id} value={o.id}>{getOrderLabel(o)}</option>
                     ))}
                   </select>
+                  {!!form.orderId && (
+                    <div className="d-flex justify-content-end mt-2">
+                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleViewSelectedOrder}>
+                        Xem đơn hàng
+                      </button>
+                    </div>
+                  )}
                 </>
               ) : (
-                <input 
-                  className="form-control" 
-                  value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)} 
-                  disabled 
-                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
-                />
+                <>
+                  <input 
+                    className="form-control" 
+                    value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)} 
+                    disabled 
+                    style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                  />
+                  {!!form.orderId && (
+                    <div className="d-flex justify-content-end mt-2">
+                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={handleViewSelectedOrder}>
+                        Xem đơn hàng
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
             <div className="mb-3">
@@ -1001,6 +1053,24 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             </div>
           </div>
         </div>
+      )}
+
+      {viewingOrder && (
+        <OrderDetailsModal
+          order={viewingOrder}
+          onClose={() => setViewingOrder(null)}
+          inventory={inventoryItems as any}
+          products={products as any}
+          packages={packages as any}
+          getCustomerName={getCustomerName}
+          getCustomerCode={getCustomerCode}
+          getPackageInfo={getPackageInfo}
+          getStatusLabel={getStatusLabel}
+          getPaymentLabel={getPaymentLabel}
+          formatDate={formatDate}
+          formatPrice={formatPrice}
+          getOrderPrice={getOrderPrice}
+        />
       )}
     </>
   );

@@ -1529,6 +1529,26 @@ const OrderList: React.FC = () => {
         });
       }
       
+      const purchaseDateStrings: string[] = [];
+      if (order.purchaseDate) {
+        const purchaseDateObj = new Date(order.purchaseDate);
+        if (!Number.isNaN(purchaseDateObj.getTime())) {
+          purchaseDateStrings.push(purchaseDateObj.toLocaleDateString('vi-VN').toLowerCase());
+          purchaseDateStrings.push(purchaseDateObj.toLocaleDateString('en-GB').toLowerCase());
+          purchaseDateStrings.push(purchaseDateObj.toISOString().slice(0, 10).toLowerCase());
+        }
+      }
+
+      const expiryDateStrings: string[] = [];
+      if (order.expiryDate) {
+        const expiryDateObj = new Date(order.expiryDate);
+        if (!Number.isNaN(expiryDateObj.getTime())) {
+          expiryDateStrings.push(expiryDateObj.toLocaleDateString('vi-VN').toLowerCase());
+          expiryDateStrings.push(expiryDateObj.toLocaleDateString('en-GB').toLowerCase());
+          expiryDateStrings.push(expiryDateObj.toISOString().slice(0, 10).toLowerCase());
+        }
+      }
+
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
@@ -1537,7 +1557,9 @@ const OrderList: React.FC = () => {
         (pkg ? (packageNameLower.get(pkg.id) || '') : '').includes(normalizedSearch) ||
         (order.notes ? String(order.notes).toLowerCase().includes(normalizedSearch) : false) ||
         inventorySearchText.includes(normalizedSearch) ||
-        customFieldsSearchText.includes(normalizedSearch);
+        customFieldsSearchText.includes(normalizedSearch) ||
+        purchaseDateStrings.some(dateStr => dateStr.includes(normalizedSearch)) ||
+        expiryDateStrings.some(dateStr => dateStr.includes(normalizedSearch));
 
       if (!matchesSearch) return false;
 
