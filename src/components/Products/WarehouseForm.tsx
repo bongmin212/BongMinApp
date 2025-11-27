@@ -365,13 +365,23 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       if (!sb) throw new Error('Supabase not configured');
       if (item) {
         // Edit mode → update inventory row
-        // Recalculate expiry = purchase date + warranty period (ignore past renewals)
+        // Recalculate expiry = purchase date + warranty period but never shorten an already-extended warehouse
         const recomputedExpiryIso = (() => {
           const purchaseDate = new Date(formData.purchaseDate);
           const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-          const d = new Date(purchaseDate);
-          d.setMonth(d.getMonth() + months);
-          return d.toISOString();
+          const baselineExpiry = new Date(purchaseDate);
+          baselineExpiry.setMonth(baselineExpiry.getMonth() + months);
+          const existingExpiry = (() => {
+            if (!item) return null;
+            const dateFromProp = (item as any).expiryDate || (item as any).expiry_date;
+            if (!dateFromProp) return null;
+            const parsed = new Date(dateFromProp);
+            return isNaN(parsed.getTime()) ? null : parsed;
+          })();
+          const finalExpiry = existingExpiry && existingExpiry.getTime() > baselineExpiry.getTime()
+            ? existingExpiry
+            : baselineExpiry;
+          return finalExpiry.toISOString();
         })();
 
         const { error } = await sb
@@ -406,13 +416,22 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 productId: selectedProduct,
                 packageId: formData.packageId,
                 purchaseDate: new Date(formData.purchaseDate),
-                // Reset expiry to purchase + warranty, dropping past renewals
+                // Keep expiry at the furthest known date so manual renewals are preserved locally
                 expiryDate: (() => {
                   const purchaseDate = new Date(formData.purchaseDate);
                   const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-                  const d = new Date(purchaseDate);
-                  d.setMonth(d.getMonth() + months);
-                  return d;
+                  const baselineExpiry = new Date(purchaseDate);
+                  baselineExpiry.setMonth(baselineExpiry.getMonth() + months);
+                  const currentExpiry = (() => {
+                    const candidate = (item as any).expiryDate || (item as any).expiry_date || (it as any).expiryDate || (it as any).expiry_date;
+                    if (!candidate) return null;
+                    const parsed = new Date(candidate);
+                    return isNaN(parsed.getTime()) ? null : parsed;
+                  })();
+                  if (currentExpiry && currentExpiry.getTime() > baselineExpiry.getTime()) {
+                    return currentExpiry;
+                  }
+                  return baselineExpiry;
                 })(),
                 sourceNote: formData.sourceNote,
                 purchasePrice: formData.purchasePrice,

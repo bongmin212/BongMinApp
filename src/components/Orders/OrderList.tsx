@@ -873,6 +873,32 @@ const OrderList: React.FC = () => {
     });
   }, [orders, inventory]);
 
+  const getLatestRenewalDate = useCallback((order: Order): Date | null => {
+    const renewals = Array.isArray((order as any).renewals) ? (order as any).renewals : [];
+    if (!renewals.length) return null;
+    let latest: Date | null = null;
+    renewals.forEach((renewal: any) => {
+      const raw = renewal?.newExpiryDate || renewal?.new_expiry_date;
+      if (!raw) return;
+      const candidate = raw instanceof Date ? raw : new Date(raw);
+      if (!candidate || isNaN(candidate.getTime())) return;
+      if (!latest || candidate.getTime() > latest.getTime()) {
+        latest = candidate;
+      }
+    });
+    return latest;
+  }, []);
+
+  const expiryMismatchOrders = useMemo(() => {
+    return orders.filter(order => {
+      const latest = getLatestRenewalDate(order);
+      if (!latest) return false;
+      const currentExpiry = order.expiryDate instanceof Date ? order.expiryDate : (order.expiryDate ? new Date(order.expiryDate) : null);
+      if (!currentExpiry || isNaN(currentExpiry.getTime())) return false;
+      return latest.getTime() > currentExpiry.getTime();
+    });
+  }, [orders, getLatestRenewalDate]);
+
   const handleFixAllStuckInventoryLinks = async () => {
     const stuckOrders = stuckInventoryLinks;
     if (stuckOrders.length === 0) {
@@ -916,6 +942,67 @@ const OrderList: React.FC = () => {
         } catch (error) {
           notify('Lỗi khi fix liên kết kho hàng', 'error');
           console.error('Unexpected error:', error);
+        }
+      }
+    });
+  };
+
+  const handleFixOrderExpiryMismatches = () => {
+    const mismatches = expiryMismatchOrders;
+    if (mismatches.length === 0) {
+      notify('Không có đơn nào cần fix hạn', 'info');
+      return;
+    }
+
+    setConfirmState({
+      message: `Cập nhật hạn sử dụng cho ${mismatches.length} đơn dựa trên lần gia hạn mới nhất?`,
+      onConfirm: async () => {
+        const sb = getSupabase();
+        if (!sb) {
+          notify('Không thể kết nối database', 'error');
+          return;
+        }
+
+        let success = 0;
+        let failed = 0;
+        const detailEntries: string[] = [];
+
+        for (const order of mismatches) {
+          const latest = getLatestRenewalDate(order);
+          if (!latest) continue;
+          const latestIso = latest.toISOString();
+          const { error } = await sb.from('orders').update({ expiry_date: latestIso }).eq('id', order.id);
+          if (error) {
+            failed++;
+            continue;
+          }
+          success++;
+          const oldExpiry = order.expiryDate instanceof Date ? order.expiryDate : (order.expiryDate ? new Date(order.expiryDate) : null);
+          const oldStr = oldExpiry && !isNaN(oldExpiry.getTime()) ? oldExpiry.toISOString().split('T')[0] : '-';
+          detailEntries.push(`${order.code || order.id}: ${oldStr} -> ${latestIso.split('T')[0]}`);
+          try {
+            Database.updateOrder(order.id, { expiryDate: new Date(latest) } as any);
+          } catch {}
+        }
+
+        if (success > 0) {
+          try {
+            const sb2 = getSupabase();
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: state.user?.id || null,
+              action: 'Fix hạn đơn',
+              details: `count=${success}; entries=${detailEntries.join(', ')}`
+            });
+          } catch {}
+          notify(
+            failed > 0
+              ? `Đã cập nhật hạn cho ${success} đơn, ${failed} lỗi`
+              : `Đã cập nhật hạn cho ${success} đơn`,
+            failed > 0 ? 'warning' : 'success'
+          );
+          loadData();
+        } else {
+          notify('Không thể cập nhật hạn đơn hàng', 'error');
         }
       }
     });
@@ -2088,6 +2175,15 @@ const OrderList: React.FC = () => {
               }
               return null;
             })()}
+            {expiryMismatchOrders.length > 0 && (
+              <button
+                className="btn btn-warning"
+                onClick={handleFixOrderExpiryMismatches}
+                title="Khôi phục hạn đơn dựa trên lịch sử gia hạn mới nhất"
+              >
+                🔧 Fix hạn đơn ({expiryMismatchOrders.length})
+              </button>
+            )}
             <div className="text-right">
               <div>Tổng doanh thu: {formatPrice(totalRevenue)}</div>
               <small className="text-muted">({totalOrderCount} đơn đã bán)</small>

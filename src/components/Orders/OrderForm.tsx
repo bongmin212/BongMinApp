@@ -621,16 +621,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return;
       }
 
-      // Calculate expiry date (allow override by custom expiry)
+      // Calculate expiry date (allow override by custom expiry). When editing an already renewed order, never shorten it.
       const purchaseDate = new Date(formData.purchaseDate);
-      let expiryDate = new Date(purchaseDate);
-      
-      if (formData.useCustomExpiry && formData.customExpiryDate) {
-        expiryDate = new Date(formData.customExpiryDate);
-      } else {
-        // Always use selected package warranty period, even for shared pools
-        expiryDate.setMonth(expiryDate.getMonth() + selectedPackage.warrantyPeriod);
-      }
+      const computedExpiry = (() => {
+        if (formData.useCustomExpiry && formData.customExpiryDate) {
+          return new Date(formData.customExpiryDate);
+        }
+        const months = selectedPackage.warrantyPeriod;
+        const baseline = new Date(purchaseDate);
+        baseline.setMonth(baseline.getMonth() + months);
+        if (order?.expiryDate && !formData.useCustomExpiry) {
+          const existing = order.expiryDate instanceof Date ? order.expiryDate : new Date(order.expiryDate);
+          if (existing && !isNaN(existing.getTime()) && existing.getTime() > baseline.getTime()) {
+            return new Date(existing);
+          }
+        }
+        return baseline;
+      })();
+      let expiryDate = computedExpiry;
 
       const customFieldValues = (() => {
         const values = formData.customFieldValues || {};
