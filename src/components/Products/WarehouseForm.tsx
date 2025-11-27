@@ -365,24 +365,28 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       if (!sb) throw new Error('Supabase not configured');
       if (item) {
         // Edit mode → update inventory row
-        // Recalculate expiry = purchase date + warranty period but never shorten an already-extended warehouse
-        const recomputedExpiryIso = (() => {
-          const purchaseDate = new Date(formData.purchaseDate);
-          const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-          const baselineExpiry = new Date(purchaseDate);
-          baselineExpiry.setMonth(baselineExpiry.getMonth() + months);
-          const existingExpiry = (() => {
-            if (!item) return null;
-            const dateFromProp = (item as any).expiryDate || (item as any).expiry_date;
-            if (!dateFromProp) return null;
-            const parsed = new Date(dateFromProp);
-            return isNaN(parsed.getTime()) ? null : parsed;
-          })();
-          const finalExpiry = existingExpiry && existingExpiry.getTime() > baselineExpiry.getTime()
-            ? existingExpiry
-            : baselineExpiry;
-          return finalExpiry.toISOString();
-        })();
+        // Recalculate expiry = purchase date + total months (original warranty + all renewal months)
+        const purchaseDate = new Date(formData.purchaseDate);
+        const baseMonths = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
+        
+        // Load renewals for this inventory item
+        let totalMonths = baseMonths;
+        try {
+          const { data: renewals } = await sb.from('inventory_renewals').select('months').eq('inventory_id', item.id);
+          if (renewals && Array.isArray(renewals) && renewals.length > 0) {
+            const renewalMonths = renewals.reduce((sum: number, r: any) => {
+              const months = typeof r.months === 'number' ? r.months : 0;
+              return sum + Math.max(0, months);
+            }, 0);
+            totalMonths = baseMonths + renewalMonths;
+          }
+        } catch {
+          // If error loading renewals, just use base months
+        }
+        
+        const result = new Date(purchaseDate);
+        result.setMonth(result.getMonth() + totalMonths);
+        const recomputedExpiryIso = result.toISOString();
 
         const { error } = await sb
           .from('inventory')
@@ -416,22 +420,12 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 productId: selectedProduct,
                 packageId: formData.packageId,
                 purchaseDate: new Date(formData.purchaseDate),
-                // Keep expiry at the furthest known date so manual renewals are preserved locally
+                // Recalculate expiry based on purchase date + total months (original + renewals)
                 expiryDate: (() => {
-                  const purchaseDate = new Date(formData.purchaseDate);
-                  const months = currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : (selectedPkg ? selectedPkg.warrantyPeriod : 0);
-                  const baselineExpiry = new Date(purchaseDate);
-                  baselineExpiry.setMonth(baselineExpiry.getMonth() + months);
-                  const currentExpiry = (() => {
-                    const candidate = (item as any).expiryDate || (item as any).expiry_date || (it as any).expiryDate || (it as any).expiry_date;
-                    if (!candidate) return null;
-                    const parsed = new Date(candidate);
-                    return isNaN(parsed.getTime()) ? null : parsed;
-                  })();
-                  if (currentExpiry && currentExpiry.getTime() > baselineExpiry.getTime()) {
-                    return currentExpiry;
-                  }
-                  return baselineExpiry;
+                  const localPurchaseDate = new Date(formData.purchaseDate);
+                  const localResult = new Date(localPurchaseDate);
+                  localResult.setMonth(localResult.getMonth() + totalMonths);
+                  return localResult;
                 })(),
                 sourceNote: formData.sourceNote,
                 purchasePrice: formData.purchasePrice,

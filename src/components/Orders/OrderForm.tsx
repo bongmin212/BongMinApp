@@ -621,22 +621,27 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return;
       }
 
-      // Calculate expiry date (allow override by custom expiry). When editing an already renewed order, never shorten it.
+      // Calculate expiry date (allow override by custom expiry). For renewed orders, recalculate based on purchase date + total months (original + all renewals).
       const purchaseDate = new Date(formData.purchaseDate);
       const computedExpiry = (() => {
         if (formData.useCustomExpiry && formData.customExpiryDate) {
           return new Date(formData.customExpiryDate);
         }
-        const months = selectedPackage.warrantyPeriod;
-        const baseline = new Date(purchaseDate);
-        baseline.setMonth(baseline.getMonth() + months);
-        if (order?.expiryDate && !formData.useCustomExpiry) {
-          const existing = order.expiryDate instanceof Date ? order.expiryDate : new Date(order.expiryDate);
-          if (existing && !isNaN(existing.getTime()) && existing.getTime() > baseline.getTime()) {
-            return new Date(existing);
-          }
+        const baseMonths = selectedPackage.warrantyPeriod;
+        // Check if order has renewals - if so, calculate total months from original warranty + all renewal months
+        const renewals = Array.isArray((order as any)?.renewals) ? ((order as any).renewals || []) : [];
+        let totalMonths = baseMonths;
+        if (renewals.length > 0) {
+          // Sum all renewal months
+          const renewalMonths = renewals.reduce((sum: number, r: any) => {
+            const months = typeof r.months === 'number' ? r.months : 0;
+            return sum + Math.max(0, months);
+          }, 0);
+          totalMonths = baseMonths + renewalMonths;
         }
-        return baseline;
+        const result = new Date(purchaseDate);
+        result.setMonth(result.getMonth() + totalMonths);
+        return result;
       })();
       let expiryDate = computedExpiry;
 
