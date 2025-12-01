@@ -108,7 +108,8 @@ const WarehouseList: React.FC = () => {
       setSelectedIds([]);
       return;
     }
-    setSelectedIds(prev => prev.filter(id => canDeleteInventoryItem(items.find(i => i.id === id))));
+    // Keep selected IDs that still exist in the items list
+    setSelectedIds(prev => prev.filter(id => items.find(i => i.id === id)));
   }, [items]);
 
   const expiryMismatchItems = useMemo(() => {
@@ -1392,23 +1393,13 @@ const isExpiringSoon = (i: InventoryItem) => {
   };
 
   const toggleSelectAll = (checked: boolean, ids: string[]) => {
-    const eligibleIds = ids.filter(id => canDeleteInventoryItem(items.find(i => i.id === id)));
     if (checked) {
-      if (eligibleIds.length === 0) {
-        notify('Các kho được chọn vẫn còn slot hoặc chưa sẵn sàng để xóa', 'warning');
-        return;
-      }
-      setSelectedIds(prev => Array.from(new Set([...prev, ...eligibleIds])));
+      setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
     } else {
-      setSelectedIds(prev => prev.filter(id => !eligibleIds.includes(id)));
+      setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
     }
   };
   const toggleSelect = (id: string, checked: boolean) => {
-    const item = items.find(i => i.id === id);
-    if (checked && !canDeleteInventoryItem(item)) {
-      notify(getDeleteBlockedReason(item), 'warning');
-      return;
-    }
     setSelectedIds(prev => checked ? Array.from(new Set([...prev, id])) : prev.filter(x => x !== id));
   };
   const bulkDelete = () => {
@@ -1737,7 +1728,9 @@ const isExpiringSoon = (i: InventoryItem) => {
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
                 <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>
-                <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn</button>
+                {!selectedIds.some(id => !canDeleteInventoryItem(items.find(i => i.id === id))) && (
+                  <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn</button>
+                )}
                 <button className="btn btn-info" onClick={bulkUpdatePaymentStatus}>Cập nhật thanh toán</button>
               </>
             )}
@@ -2014,9 +2007,9 @@ const isExpiringSoon = (i: InventoryItem) => {
                 <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                   <input
                     type="checkbox"
-                    checked={deletablePageIds.length > 0 && deletablePageIds.every(id => selectedIds.includes(id))}
-                    disabled={deletablePageIds.length === 0}
-                    onChange={(e) => toggleSelectAll(e.target.checked, deletablePageIds)}
+                    checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
+                    disabled={pageItems.length === 0}
+                    onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
                   />
                 </th>
                 <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
@@ -2040,8 +2033,6 @@ const isExpiringSoon = (i: InventoryItem) => {
                     <input
                       type="checkbox"
                       checked={selectedIds.includes(i.id)}
-                      disabled={!canDeleteInventoryItem(i)}
-                      title={canDeleteInventoryItem(i) ? undefined : getDeleteBlockedReason(i)}
                       onChange={(e) => toggleSelect(i.id, e.target.checked)}
                     />
                   </td>
