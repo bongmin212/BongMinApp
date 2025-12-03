@@ -371,16 +371,6 @@ const CustomerList: React.FC = () => {
                     debouncedSearchTerm,
                     filterType,
                     filterSource,
-                    page,
-                    limit
-                  }, 'TrangHienTai');
-                  exportCustomersXlsx(paginatedCustomers, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('KhachHang', {
-                    debouncedSearchTerm,
-                    filterType,
-                    filterSource,
                     total: filteredCustomers.length
                   }, 'KetQuaLoc');
                   exportCustomersXlsx(filteredCustomers, filename);

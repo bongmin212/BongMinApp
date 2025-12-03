@@ -489,14 +489,6 @@ const PackageList: React.FC = () => {
                 <button className="btn btn-light" onClick={() => {
                   const filename = generateExportFilename('GoiSanPham', { 
                     searchTerm,
-                    page,
-                    limit
-                  }, 'TrangHienTai');
-                  exportPackagesXlsx(pageItems, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('GoiSanPham', { 
-                    searchTerm,
                     total: filteredPackages.length
                   }, 'KetQuaLoc');
                   exportPackagesXlsx(filteredPackages, filename);

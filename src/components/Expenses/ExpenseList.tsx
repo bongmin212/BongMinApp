@@ -298,19 +298,6 @@ const ExpenseList: React.FC = () => {
                     dateTo,
                     minAmount,
                     maxAmount,
-                    page,
-                    limit
-                  }, 'TrangHienTai');
-                  exportExpensesXlsx(pageItems, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('ChiPhi', {
-                    debouncedSearchQuery,
-                    filterType,
-                    dateFrom,
-                    dateTo,
-                    minAmount,
-                    maxAmount,
                     total: filteredExpenses.length
                   }, 'KetQuaLoc');
                   exportExpensesXlsx(filteredExpenses, filename);

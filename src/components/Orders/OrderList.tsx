@@ -2245,18 +2245,6 @@ const OrderList: React.FC = () => {
                     dateTo,
                     expiryFilter,
                     onlyExpiringNotSent
-                  }, 'TrangHienTai');
-                  exportOrdersXlsx(paginatedOrders, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('DonHang', {
-                    debouncedSearchTerm,
-                    filterStatus,
-                    filterPayment,
-                    dateFrom,
-                    dateTo,
-                    expiryFilter,
-                    onlyExpiringNotSent
                   }, 'KetQuaLoc');
                   exportOrdersXlsx(filteredOrders, filename);
                 }}>Xuất Excel (kết quả đã lọc)</button>

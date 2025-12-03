@@ -26,6 +26,7 @@ const WarehouseList: React.FC = () => {
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>('');
   const [filterProduct, setFilterProduct] = useState<string>('');
   const [filterPackage, setFilterPackage] = useState<string>('');
+  const [filterSource, setFilterSource] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
@@ -810,6 +811,7 @@ const WarehouseList: React.FC = () => {
         const paymentStatus = params.get('paymentStatus') || '';
         const product = params.get('product') || '';
         const packageId = params.get('package') || '';
+        const source = params.get('source') || '';
         const from = params.get('from') || '';
         const to = params.get('to') || '';
         const accounts = params.get('accounts') === '1';
@@ -821,6 +823,7 @@ const WarehouseList: React.FC = () => {
         if (paymentStatus !== filterPaymentStatus) setFilterPaymentStatus(paymentStatus);
         if (product !== filterProduct) setFilterProduct(product);
         if (packageId !== filterPackage) setFilterPackage(packageId);
+        if (source !== filterSource) setFilterSource(source);
         if (from !== dateFrom) setDateFrom(from);
         if (to !== dateTo) setDateTo(to);
         if (accounts !== onlyAccounts) setOnlyAccounts(accounts);
@@ -884,7 +887,7 @@ const WarehouseList: React.FC = () => {
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
 
   // Persist limit
   useEffect(() => {
@@ -900,6 +903,7 @@ const WarehouseList: React.FC = () => {
       if (filterPaymentStatus) params.set('paymentStatus', filterPaymentStatus); else params.delete('paymentStatus');
       if (filterProduct) params.set('product', filterProduct); else params.delete('product');
       if (filterPackage) params.set('package', filterPackage); else params.delete('package');
+      if (filterSource) params.set('source', filterSource); else params.delete('source');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
       params.set('accounts', onlyAccounts ? '1' : '0');
@@ -910,7 +914,7 @@ const WarehouseList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
   const packageMap = useMemo(() => new Map(packages.map(p => [p.id, p.name])), [packages]);
@@ -1063,6 +1067,8 @@ const isExpiringSoon = (i: InventoryItem) => {
               : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
+      const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
+      const matchesSource = !filterSource || normalizedSource.includes(filterSource);
 
       const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
       const pToOk = !dateTo || new Date(i.purchaseDate) <= new Date(dateTo);
@@ -1073,11 +1079,11 @@ const isExpiringSoon = (i: InventoryItem) => {
       const accountsOk = !onlyAccounts || isAcc;
       const freeOk = !onlyFreeSlots || hasFree;
 
-      return matchesSearch && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
+      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk;
     });
-  }, [items, filterStatus, filterPaymentStatus, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap]);
+  }, [items, filterStatus, filterPaymentStatus, filterSource, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap]);
 
-  // Extract available products and packages from base filtered list
+  // Extract available products, packages, and sources from base filtered list
   // Products: if package filter is set, only show products that have that package
   const availableProducts = useMemo(() => {
     const productSet = new Set<string>();
@@ -1097,6 +1103,20 @@ const isExpiringSoon = (i: InventoryItem) => {
     });
     return Array.from(productSet).map(id => products.find(p => p.id === id)).filter(Boolean) as Product[];
   }, [baseFilteredItems, products, packages, filterPackage]);
+
+  // Sources: unique non-empty sourceNote from base filtered list (case-insensitive)
+  const availableSources = useMemo(() => {
+    const sourceMap = new Map<string, string>(); // key: normalized (lowercase), value: original label
+    baseFilteredItems.forEach(item => {
+      const raw = (item.sourceNote || '').trim();
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!sourceMap.has(key)) {
+        sourceMap.set(key, raw);
+      }
+    });
+    return Array.from(sourceMap.values()).sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [baseFilteredItems]);
 
   // Packages: if product filter is set, only show packages from that product
   const availablePackages = useMemo(() => {
@@ -1194,6 +1214,8 @@ const isExpiringSoon = (i: InventoryItem) => {
               : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
+      const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
+      const matchesSource = !filterSource || normalizedSource.includes(filterSource);
 
       const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
       const pToOk = !dateTo || new Date(i.purchaseDate) <= new Date(dateTo);
@@ -1210,13 +1232,13 @@ const isExpiringSoon = (i: InventoryItem) => {
       // Package filter
       if (filterPackage && i.packageId !== filterPackage) return false;
 
-      return matchesSearch && matchesStatus && matchesPaymentStatus && pFromOk && pToOk && accountsOk && freeOk;
+      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk;
     });
     
     // WarehouseList: Filtered results
     
     return filtered;
-  }, [items, filterStatus, filterPaymentStatus, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+  }, [items, filterStatus, filterPaymentStatus, filterSource, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -1674,6 +1696,7 @@ const isExpiringSoon = (i: InventoryItem) => {
     setFilterPaymentStatus('');
     setFilterProduct('');
     setFilterPackage('');
+    setFilterSource('');
     setDateFrom('');
     setDateTo('');
     setOnlyAccounts(false);
@@ -1689,18 +1712,6 @@ const isExpiringSoon = (i: InventoryItem) => {
           <div className="d-flex gap-2">
             {!isMobile && (
               <>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('KhoHang', {
-                    searchTerm: debouncedSearchTerm,
-                    filterStatus,
-                    filterPaymentStatus,
-                    dateFrom,
-                    dateTo,
-                    onlyAccounts,
-                    onlyFreeSlots
-                  }, 'TrangHienTai');
-                  exportInventoryXlsx(pageItems, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
                 <button className="btn btn-light" onClick={() => {
                   const filename = generateExportFilename('KhoHang', {
                     searchTerm: debouncedSearchTerm,
@@ -1807,6 +1818,23 @@ const isExpiringSoon = (i: InventoryItem) => {
                   {pkg.name}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterSource}
+              onChange={(e) => setFilterSource(e.target.value)}
+            >
+              <option value="">Tất cả nguồn nhập</option>
+              {availableSources.map(source => {
+                const value = source.trim().toLowerCase();
+                return (
+                  <option key={value} value={value}>
+                    {source}
+                  </option>
+                );
+              })}
             </select>
           </div>
           <div>

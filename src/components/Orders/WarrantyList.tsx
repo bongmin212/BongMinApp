@@ -1558,17 +1558,6 @@ const handleDelete = (id: string) => {
                     searchStatus,
                     dateFrom,
                     dateTo,
-                    page,
-                    limit
-                  }, 'TrangHienTai');
-                  exportWarrantiesXlsx(pageItems, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('BaoHanh', {
-                    debouncedSearchTerm,
-                    searchStatus,
-                    dateFrom,
-                    dateTo,
                     total: filteredWarranties.length
                   }, 'KetQuaLoc');
                   exportWarrantiesXlsx(filteredWarranties, filename);

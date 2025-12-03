@@ -576,15 +576,6 @@ const ActivityLogList: React.FC = () => {
                   const filename = generateExportFilename('NhatKyHoatDong', {
                     debouncedSearchTerm,
                     selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
-                    page,
-                    limit
-                  }, 'TrangHienTai');
-                  exportLogsXlsx(pageItems, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('NhatKyHoatDong', {
-                    debouncedSearchTerm,
-                    selectedEmployee: selectedEmployee ? employees.find(e => e.id === selectedEmployee)?.username : '',
                     total: filteredLogs.length
                   }, 'KetQuaLoc');
                   exportLogsXlsx(filteredLogs, filename);

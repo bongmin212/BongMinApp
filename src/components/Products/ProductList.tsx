@@ -439,14 +439,6 @@ const ProductList: React.FC = () => {
                 <button className="btn btn-light" onClick={() => {
                   const filename = generateExportFilename('SanPham', { 
                     debouncedSearchTerm,
-                    page,
-                    limit
-                  }, 'TrangHienTai');
-                  exportProductsXlsx(paginatedProducts, filename);
-                }}>Xuất Excel (trang hiện tại)</button>
-                <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('SanPham', { 
-                    debouncedSearchTerm,
                     total: sortedProducts.length
                   }, 'KetQuaLoc');
                   exportProductsXlsx(sortedProducts, filename);
