@@ -1676,7 +1676,8 @@ const isExpiringSoon = (i: InventoryItem) => {
     const product = products.find(p => p.id === inv.productId);
     const packageInfo = packages.find(p => p.id === inv.packageId);
     const defaultMonths = product?.sharedInventoryPool ? 1 : (packageInfo?.warrantyPeriod || 1);
-    setRenewalDialog({ id, months: defaultMonths, amount: 0, note: '', paymentStatus: inv.paymentStatus || 'UNPAID' });
+    // Mặc định lần gia hạn kho luôn là chưa thanh toán, không lấy theo trạng thái hiện tại
+    setRenewalDialog({ id, months: defaultMonths, amount: 0, note: '', paymentStatus: 'UNPAID' });
   };
 
   const bulkRenewal = () => {
@@ -2501,8 +2502,8 @@ const isExpiringSoon = (i: InventoryItem) => {
                   const newExpiry = new Date(currentExpiry);
                   newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
                   const { error } = await sb.from('inventory').update({ 
-                    expiry_date: newExpiry.toISOString(),
-                    payment_status: renewalDialog.paymentStatus
+                    // Chỉ cập nhật hạn mới, không đụng tới trạng thái thanh toán lần nhập kho ban đầu
+                    expiry_date: newExpiry.toISOString()
                   }).eq('id', inv.id);
                   if (!error) {
                     // Store renewal in Supabase
@@ -2977,7 +2978,8 @@ const isExpiringSoon = (i: InventoryItem) => {
               useCustomPrice: false,
               customPrice: 0,
               note: '',
-              paymentStatus: viewingOrder.paymentStatus || 'UNPAID',
+              // Mặc định lần gia hạn luôn là chưa thanh toán
+              paymentStatus: 'UNPAID',
               markMessageSent: !!(viewingOrder as any).renewalMessageSent,
               useCustomExpiry: false,
               customExpiryDate: undefined
@@ -3182,9 +3184,11 @@ const isExpiringSoon = (i: InventoryItem) => {
                         value={renewState.paymentStatus}
                         onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as PaymentStatus } : prev)}
                       >
-                        {PAYMENT_STATUSES.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
+                        {PAYMENT_STATUSES
+                          .filter(p => p.value !== 'REFUNDED')
+                          .map(p => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
                       </select>
                     </div>
                     <div className="mt-2">

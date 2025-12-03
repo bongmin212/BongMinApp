@@ -919,7 +919,9 @@ export class Database {
     const nextOrder: Order = {
       ...current,
       expiryDate: nextExpiry,
-      paymentStatus: renewal.paymentStatus,
+      // Giữ nguyên paymentStatus của lần mua ban đầu; trạng thái thanh toán cho từng lần gia hạn
+      // được lưu riêng trong mảng renewals và dùng getDisplayPaymentStatus để hiển thị.
+      paymentStatus: current.paymentStatus,
       packageId: packageId || current.packageId,
       renewals: [...(current as any).renewals || [], renewal],
       useCustomPrice,

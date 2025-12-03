@@ -455,7 +455,8 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
             useCustomPrice: false,
             customPrice: 0,
             note: '',
-            paymentStatus: (viewingOrder as any).paymentStatus || 'UNPAID',
+            // Mặc định lần gia hạn luôn là chưa thanh toán
+            paymentStatus: 'UNPAID',
             markMessageSent: !!(viewingOrder as any).renewalMessageSent,
             useCustomExpiry: false,
             customExpiryDate: undefined
@@ -645,18 +646,20 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
                       <div className="alert alert-success"><strong>Giá:</strong> {formatPrice(price)}</div>
                     )}
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Thanh toán</label>
-                    <select
-                      className="form-control"
-                      value={renewState.paymentStatus}
-                      onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as any } : prev)}
-                    >
-                      {PAYMENT_STATUSES.map(p => (
+                <div className="form-group">
+                  <label className="form-label">Thanh toán</label>
+                  <select
+                    className="form-control"
+                    value={renewState.paymentStatus}
+                    onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as any } : prev)}
+                  >
+                    {PAYMENT_STATUSES
+                      .filter(p => p.value !== 'REFUNDED')
+                      .map(p => (
                         <option key={p.value} value={p.value}>{p.label}</option>
                       ))}
-                    </select>
-                  </div>
+                  </select>
+                </div>
                   <div className="mt-2">
                     <label className="form-label">Ghi chú</label>
                     <textarea

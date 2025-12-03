@@ -56,6 +56,19 @@ const OrderList: React.FC = () => {
     useCustomExpiry: boolean;
     customExpiryDate?: Date;
   }>(null);
+  const [orderPaymentModal, setOrderPaymentModal] = useState<null | { selectedIds: string[] }>(null);
+  const [selectedOrderPaymentStatus, setSelectedOrderPaymentStatus] = useState<PaymentStatus>('UNPAID');
+  const [orderBulkPaymentTarget, setOrderBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
+  const [selectedOrderRenewalIds, setSelectedOrderRenewalIds] = useState<string[]>([]);
+
+  const renewalsByOrder = useMemo(() => {
+    const map = new Map<string, any[]>();
+    orders.forEach(order => {
+      const renewals = Array.isArray((order as any).renewals) ? ((order as any).renewals || []) : [];
+      map.set(order.id, renewals);
+    });
+    return map;
+  }, [orders]);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const getMobileViewportHeight = () => {
     if (typeof window === 'undefined') return 480;
@@ -2251,17 +2264,22 @@ const OrderList: React.FC = () => {
               </>
             )}
             {selectedIds.length > 0 && !isMobile && (
-            <div className="d-flex gap-2 align-items-center">
-              <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
-              <span className="badge bg-info">Tổng tiền: {formatPrice(getSelectedTotal)}</span>
-              {/* Bulk delete removed per request */}
-              <div className="d-flex gap-1">
-                  <button className="btn btn-secondary" onClick={() => bulkSetStatus('CANCELLED')}>Đã hủy</button>
-                </div>
-                <div className="d-flex gap-1">
-                  <button className="btn btn-secondary" onClick={() => bulkSetPayment('PAID')}>Đã thanh toán</button>
-                  <button className="btn btn-secondary" onClick={() => bulkSetPayment('REFUNDED')}>Đã hoàn tiền</button>
-                </div>
+              <div className="d-flex gap-2 align-items-center">
+                <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+                <span className="badge bg-info">Tổng tiền: {formatPrice(getSelectedTotal)}</span>
+                <button
+                  className="btn btn-info"
+                  onClick={() => {
+                    const selectedExistingIds = selectedIds.filter(id => orders.some(o => o.id === id));
+                    if (selectedExistingIds.length === 0) return;
+                    setSelectedOrderPaymentStatus('UNPAID');
+                    setOrderBulkPaymentTarget('INITIAL');
+                    setSelectedOrderRenewalIds([]);
+                    setOrderPaymentModal({ selectedIds: selectedExistingIds });
+                  }}
+                >
+                  Cập nhật thanh toán
+                </button>
               </div>
             )}
             <button
@@ -2521,7 +2539,8 @@ const OrderList: React.FC = () => {
               useCustomPrice: false,
               customPrice: 0,
               note: '',
-              paymentStatus: viewingOrder.paymentStatus || 'UNPAID',
+              // Mặc định lần gia hạn luôn là chưa thanh toán
+              paymentStatus: 'UNPAID',
               markMessageSent: !!(viewingOrder as any).renewalMessageSent,
               useCustomExpiry: false,
               customExpiryDate: undefined
@@ -2591,6 +2610,353 @@ const OrderList: React.FC = () => {
           }}
         />
       )}
+
+      {orderPaymentModal && (() => {
+        const selectedItems = orders.filter(o => orderPaymentModal.selectedIds.includes(o.id));
+        const renewalOptions = selectedItems.flatMap(order => {
+          const renewals = (renewalsByOrder.get(order.id) || []).slice().sort(
+            (a: any, b: any) => +new Date(b.createdAt || b.newExpiryDate || b.new_expiry_date) - +new Date(a.createdAt || a.newExpiryDate || a.new_expiry_date)
+          );
+          return renewals.map((renewal: any, idx: number) => ({
+            id: renewal.id || `${order.id}-${idx}`,
+            orderId: order.id,
+            code: order.code || order.id.slice(-6),
+            months: renewal.months,
+            createdAt: renewal.createdAt,
+            previousExpiryDate: renewal.previousExpiryDate || renewal.previous_expiry_date,
+            newExpiryDate: renewal.newExpiryDate || renewal.new_expiry_date,
+            paymentStatus: renewal.paymentStatus || 'UNPAID',
+            indexLabel: `Gia hạn #${renewals.length - idx}`
+          }));
+        });
+        const renewalDisabled = renewalOptions.length === 0;
+        const handleToggleRenewal = (id: string, checked: boolean) => {
+          setSelectedOrderRenewalIds(prev => {
+            if (checked) {
+              if (prev.includes(id)) return prev;
+              return [...prev, id];
+            }
+            return prev.filter(rid => rid !== id);
+          });
+        };
+        const canConfirm =
+          orderBulkPaymentTarget === 'INITIAL' ||
+          (orderBulkPaymentTarget === 'RENEWAL' && selectedOrderRenewalIds.length > 0);
+
+        return (
+          <div className="modal" role="dialog" aria-modal>
+            <div className="modal-content" style={{ maxWidth: 520 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Cập nhật trạng thái thanh toán đơn</h3>
+                <button className="close" onClick={() => setOrderPaymentModal(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                <div className="mb-3">
+                  <strong>Đã chọn {selectedItems.length} đơn hàng:</strong>
+                  <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
+                    {selectedItems.map(order => (
+                      <li key={order.id}>{order.code || order.id.slice(-6)}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Trạng thái thanh toán mới</label>
+                  <select
+                    className="form-control"
+                    value={selectedOrderPaymentStatus}
+                    onChange={e => setSelectedOrderPaymentStatus(e.target.value as PaymentStatus)}
+                  >
+                    <option value="UNPAID">{getPaymentLabel('UNPAID')}</option>
+                    <option value="PAID">{getPaymentLabel('PAID')}</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Áp dụng cho</label>
+                  <div className="d-flex flex-column gap-2">
+                    <label className="d-flex align-items-center gap-2">
+                      <input
+                        type="radio"
+                        name="orderBulkPaymentTarget"
+                        value="INITIAL"
+                        checked={orderBulkPaymentTarget === 'INITIAL'}
+                        onChange={() => {
+                          setOrderBulkPaymentTarget('INITIAL');
+                          setSelectedOrderRenewalIds([]);
+                        }}
+                      />
+                      <span>Lần mua ban đầu</span>
+                    </label>
+                    <label className="d-flex align-items-center gap-2">
+                      <input
+                        type="radio"
+                        name="orderBulkPaymentTarget"
+                        value="RENEWAL"
+                        disabled={renewalDisabled}
+                        checked={orderBulkPaymentTarget === 'RENEWAL'}
+                        onChange={() => {
+                          setOrderBulkPaymentTarget('RENEWAL');
+                          setSelectedOrderRenewalIds(renewalOptions.map(option => option.id));
+                        }}
+                      />
+                      <span>Các lần gia hạn{renewalDisabled ? ' (Không có dữ liệu)' : ''}</span>
+                    </label>
+                  </div>
+                </div>
+                {orderBulkPaymentTarget === 'RENEWAL' && !renewalDisabled && (
+                  <div className="form-group">
+                    <label className="form-label">Chọn lần gia hạn</label>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="text-muted small">
+                        Đã chọn {selectedOrderRenewalIds.length}/{renewalOptions.length}
+                      </div>
+                      <div className="d-flex gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-light"
+                          onClick={() =>
+                            setSelectedOrderRenewalIds(renewalOptions.map(option => option.id))
+                          }
+                        >
+                          Chọn tất
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-light"
+                          onClick={() => setSelectedOrderRenewalIds([])}
+                        >
+                          Bỏ chọn
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        maxHeight: 220,
+                        overflowY: 'auto',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 4,
+                        padding: '8px'
+                      }}
+                    >
+                      {renewalOptions.map(option => (
+                        <label
+                          key={option.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 8,
+                            marginBottom: 8
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderRenewalIds.includes(option.id)}
+                            onChange={e => handleToggleRenewal(option.id, e.target.checked)}
+                          />
+                          <div>
+                            <div>
+                              <strong>{option.code}</strong> · {option.indexLabel}
+                            </div>
+                            <div className="text-muted small">
+                              {option.createdAt
+                                ? formatDate(option.createdAt)
+                                : ''}
+                              {typeof option.months === 'number' &&
+                                !Number.isNaN(option.months) &&
+                                ` · +${option.months} tháng`}
+                            </div>
+                            {(option.previousExpiryDate || option.newExpiryDate) && (
+                              <div className="text-muted small">
+                                {option.previousExpiryDate
+                                  ? formatDate(
+                                      option.previousExpiryDate instanceof Date
+                                        ? option.previousExpiryDate
+                                        : new Date(option.previousExpiryDate)
+                                    )
+                                  : ''}
+                                {' → '}
+                                {option.newExpiryDate
+                                  ? formatDate(
+                                      option.newExpiryDate instanceof Date
+                                        ? option.newExpiryDate
+                                        : new Date(option.newExpiryDate)
+                                    )
+                                  : ''}
+                              </div>
+                            )}
+                            <div className="text-muted small">
+                              Hiện tại:{' '}
+                              {getPaymentLabel(
+                                (option.paymentStatus as PaymentStatus) || 'UNPAID'
+                              ) || 'Chưa thanh toán'}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setOrderPaymentModal(null);
+                    setSelectedOrderRenewalIds([]);
+                    setOrderBulkPaymentTarget('INITIAL');
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  className="btn btn-primary"
+                  disabled={!canConfirm}
+                  onClick={async () => {
+                    const sb = getSupabase();
+                    if (!sb) {
+                      notify('Không thể cập nhật trạng thái thanh toán', 'error');
+                      return;
+                    }
+
+                    if (orderBulkPaymentTarget === 'INITIAL') {
+                      const validIds = orderPaymentModal.selectedIds.filter(id =>
+                        orders.some(o => o.id === id)
+                      );
+                      if (validIds.length === 0) {
+                        notify('Không tìm thấy đơn hàng hợp lệ', 'error');
+                        return;
+                      }
+
+                      const { error } = await sb
+                        .from('orders')
+                        .update({ payment_status: selectedOrderPaymentStatus })
+                        .in('id', validIds);
+
+                      if (error) {
+                        notify('Không thể cập nhật trạng thái thanh toán', 'error');
+                        return;
+                      }
+
+                      try {
+                        const sb2 = getSupabase();
+                        if (sb2) {
+                          const codes = validIds
+                            .map(id => orders.find(o => o.id === id)?.code)
+                            .filter(Boolean)
+                            .join(',');
+                          await sb2.from('activity_logs').insert({
+                            employee_id: state.user?.id || null,
+                            action: 'Cập nhật thanh toán đơn hàng loạt (mua ban đầu)',
+                            details: `count=${validIds.length}; status=${selectedOrderPaymentStatus}; codes=${codes}`
+                          });
+                        }
+                      } catch {}
+
+                      setSelectedIds([]);
+                      setOrderPaymentModal(null);
+                      setSelectedOrderRenewalIds([]);
+                      setOrderBulkPaymentTarget('INITIAL');
+                      await loadData();
+                      notify(
+                        `Đã cập nhật trạng thái thanh toán cho ${validIds.length} đơn hàng`,
+                        'success'
+                      );
+                      return;
+                    }
+
+                    if (selectedOrderRenewalIds.length === 0) {
+                      notify('Vui lòng chọn ít nhất 1 lần gia hạn', 'warning');
+                      return;
+                    }
+
+                    const renewalIdSet = new Set(selectedOrderRenewalIds);
+                    const ordersToUpdate = selectedItems
+                      .map(order => {
+                        const renewals = (renewalsByOrder.get(order.id) || []).slice();
+                        let changed = false;
+                        const nextRenewals = renewals.map((r: any) => {
+                          const rid = r.id || '';
+                          if (renewalIdSet.has(rid)) {
+                            changed = true;
+                            return {
+                              ...r,
+                              paymentStatus: selectedOrderPaymentStatus
+                            };
+                          }
+                          return r;
+                        });
+                        if (!changed) return null;
+                        return { order, renewals: nextRenewals };
+                      })
+                      .filter(Boolean) as { order: Order; renewals: any[] }[];
+
+                    if (ordersToUpdate.length === 0) {
+                      notify('Không tìm thấy lần gia hạn hợp lệ để cập nhật', 'warning');
+                      return;
+                    }
+
+                    try {
+                      for (const item of ordersToUpdate) {
+                        const serializedRenewals = item.renewals.map((r: any) => ({
+                          id: r.id,
+                          months: r.months,
+                          packageId: r.packageId,
+                          previousPackageId: r.previousPackageId,
+                          price: r.price,
+                          useCustomPrice: r.useCustomPrice,
+                          previousExpiryDate: r.previousExpiryDate,
+                          newExpiryDate: r.newExpiryDate,
+                          note: r.note,
+                          paymentStatus: r.paymentStatus,
+                          createdAt: r.createdAt,
+                          createdBy: r.createdBy
+                        }));
+
+                        const { error } = await sb
+                          .from('orders')
+                          .update({ renewals: serializedRenewals })
+                          .eq('id', item.order.id);
+
+                        if (error) {
+                          notify(
+                            `Không thể cập nhật thanh toán gia hạn cho đơn ${item.order.code ||
+                              item.order.id}`,
+                            'error'
+                          );
+                          return;
+                        }
+                      }
+
+                      try {
+                        const sb2 = getSupabase();
+                        if (sb2) {
+                          await sb2.from('activity_logs').insert({
+                            employee_id: state.user?.id || null,
+                            action: 'Cập nhật thanh toán gia hạn đơn hàng loạt',
+                            details: `renewalCount=${selectedOrderRenewalIds.length}; status=${selectedOrderPaymentStatus}`
+                          });
+                        }
+                      } catch {}
+
+                      setOrderPaymentModal(null);
+                      setSelectedOrderRenewalIds([]);
+                      setOrderBulkPaymentTarget('INITIAL');
+                      await loadData();
+                      notify(
+                        `Đã cập nhật trạng thái thanh toán cho ${selectedOrderRenewalIds.length} lần gia hạn`,
+                        'success'
+                      );
+                    } catch {
+                      notify('Không thể cập nhật thanh toán gia hạn', 'error');
+                    }
+                  }}
+                >
+                  Xác nhận
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {renewState && (
         <div className="modal">
@@ -2720,9 +3086,11 @@ const OrderList: React.FC = () => {
                         value={renewState.paymentStatus}
                         onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as PaymentStatus } : prev)}
                       >
-                        {PAYMENT_STATUSES.map(p => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
+                        {PAYMENT_STATUSES
+                          .filter(p => p.value !== 'REFUNDED')
+                          .map(p => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
                       </select>
                     </div>
                     <div className="mt-2">
@@ -2925,7 +3293,8 @@ const OrderList: React.FC = () => {
                         // Persist renewal changes to orders table
                         await sb2.from('orders').update({
                           expiry_date: (updated as any).expiryDate,
-                          payment_status: (updated as any).paymentStatus,
+                          // Không cập nhật payment_status của lần mua ban đầu khi gia hạn;
+                          // trạng thái thanh toán của từng lần gia hạn lưu trong renewals.
                           package_id: (updated as any).packageId,
                           renewals: ((updated as any).renewals || []).map((r: any) => ({
                             id: r.id,
