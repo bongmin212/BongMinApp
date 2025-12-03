@@ -56,6 +56,7 @@ const WarehouseList: React.FC = () => {
   const [onlyAccounts, setOnlyAccounts] = useState(false);
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
+  const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
   const [bulkPaymentTarget, setBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
@@ -791,6 +792,7 @@ const WarehouseList: React.FC = () => {
       const packageId = params.get('package') || '';
       const from = params.get('from') || '';
       const to = params.get('to') || '';
+      const expiry = (params.get('expiry') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '' | null) || '';
       const accounts = params.get('accounts') === '1';
       const free = params.get('free') === '1';
       const p = parseInt(params.get('page') || '1', 10);
@@ -805,6 +807,7 @@ const WarehouseList: React.FC = () => {
       setFilterPackage(packageId);
       setDateFrom(from);
       setDateTo(to);
+      setExpiryFilter(expiry);
       setOnlyAccounts(accounts);
       setOnlyFreeSlots(free);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
@@ -826,6 +829,7 @@ const WarehouseList: React.FC = () => {
         const source = params.get('source') || '';
         const from = params.get('from') || '';
         const to = params.get('to') || '';
+        const expiry = (params.get('expiry') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '' | null) || '';
         const accounts = params.get('accounts') === '1';
         const free = params.get('free') === '1';
         const p = parseInt(params.get('page') || '1', 10);
@@ -838,6 +842,7 @@ const WarehouseList: React.FC = () => {
         if (source !== filterSource) setFilterSource(source);
         if (from !== dateFrom) setDateFrom(from);
         if (to !== dateTo) setDateTo(to);
+        if (expiry !== expiryFilter) setExpiryFilter(expiry);
         if (accounts !== onlyAccounts) setOnlyAccounts(accounts);
         if (free !== onlyFreeSlots) setOnlyFreeSlots(free);
         if (p !== page) setPage(p);
@@ -899,7 +904,7 @@ const WarehouseList: React.FC = () => {
   // Reset page on filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, onlyAccounts, onlyFreeSlots]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, expiryFilter, onlyAccounts, onlyFreeSlots]);
 
   // Persist limit
   useEffect(() => {
@@ -918,6 +923,7 @@ const WarehouseList: React.FC = () => {
       if (filterSource) params.set('source', filterSource); else params.delete('source');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
+      if (expiryFilter) params.set('expiry', expiryFilter); else params.delete('expiry');
       params.set('accounts', onlyAccounts ? '1' : '0');
       params.set('free', onlyFreeSlots ? '1' : '0');
       params.set('page', String(page));
@@ -926,7 +932,7 @@ const WarehouseList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch {}
-  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, onlyAccounts, onlyFreeSlots, page, limit]);
+  }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, expiryFilter, onlyAccounts, onlyFreeSlots, page, limit]);
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
   const packageMap = useMemo(() => new Map(packages.map(p => [p.id, p.name])), [packages]);
@@ -1088,13 +1094,11 @@ const isExpiringSoon = (i: InventoryItem) => {
         linkedOrderMatches;
 
       const matchesStatus = !filterStatus || (
-        filterStatus === 'EXPIRING_SOON' 
-          ? isExpiringSoon(i) 
-          : filterStatus === 'NEEDS_UPDATE'
-            ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
-            : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
-              ? getActualStatus(i) === filterStatus
-              : i.status === filterStatus as any
+        filterStatus === 'NEEDS_UPDATE'
+          ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
+          : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
+            ? getActualStatus(i) === filterStatus
+            : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || getInventoryDisplayPaymentStatus(i) === filterPaymentStatus as InventoryPaymentStatus;
       const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
@@ -1102,6 +1106,26 @@ const isExpiringSoon = (i: InventoryItem) => {
 
       const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
       const pToOk = !dateTo || new Date(i.purchaseDate) <= new Date(dateTo);
+
+      // Expiry bucket filter (giống OrderList: Tất cả hạn dùng)
+      if (expiryFilter) {
+        const expiryTs = getExpiryTimestamp(i.expiryDate);
+        const nowTs = Date.now();
+        if (expiryTs !== null) {
+          const daysToExpiry = Math.ceil((expiryTs - nowTs) / 86400000);
+          const isExpired = expiryTs < nowTs;
+          const isExpiring = daysToExpiry >= 0 && daysToExpiry <= 7;
+          const isActive = expiryTs >= nowTs && daysToExpiry > 7;
+          const matchesExpiry =
+            (expiryFilter === 'EXPIRED' && isExpired) ||
+            (expiryFilter === 'EXPIRING' && isExpiring) ||
+            (expiryFilter === 'ACTIVE' && isActive);
+          if (!matchesExpiry) return false;
+        } else {
+          // Không có hạn thì không match bất kỳ bucket nào khi đang lọc
+          return false;
+        }
+      }
 
       const pkg = packages.find(p => p.id === i.packageId) as any;
       const isAcc = !!(i.isAccountBased || pkg?.isAccountBased);
@@ -1111,7 +1135,7 @@ const isExpiringSoon = (i: InventoryItem) => {
 
       return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk;
     });
-  }, [items, filterStatus, filterPaymentStatus, filterSource, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap]);
+  }, [items, filterStatus, filterPaymentStatus, filterSource, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap]);
 
   // Extract available products, packages, and sources from base filtered list
   // Products: if package filter is set, only show products that have that package
@@ -1240,13 +1264,11 @@ const isExpiringSoon = (i: InventoryItem) => {
         linkedOrderMatches;
 
       const matchesStatus = !filterStatus || (
-        filterStatus === 'EXPIRING_SOON' 
-          ? isExpiringSoon(i) 
-          : filterStatus === 'NEEDS_UPDATE'
-            ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
-            : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
-              ? getActualStatus(i) === filterStatus
-              : i.status === filterStatus as any
+        filterStatus === 'NEEDS_UPDATE'
+          ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
+          : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
+            ? getActualStatus(i) === filterStatus
+            : i.status === filterStatus as any
       );
       const matchesPaymentStatus = !filterPaymentStatus || getInventoryDisplayPaymentStatus(i) === filterPaymentStatus as InventoryPaymentStatus;
       const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
@@ -1254,6 +1276,25 @@ const isExpiringSoon = (i: InventoryItem) => {
 
       const pFromOk = !dateFrom || new Date(i.purchaseDate) >= new Date(dateFrom);
       const pToOk = !dateTo || new Date(i.purchaseDate) <= new Date(dateTo);
+
+      // Expiry bucket filter (giống OrderList: Tất cả hạn dùng)
+      if (expiryFilter) {
+        const expiryTs = getExpiryTimestamp(i.expiryDate);
+        const nowTs = Date.now();
+        if (expiryTs !== null) {
+          const daysToExpiry = Math.ceil((expiryTs - nowTs) / 86400000);
+          const isExpired = expiryTs < nowTs;
+          const isExpiring = daysToExpiry >= 0 && daysToExpiry <= 7;
+          const isActive = expiryTs >= nowTs && daysToExpiry > 7;
+          const matchesExpiry =
+            (expiryFilter === 'EXPIRED' && isExpired) ||
+            (expiryFilter === 'EXPIRING' && isExpiring) ||
+            (expiryFilter === 'ACTIVE' && isActive);
+          if (!matchesExpiry) return false;
+        } else {
+          return false;
+        }
+      }
 
       const pkg = packages.find(p => p.id === i.packageId) as any;
       const isAcc = !!(i.isAccountBased || pkg?.isAccountBased);
@@ -1273,7 +1314,7 @@ const isExpiringSoon = (i: InventoryItem) => {
     // WarehouseList: Filtered results
     
     return filtered;
-  }, [items, filterStatus, filterPaymentStatus, filterSource, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+  }, [items, filterStatus, filterPaymentStatus, filterSource, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -1736,6 +1777,7 @@ const isExpiringSoon = (i: InventoryItem) => {
     setFilterSource('');
     setDateFrom('');
     setDateTo('');
+    setExpiryFilter('');
     setOnlyAccounts(false);
     setOnlyFreeSlots(false);
     setPage(1);
@@ -1880,7 +1922,6 @@ const isExpiringSoon = (i: InventoryItem) => {
               <option value="AVAILABLE">Sẵn có</option>
               <option value="SOLD">Đã bán</option>
               <option value="EXPIRED">Hết hạn</option>
-              <option value="EXPIRING_SOON">Sắp hết hạn (≤7 ngày)</option>
               <option value="NEEDS_UPDATE">Cần update</option>
             </select>
           </div>
@@ -1899,6 +1940,18 @@ const isExpiringSoon = (i: InventoryItem) => {
               to={dateTo}
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={expiryFilter}
+              onChange={(e) => setExpiryFilter(e.target.value as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '')}
+            >
+              <option value="">Tất cả hạn dùng</option>
+              <option value="EXPIRING">Sắp hết hạn (≤ 7 ngày)</option>
+              <option value="EXPIRED">Đã hết hạn</option>
+              <option value="ACTIVE">Còn hạn (&gt; 7 ngày)</option>
+            </select>
           </div>
           <div>
             <select
