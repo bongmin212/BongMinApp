@@ -164,6 +164,7 @@ export interface InventoryRenewal {
   previousExpiryDate: Date;
   newExpiryDate: Date;
   note?: string;
+  paymentStatus?: InventoryPaymentStatus; // payment status at time of renewal
   createdAt: Date;
   createdBy: string;
 }

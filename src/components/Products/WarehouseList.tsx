@@ -31,8 +31,8 @@ const WarehouseList: React.FC = () => {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
-  const [renewalDialog, setRenewalDialog] = useState<null | { id: string; months: number; amount: number; note: string }>(null);
-  const [bulkRenewalDialog, setBulkRenewalDialog] = useState<null | { ids: string[]; months: number; amount: number; note: string }>(null);
+  const [renewalDialog, setRenewalDialog] = useState<null | { id: string; months: number; amount: number; note: string; paymentStatus: InventoryPaymentStatus }>(null);
+  const [bulkRenewalDialog, setBulkRenewalDialog] = useState<null | { ids: string[]; months: number; amount: number; note: string; paymentStatus: InventoryPaymentStatus }>(null);
   const [viewingInventory, setViewingInventory] = useState<null | InventoryItem>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(1);
@@ -85,6 +85,7 @@ const WarehouseList: React.FC = () => {
         previousExpiryDate: r.previous_expiry_date ? new Date(r.previous_expiry_date) : new Date(),
         newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(),
         note: r.note || undefined,
+        paymentStatus: r.payment_status || undefined,
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         createdBy: r.created_by || r.createdBy || '',
       }));
@@ -1575,13 +1576,13 @@ const isExpiringSoon = (i: InventoryItem) => {
     const product = products.find(p => p.id === inv.productId);
     const packageInfo = packages.find(p => p.id === inv.packageId);
     const defaultMonths = product?.sharedInventoryPool ? 1 : (packageInfo?.warrantyPeriod || 1);
-    setRenewalDialog({ id, months: defaultMonths, amount: 0, note: '' });
+    setRenewalDialog({ id, months: defaultMonths, amount: 0, note: '', paymentStatus: inv.paymentStatus || 'UNPAID' });
   };
 
   const bulkRenewal = () => {
     const renewables = pageItems.filter(i => selectedIds.includes(i.id));
     if (renewables.length === 0) return;
-    setBulkRenewalDialog({ ids: renewables.map(i => i.id), months: 1, amount: 0, note: '' });
+    setBulkRenewalDialog({ ids: renewables.map(i => i.id), months: 1, amount: 0, note: '', paymentStatus: 'UNPAID' });
   };
 
   const statusLabel = (status: InventoryItem['status']) => {
@@ -2340,6 +2341,18 @@ const isExpiringSoon = (i: InventoryItem) => {
                   <input type="text" className="form-control" value={renewalDialog.note} onChange={e => setRenewalDialog({ ...renewalDialog, note: e.target.value })} />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">Trạng thái thanh toán</label>
+                  <select 
+                    className="form-control" 
+                    value={renewalDialog.paymentStatus} 
+                    onChange={e => setRenewalDialog({ ...renewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
+                  >
+                    {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                      <option key={status.value} value={status.value}>{status.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Hạn mới (dự kiến)</label>
                   <div className="form-control" style={{ backgroundColor: '#f8f9fa', color: '#495057' }}>
                     {(() => {
@@ -2359,7 +2372,10 @@ const isExpiringSoon = (i: InventoryItem) => {
                   const currentExpiry = new Date(inv.expiryDate);
                   const newExpiry = new Date(currentExpiry);
                   newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
-                  const { error } = await sb.from('inventory').update({ expiry_date: newExpiry.toISOString() }).eq('id', inv.id);
+                  const { error } = await sb.from('inventory').update({ 
+                    expiry_date: newExpiry.toISOString(),
+                    payment_status: renewalDialog.paymentStatus
+                  }).eq('id', inv.id);
                   if (!error) {
                     // Store renewal in Supabase
                     const { error: renewalError } = await sb.from('inventory_renewals').insert({
@@ -2368,12 +2384,13 @@ const isExpiringSoon = (i: InventoryItem) => {
                       amount: renewalDialog.amount,
                       previous_expiry_date: currentExpiry.toISOString(),
                       new_expiry_date: newExpiry.toISOString(),
-                      note: renewalDialog.note
+                      note: renewalDialog.note,
+                      payment_status: renewalDialog.paymentStatus
                     });
                     
                     if (!renewalError) {
                       // Also store locally for backward compatibility
-                      Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, createdBy: state.user?.id || 'system' });
+                      Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, paymentStatus: renewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
                       // Update in-memory list so history shows immediately
                       setInventoryRenewals(prev => ([
                         ...prev,
@@ -2385,6 +2402,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                           previousExpiryDate: currentExpiry,
                           newExpiryDate: newExpiry,
                           note: renewalDialog.note,
+                          paymentStatus: renewalDialog.paymentStatus,
                           createdAt: new Date(),
                           createdBy: state.user?.id || 'system'
                         }
@@ -2393,7 +2411,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                     
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; inventoryCode=${inv.code || ''}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}` });
+                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; inventoryCode=${inv.code || ''}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}; paymentStatus=${renewalDialog.paymentStatus}` });
                     } catch {}
                     notify('Gia hạn thành công', 'success');
                     setRenewalDialog(null);
@@ -2457,6 +2475,18 @@ const isExpiringSoon = (i: InventoryItem) => {
                     onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, note: e.target.value })} 
                   />
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Trạng thái thanh toán</label>
+                  <select 
+                    className="form-control" 
+                    value={bulkRenewalDialog.paymentStatus} 
+                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
+                  >
+                    {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                      <option key={status.value} value={status.value}>{status.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="alert alert-info" role="alert">
                   Tất cả kho sẽ được cộng +{bulkRenewalDialog.months} tháng. Chi phí sẽ được ghi nhận theo thời điểm bấm gia hạn.
                 </div>
@@ -2476,7 +2506,10 @@ const isExpiringSoon = (i: InventoryItem) => {
                       const newExpiry = new Date(currentExpiry);
                       const monthsAdded = Math.max(1, bulkRenewalDialog.months || 1);
                       newExpiry.setMonth(newExpiry.getMonth() + monthsAdded);
-                      const { error } = await sb.from('inventory').update({ expiry_date: newExpiry.toISOString() }).eq('id', inv.id);
+                      const { error } = await sb.from('inventory').update({ 
+                        expiry_date: newExpiry.toISOString(),
+                        payment_status: bulkRenewalDialog.paymentStatus
+                      }).eq('id', inv.id);
                       if (error) { errorCount++; continue; }
                       // Ghi nhận chi phí gia hạn
                       const { error: renewalError } = await sb.from('inventory_renewals').insert({
@@ -2485,11 +2518,12 @@ const isExpiringSoon = (i: InventoryItem) => {
                         amount: bulkRenewalDialog.amount,
                         previous_expiry_date: currentExpiry.toISOString(),
                         new_expiry_date: newExpiry.toISOString(),
-                        note: bulkRenewalDialog.note
+                        note: bulkRenewalDialog.note,
+                        payment_status: bulkRenewalDialog.paymentStatus
                       });
                       if (renewalError) { errorCount++; continue; }
                       // Local cache (back-compat)
-                      Database.renewInventoryItem(inv.id, monthsAdded, bulkRenewalDialog.amount, { note: bulkRenewalDialog.note, createdBy: state.user?.id || 'system' });
+                      Database.renewInventoryItem(inv.id, monthsAdded, bulkRenewalDialog.amount, { note: bulkRenewalDialog.note, paymentStatus: bulkRenewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
                       // Update in-memory list so history shows immediately
                       setInventoryRenewals(prev => ([
                         ...prev,
@@ -2501,6 +2535,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                           previousExpiryDate: currentExpiry,
                           newExpiryDate: newExpiry,
                           note: bulkRenewalDialog.note,
+                          paymentStatus: bulkRenewalDialog.paymentStatus,
                           createdAt: new Date(),
                           createdBy: state.user?.id || 'system'
                         }
@@ -2517,7 +2552,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                       if (sb2) await sb2.from('activity_logs').insert({ 
                         employee_id: state.user?.id || null,
                         action: 'Gia hạn hàng loạt kho hàng',
-                        details: `count=${successCount}; months=${bulkRenewalDialog.months}; amount=${bulkRenewalDialog.amount}; ids=${renewablesNow.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}`
+                        details: `count=${successCount}; months=${bulkRenewalDialog.months}; amount=${bulkRenewalDialog.amount}; paymentStatus=${bulkRenewalDialog.paymentStatus}; ids=${renewablesNow.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}`
                       });
                     } catch {}
                   }
@@ -2643,18 +2678,85 @@ const isExpiringSoon = (i: InventoryItem) => {
                     </div>
                   </div>
                 )}
-                <div style={{ marginTop: 12 }}>
-                  <strong>Lịch sử gia hạn:</strong>
-                  {renewals.length === 0 ? (
-                    <div>Chưa có</div>
-                  ) : (
-                    <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                      {renewals.map(r => (
-                        <li key={r.id}>
-                          {new Date(r.createdAt).toLocaleDateString('vi-VN')} · +{r.months} tháng · HSD: {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → {new Date(r.newExpiryDate).toLocaleDateString('vi-VN')} · Giá: {formatPrice(r.amount)}{r.note ? ` · Ghi chú: ${r.note}` : ''}
-                        </li>
-                      ))}
-                    </ul>
+                <div style={{ marginTop: '16px' }}>
+                  <strong style={{ fontSize: '16px' }}>Lịch sử gia hạn:</strong>
+                  
+                  {/* Timeline: Nhập kho ban đầu */}
+                  {(() => {
+                    // Tính hạn sử dụng ban đầu: nếu có renewals, dùng previousExpiryDate của renewal cũ nhất
+                    // Nếu không có, tính từ purchaseDate + warrantyPeriod
+                    const sortedRenewals = [...renewals].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+                    const originalExpiryDate = sortedRenewals.length > 0 && sortedRenewals[0].previousExpiryDate
+                      ? new Date(sortedRenewals[0].previousExpiryDate)
+                      : (() => {
+                          if (pkg?.warrantyPeriod) {
+                            const expiry = new Date(inv.purchaseDate);
+                            expiry.setMonth(expiry.getMonth() + Math.floor(pkg.warrantyPeriod));
+                            return expiry;
+                          }
+                          return inv.expiryDate;
+                        })();
+                    
+                    return (
+                      <div className="card mt-3" style={{ borderLeft: '4px solid #28a745', backgroundColor: 'var(--bg-secondary)' }}>
+                        <div className="card-body" style={{ padding: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <strong style={{ color: '#28a745', fontSize: '14px' }}>📦 Nhập kho ban đầu</strong>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              {formatDate(inv.purchaseDate)}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                            <div><strong>Sản phẩm:</strong> {product?.name || 'Không xác định'}</div>
+                            <div><strong>Gói/Pool:</strong> {packageName}</div>
+                            <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
+                            <div><strong>Hạn sử dụng:</strong> {formatDate(originalExpiryDate)}</div>
+                            <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === inv.paymentStatus)?.label || 'Chưa thanh toán'}</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Timeline: Các lần gia hạn */}
+                  {renewals.length > 0 && renewals.map((r, index) => {
+                    const paymentStatusLabel = r.paymentStatus 
+                      ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
+                      : 'Chưa thanh toán';
+                    
+                    return (
+                      <div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>
+                        <div className="card-body" style={{ padding: '12px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                            <div>
+                              <strong style={{ color: '#007bff', fontSize: '14px' }}>🔄 Gia hạn lần {index + 1}</strong>
+                            </div>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                              {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                            <div><strong>Thời gian gia hạn:</strong> +{r.months} tháng</div>
+                            <div><strong>Hạn sử dụng:</strong> {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: '500' }}>{new Date(r.newExpiryDate).toLocaleDateString('vi-VN')}</span></div>
+                            <div><strong>Giá gia hạn:</strong> {formatPrice(r.amount)}</div>
+                            <div><strong>Thanh toán:</strong> {paymentStatusLabel}</div>
+                            {r.note && (
+                              <div style={{ marginTop: '6px', padding: '6px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px' }}>
+                                <strong>Ghi chú:</strong> {r.note}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {renewals.length === 0 && (
+                    <div style={{ marginTop: '8px', padding: '8px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                      Chưa có lần gia hạn nào
+                    </div>
                   )}
                 </div>
               </div>

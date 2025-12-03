@@ -1235,6 +1235,30 @@ const OrderList: React.FC = () => {
     return PAYMENT_STATUSES.find(p => p.value === value)?.label || '';
   };
 
+  // Tính toán payment status hiển thị: nếu có ít nhất 1 renewal chưa thanh toán thì hiển thị "Chưa thanh toán"
+  const getDisplayPaymentStatus = (order: Order): PaymentStatus => {
+    // Nếu order đã hoàn tiền, giữ nguyên
+    if (order.paymentStatus === 'REFUNDED') {
+      return 'REFUNDED';
+    }
+    
+    // Kiểm tra các lần gia hạn
+    const renewals = Array.isArray((order as any).renewals) ? ((order as any).renewals || []) : [];
+    if (renewals.length > 0) {
+      // Nếu có ít nhất 1 renewal chưa thanh toán, hiển thị "Chưa thanh toán"
+      const hasUnpaidRenewal = renewals.some((r: any) => {
+        const renewalPaymentStatus = r.paymentStatus || 'UNPAID';
+        return renewalPaymentStatus !== 'PAID' && renewalPaymentStatus !== 'REFUNDED';
+      });
+      if (hasUnpaidRenewal) {
+        return 'UNPAID';
+      }
+    }
+    
+    // Trả về payment status của order chính
+    return order.paymentStatus || 'UNPAID';
+  };
+
   const getStatusShortLabel = (status: OrderStatus) => {
     switch (status) {
       case 'PROCESSING':
@@ -1373,7 +1397,7 @@ const OrderList: React.FC = () => {
 
       // Status & payment
       if (filterStatus && order.status !== filterStatus) return false;
-      if (filterPayment && order.paymentStatus !== filterPayment) return false;
+      if (filterPayment && getDisplayPaymentStatus(order) !== filterPayment) return false;
 
       // Date range
       const purchaseTs = new Date(order.purchaseDate).getTime();
@@ -1565,7 +1589,7 @@ const OrderList: React.FC = () => {
 
       // Status & payment
       if (filterStatus && order.status !== filterStatus) return false;
-      if (filterPayment && order.paymentStatus !== filterPayment) return false;
+      if (filterPayment && getDisplayPaymentStatus(order) !== filterPayment) return false;
 
       // Date range
       const purchaseTs = new Date(order.purchaseDate).getTime();
@@ -1781,7 +1805,7 @@ const OrderList: React.FC = () => {
         purchaseDate: new Date(o.purchaseDate).toLocaleDateString('vi-VN'),
         expiryDate: new Date(o.expiryDate).toLocaleDateString('vi-VN'),
         status: getStatusLabel(o.status),
-        paymentStatus: getPaymentLabel(o.paymentStatus || 'UNPAID'),
+        paymentStatus: getPaymentLabel(getDisplayPaymentStatus(o)),
         
         // Pricing
         costPrice: packageInfo?.costPrice || 0,
@@ -2049,11 +2073,11 @@ const OrderList: React.FC = () => {
           </td>
           <td>
             <span
-              className={`status-badge ${getPaymentClass(order.paymentStatus)}`}
+              className={`status-badge ${getPaymentClass(getDisplayPaymentStatus(order))}`}
               style={{ padding: '2px 6px', fontSize: 12, lineHeight: 1 }}
-              title={getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán'}
+              title={getPaymentLabel(getDisplayPaymentStatus(order)) || 'Chưa thanh toán'}
             >
-              {getPaymentLabel(order.paymentStatus)}
+              {getPaymentLabel(getDisplayPaymentStatus(order))}
             </span>
           </td>
           <td>{formatPrice(getOrderPrice(order))}</td>
@@ -2119,7 +2143,7 @@ const OrderList: React.FC = () => {
           <div className="order-card-row">
             <div className="order-card-label">Thanh toán</div>
             <div className="order-card-value">
-              <span className={`status-badge ${getPaymentClass(order.paymentStatus)}`}>{getPaymentLabel(order.paymentStatus)}</span>
+              <span className={`status-badge ${getPaymentClass(getDisplayPaymentStatus(order))}`}>{getPaymentLabel(getDisplayPaymentStatus(order))}</span>
             </div>
           </div>
           <div className="order-card-row">

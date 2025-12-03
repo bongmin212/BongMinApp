@@ -509,7 +509,7 @@ export class Database {
     inventoryId: string,
     months: number,
     amount: number,
-    opts?: { note?: string; createdBy?: string }
+    opts?: { note?: string; createdBy?: string; paymentStatus?: import('../types').InventoryPaymentStatus }
   ): Promise<InventoryItem | null> {
     const item = this.getInventory().find(i => i.id === inventoryId);
     if (!item) return null;
@@ -525,6 +525,7 @@ export class Database {
         previousExpiryDate: prev,
         newExpiryDate: next,
         note: opts?.note,
+        paymentStatus: opts?.paymentStatus,
         createdBy: opts?.createdBy || 'system'
       });
     }
@@ -911,6 +912,10 @@ export class Database {
       useCustomPrice,
       customPrice: nextCustomPrice,
       salePrice: nextSalePrice,
+      // Reset renewal message flags khi có gia hạn mới (hạn sử dụng mới, cần gửi tin nhắn lại)
+      renewalMessageSent: false,
+      renewalMessageSentAt: undefined,
+      renewalMessageSentBy: undefined,
       updatedAt: new Date()
     } as any;
 

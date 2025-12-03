@@ -38,6 +38,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const [selectedInventoryId, setSelectedInventoryId] = useState<string>('');
   const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);
   const [inventoryError, setInventoryError] = useState<string>('');
+  // Payment status cho các lần gia hạn: key = renewal.id, value = paymentStatus
+  const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, string>>({});
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
@@ -139,6 +141,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         // Backward compatibility
         setSelectedProfileIds([(order as any).inventoryProfileId]);
       }
+      
+      // Load payment status của các lần gia hạn
+      const renewals = Array.isArray((order as any).renewals) ? ((order as any).renewals || []) : [];
+      const renewalPaymentStatusMap: Record<string, string> = {};
+      renewals.forEach((r: any) => {
+        if (r.id && r.paymentStatus) {
+          renewalPaymentStatusMap[r.id] = r.paymentStatus;
+        }
+      });
+      setRenewalPaymentStatuses(renewalPaymentStatusMap);
     } else {
       // Code will be generated client-side
       setFormData(prev => ({ ...prev, code: '' }));
@@ -756,6 +768,21 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         try {
           const sb = getSupabase();
           if (!sb) throw new Error('Supabase not configured');
+          
+          // Cập nhật payment status của các lần gia hạn nếu có thay đổi
+          let updatedRenewals = (order as any).renewals || [];
+          if (Array.isArray(updatedRenewals) && updatedRenewals.length > 0 && Object.keys(renewalPaymentStatuses).length > 0) {
+            updatedRenewals = updatedRenewals.map((r: any) => {
+              if (renewalPaymentStatuses[r.id] !== undefined) {
+                return {
+                  ...r,
+                  paymentStatus: renewalPaymentStatuses[r.id]
+                };
+              }
+              return r;
+            });
+          }
+          
           const updateData = {
             code: orderData.code,
             purchase_date: orderData.purchaseDate instanceof Date ? orderData.purchaseDate.toISOString() : orderData.purchaseDate,
@@ -770,7 +797,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             use_custom_price: orderData.useCustomPrice || false,
             custom_price: orderData.customPrice || null,
             custom_field_values: orderData.customFieldValues || null,
-            sale_price: (orderData as any).salePrice || null
+            sale_price: (orderData as any).salePrice || null,
+            renewals: updatedRenewals.length > 0 ? updatedRenewals : null
           };
           // Order update debug
           
@@ -791,6 +819,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           
           if (updateResult) {
             // Convert Supabase response to our Order format and update local storage
+            // Sử dụng renewals đã cập nhật từ updateData
+            const finalRenewals = updatedRenewals.length > 0 ? updatedRenewals : (updateResult.renewals || []);
             const updatedOrder: Order = {
               id: updateResult.id,
               code: updateResult.code,
@@ -808,6 +838,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               customPrice: updateResult.custom_price,
               salePrice: updateResult.sale_price,
               customFieldValues: updateResult.custom_field_values,
+              renewals: finalRenewals,
               createdBy: 'system',
               createdAt: updateResult.created_at ? new Date(updateResult.created_at) : new Date(),
               updatedAt: updateResult.updated_at ? new Date(updateResult.updated_at) : new Date()
@@ -2227,21 +2258,82 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           </small>
           </div>
 
+          {/* Payment status của lần mua ban đầu */}
           <div className="form-group">
-            <label className="form-label">Thanh toán</label>
-            <select
-              name="paymentStatus"
-              className="form-control"
-              value={formData.paymentStatus}
-              onChange={handleChange}
-            >
-              {PAYMENT_STATUSES.filter(s => s.value !== 'REFUNDED').map(s => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+            <label className="form-label">Thanh toán lần mua ban đầu</label>
+            <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+              <div className="card-body" style={{ padding: '12px' }}>
+                <div style={{ marginBottom: '6px' }}>
+                  <strong style={{ fontSize: '13px' }}>🛒 Mua ban đầu</strong>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    {formData.purchaseDate ? new Date(formData.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
+                    {(() => {
+                      const pkg = packages.find(p => p.id === formData.packageId);
+                      const months = pkg?.warrantyPeriod || 0;
+                      return months > 0 ? ` · ${months} tháng` : '';
+                    })()}
+                  </div>
+                </div>
+                <select
+                  name="paymentStatus"
+                  className="form-control form-control-sm"
+                  value={formData.paymentStatus}
+                  onChange={handleChange}
+                >
+                  {PAYMENT_STATUSES.filter(s => s.value !== 'REFUNDED').map(s => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
+
+          {/* Payment status của các lần gia hạn */}
+          {order && Array.isArray((order as any).renewals) && ((order as any).renewals || []).length > 0 && (
+            <div className="form-group">
+              <label className="form-label">Thanh toán các lần gia hạn</label>
+              <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                <div className="card-body" style={{ padding: '12px' }}>
+                  {((order as any).renewals || []).map((r: any, index: number) => {
+                    const renewalPaymentStatus = renewalPaymentStatuses[r.id] || r.paymentStatus || 'UNPAID';
+                    const renewalDate = r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : 'N/A';
+                    const renewalMonths = r.months || 0;
+                    
+                    return (
+                      <div key={r.id} style={{ marginBottom: index < ((order as any).renewals || []).length - 1 ? '12px' : '0', paddingBottom: index < ((order as any).renewals || []).length - 1 ? '12px' : '0', borderBottom: index < ((order as any).renewals || []).length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <div>
+                            <strong style={{ fontSize: '13px' }}>Gia hạn lần {index + 1}</strong>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                              {renewalDate} · +{renewalMonths} tháng
+                            </div>
+                          </div>
+                        </div>
+                        <select
+                          className="form-control form-control-sm"
+                          value={renewalPaymentStatus}
+                          onChange={(e) => {
+                            setRenewalPaymentStatuses(prev => ({
+                              ...prev,
+                              [r.id]: e.target.value
+                            }));
+                          }}
+                        >
+                          {PAYMENT_STATUSES.filter(s => s.value !== 'REFUNDED').map(s => (
+                            <option key={s.value} value={s.value}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 6. Ghi chú */}
           <div className="form-group">
