@@ -2799,7 +2799,12 @@ const isExpiringSoon = (i: InventoryItem) => {
                   })()}
 
                   {/* Timeline: Các lần gia hạn */}
-                  {renewals.length > 0 && renewals.map((r, index) => {
+                  {renewals.length > 0 && (() => {
+                    // Sắp xếp theo thời gian tạo tăng dần để Gia hạn lần 1 là lần sớm nhất
+                    const sortedTimeline = [...renewals].sort(
+                      (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)
+                    );
+                    return sortedTimeline.map((r, index) => {
                     const paymentStatusLabel = r.paymentStatus 
                       ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
                       : 'Chưa thanh toán';
@@ -2829,7 +2834,8 @@ const isExpiringSoon = (i: InventoryItem) => {
                         </div>
                       </div>
                     );
-                  })}
+                  });
+                  })()}
 
                   {renewals.length === 0 && (
                     <div style={{ marginTop: '8px', padding: '8px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
