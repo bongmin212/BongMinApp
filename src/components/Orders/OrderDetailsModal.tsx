@@ -60,14 +60,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				setWarrantyTick((v) => v + 1);
 			})
 			.subscribe();
-		return () => { 
-			try { 
-				ch.unsubscribe(); 
-		} catch (error) {
-			// Error unsubscribing from realtime channel - ignore
-		}
+		return () => {
+			try {
+				ch.unsubscribe();
+			} catch (error) {
+				// Error unsubscribing from realtime channel - ignore
+			}
 		};
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [order.id]);
 
 	// Load warranties for this order and refresh on realtime tick
@@ -95,7 +95,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				setWarranties(Database.getWarrantiesByOrder(order.id));
 			}
 		})();
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [order.id, warrantyTick]);
 	const pkgInfo = getPackageInfo(order.packageId);
 	const paymentLabel = (PAYMENT_STATUSES.find(p => p.value === (order as any).paymentStatus)?.label) || 'Chưa thanh toán';
@@ -128,7 +128,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				// For account-based inventory, verify that at least one slot is assigned to this order
 				if (found.is_account_based || found.isAccountBased) {
 					const profiles = found.profiles || [];
-					const hasAssignedSlot = profiles.some((p: any) => 
+					const hasAssignedSlot = profiles.some((p: any) =>
 						p.isAssigned && p.assignedOrderId === order.id
 					);
 					if (hasAssignedSlot) return found;
@@ -178,20 +178,20 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	};
 
 	const inv = findInventory();
-	
+
 	// Check if order has stuck inventory links (has inventory_item_id or inventory_profile_ids but no actual link)
 	const hasStuckInventoryLink = ((order as any).inventoryItemId || ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds) && (order as any).inventoryProfileIds.length > 0)) && !inv;
-	
+
 	const handleFixStuckInventoryLink = async () => {
 		const sb = getSupabase();
 		if (!sb) return;
-		
+
 		try {
 			await sb.from('orders').update({
 				inventory_item_id: null,
 				inventory_profile_ids: null
 			}).eq('id', order.id);
-			
+
 			if (onOrderUpdated) {
 				await onOrderUpdated();
 			}
@@ -217,11 +217,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 		const productName = product?.name || 'Không xác định';
 		const isSharedPool = product?.sharedInventoryPool;
 		const packageName = packageInfo?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
-			const linkedSlots: string[] = Array.isArray(inv.profiles)
-				? (inv.profiles as any[])
-					.filter(p => p.assignedOrderId === order.id)
-					.map(p => (p.label || p.id))
-				: [];
+		const linkedSlots: string[] = Array.isArray(inv.profiles)
+			? (inv.profiles as any[])
+				.filter(p => p.assignedOrderId === order.id)
+				.map(p => (p.label || p.id))
+			: [];
 		const accountColumns = (() => {
 			const orderPackage = pkgInfo?.package;
 			if (orderPackage?.accountColumns && orderPackage.accountColumns.length > 0) {
@@ -269,12 +269,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div style={{ marginTop: 6 }}>
 						<strong>Ghi chú nội bộ:</strong>
 						{inv.notes ? (
-							<pre style={{ 
-								whiteSpace: 'pre-wrap', 
-								margin: '4px 0 0 0', 
-								padding: '8px', 
-								backgroundColor: 'var(--bg-tertiary)', 
-								borderRadius: '4px', 
+							<pre style={{
+								whiteSpace: 'pre-wrap',
+								margin: '4px 0 0 0',
+								padding: '8px',
+								backgroundColor: 'var(--bg-tertiary)',
+								borderRadius: '4px',
 								fontSize: '14px',
 								border: '1px solid var(--border-color)'
 							}}>
@@ -293,11 +293,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 									return (
 										<div key={col.id} style={{ marginBottom: 8 }}>
 											<div><strong>{col.title}:</strong></div>
-											<pre style={{ 
-												whiteSpace: 'pre-wrap', 
-												margin: 0, 
-												padding: '8px', 
-												backgroundColor: 'var(--bg-tertiary)', 
+											<pre style={{
+												whiteSpace: 'pre-wrap',
+												margin: 0,
+												padding: '8px',
+												backgroundColor: 'var(--bg-tertiary)',
 												color: 'var(--text-primary)',
 												borderRadius: '4px',
 												fontSize: '14px',
@@ -341,11 +341,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 						return (
 							<div key={cf.id} style={{ marginBottom: 8 }}>
 								<div><strong>{cf.title}:</strong></div>
-								<pre style={{ 
-									whiteSpace: 'pre-wrap', 
-									margin: 0, 
-									padding: '8px', 
-									backgroundColor: 'var(--bg-tertiary)', 
+								<pre style={{
+									whiteSpace: 'pre-wrap',
+									margin: 0,
+									padding: '8px',
+									backgroundColor: 'var(--bg-tertiary)',
 									color: 'var(--text-primary)',
 									borderRadius: '4px',
 									fontSize: '14px',
@@ -407,6 +407,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							id: string;
 							months: number;
 							packageId?: string;
+							previousPackageId?: string;
 							price?: number;
 							useCustomPrice?: boolean;
 							previousExpiryDate: Date;
@@ -416,29 +417,172 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							createdAt: Date;
 							createdBy: string;
 						}>;
-						if (!renewals.length) return (
-							<div style={{ marginTop: '12px' }}>
-								<strong>Lịch sử gia hạn:</strong>
-								<div>Chưa có</div>
-							</div>
-						);
+
+						// Hàm tính số tháng giữa 2 ngày
+						const monthsBetween = (date1: Date, date2: Date): number => {
+							const d1 = new Date(date1);
+							const d2 = new Date(date2);
+							const years = d2.getFullYear() - d1.getFullYear();
+							const months = d2.getMonth() - d1.getMonth();
+							return years * 12 + months;
+						};
+
+						// Hàm tìm gói theo warrantyPeriod, ưu tiên gói cùng productId với order
+						const findPackageByWarrantyPeriod = (months: number): string | undefined => {
+							const currentProductId = pkgInfo?.product?.id;
+							// Ưu tiên tìm gói cùng productId trước
+							if (currentProductId) {
+								const matchingPackage = packages.find((p: any) => 
+									p.productId === currentProductId && Math.floor(p.warrantyPeriod || 0) === months
+								);
+								if (matchingPackage) return matchingPackage.id;
+							}
+							// Nếu không tìm thấy, tìm bất kỳ gói nào có warrantyPeriod khớp
+							const matchingPackage = packages.find((p: any) => 
+								Math.floor(p.warrantyPeriod || 0) === months
+							);
+							return matchingPackage?.id;
+						};
+
+						// Hàm suy luận previousPackageId cho dữ liệu cũ
+						const inferPreviousPackageId = (renewalIndex: number): string | undefined => {
+							const r = renewals[renewalIndex];
+							// Nếu đã có previousPackageId, dùng nó
+							if (r.previousPackageId) return r.previousPackageId;
+							
+							// Nếu là renewal đầu tiên, cần tìm packageId ban đầu
+							if (renewalIndex === 0) {
+								// Suy luận từ hạn sử dụng ban đầu (previousExpiryDate) và purchaseDate
+								if (r.previousExpiryDate) {
+									const months = monthsBetween(order.purchaseDate, new Date(r.previousExpiryDate));
+									const inferredPackageId = findPackageByWarrantyPeriod(months);
+									if (inferredPackageId) return inferredPackageId;
+								}
+								
+								// Fallback: Nếu order.packageId khác với packageId của renewal đầu tiên,
+								// thì order.packageId có thể là package ban đầu
+								if (order.packageId !== (r.packageId || order.packageId)) {
+									return order.packageId;
+								}
+								
+								// Nếu không suy luận được, trả về undefined
+								return undefined;
+							}
+							
+							// Các renewal sau: dùng packageId của renewal trước đó
+							const prevRenewal = renewals[renewalIndex - 1];
+							return prevRenewal?.packageId || order.packageId;
+						};
+
+						// Tính toán packageId ban đầu (trước tất cả các renewals)
+						// Nếu có renewals, packageId ban đầu là previousPackageId của renewal đầu tiên
+						// Nếu không có hoặc không thể suy luận, dùng order.packageId hiện tại
+						const originalPackageId = renewals.length > 0 
+							? (inferPreviousPackageId(0) || order.packageId)
+							: order.packageId;
+
+						// Tính toán hạn sử dụng ban đầu
+						// Nếu có renewals, dùng previousExpiryDate của renewal đầu tiên
+						// Nếu không có, tính từ purchaseDate + warrantyPeriod của gói ban đầu
+						const originalExpiryDate = renewals.length > 0 && renewals[0].previousExpiryDate
+							? new Date(renewals[0].previousExpiryDate)
+							: (() => {
+								const originalPkg = getPackageInfo(originalPackageId)?.package;
+								if (originalPkg && originalPkg.warrantyPeriod) {
+									const expiry = new Date(order.purchaseDate);
+									expiry.setMonth(expiry.getMonth() + Math.floor(originalPkg.warrantyPeriod));
+									return expiry;
+								}
+								// Fallback: dùng order.expiryDate nếu không tính được
+								return order.expiryDate;
+							})();
+
+						const originalPkgInfo = getPackageInfo(originalPackageId);
+						// Lấy giá ban đầu: ưu tiên originalSalePrice, nếu không có thì dùng salePrice hoặc tính lại
+						const originalPrice = (order as any).originalSalePrice || getOrderPrice();
+
 						return (
-							<div style={{ marginTop: '12px' }}>
-								<strong>Lịch sử gia hạn:</strong>
-								<ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-									{renewals.map(r => (
-										<li key={r.id}>
-											{new Date(r.createdAt).toLocaleDateString('vi-VN')} · +{r.months} tháng · HSD: {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → {new Date(r.newExpiryDate).toLocaleDateString('vi-VN')} · Gói: {getPackageInfo(r.packageId || order.packageId)?.package?.name || 'Không xác định'} · Giá: {typeof r.price === 'number' && formatPrice ? formatPrice(r.price) : (typeof r.price === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(r.price) : '-') } · TT: {(getPaymentLabel ? getPaymentLabel(r.paymentStatus) : (PAYMENT_STATUSES.find(p => p.value === r.paymentStatus)?.label || ''))}{r.note ? ` · Ghi chú: ${r.note}` : ''}
-										</li>
-									))}
-								</ul>
+							<div style={{ marginTop: '16px' }}>
+								<strong style={{ fontSize: '16px' }}>Lịch sử gia hạn:</strong>
+								
+								{/* Timeline: Mua ban đầu */}
+								<div className="card mt-3" style={{ borderLeft: '4px solid #28a745', backgroundColor: 'var(--bg-secondary)' }}>
+									<div className="card-body" style={{ padding: '12px' }}>
+										<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+											<div>
+												<strong style={{ color: '#28a745', fontSize: '14px' }}>🛒 Mua ban đầu</strong>
+											</div>
+											<div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+												{formatDate(order.purchaseDate)}
+											</div>
+										</div>
+										<div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+											<div><strong>Gói:</strong> {originalPkgInfo?.package?.name || 'Không xác định'}</div>
+											<div><strong>Giá:</strong> {formatPrice ? formatPrice(originalPrice) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(originalPrice)}</div>
+											<div><strong>Hạn sử dụng:</strong> {formatDate(originalExpiryDate)}</div>
+											<div><strong>Thanh toán:</strong> {getPaymentLabel ? (getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán') : paymentLabel}</div>
+										</div>
+									</div>
+								</div>
+
+								{/* Timeline: Các lần gia hạn */}
+								{renewals.length > 0 && renewals.map((r, index) => {
+									const prevPkgId = inferPreviousPackageId(index);
+									const prevPkgInfo = getPackageInfo(prevPkgId || order.packageId);
+									const newPkgInfo = getPackageInfo(r.packageId || order.packageId);
+									const renewalPrice = typeof r.price === 'number' ? r.price : 0;
+									const renewalPriceFormatted = formatPrice ? formatPrice(renewalPrice) : (typeof r.price === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(r.price) : '-');
+									const paymentStatusLabel = getPaymentLabel ? getPaymentLabel(r.paymentStatus) : (PAYMENT_STATUSES.find(p => p.value === r.paymentStatus)?.label || '');
+
+									return (
+										<div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>
+											<div className="card-body" style={{ padding: '12px' }}>
+												<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+													<div>
+														<strong style={{ color: '#007bff', fontSize: '14px' }}>🔄 Gia hạn lần {index + 1}</strong>
+													</div>
+													<div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+														{new Date(r.createdAt).toLocaleDateString('vi-VN')}
+													</div>
+												</div>
+												<div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+													<div style={{ marginBottom: '6px' }}>
+														<strong>Gói:</strong> 
+														<span style={{ marginLeft: '4px', color: 'var(--text-secondary)' }}>
+															{prevPkgInfo?.package?.name || 'Không xác định'}
+														</span>
+														<span style={{ margin: '0 8px', color: '#007bff' }}>→</span>
+														<span style={{ color: '#28a745', fontWeight: '500' }}>
+															{newPkgInfo?.package?.name || 'Không xác định'}
+														</span>
+													</div>
+													<div><strong>Thời gian gia hạn:</strong> +{r.months} tháng</div>
+													<div><strong>Hạn sử dụng:</strong> {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: '500' }}>{new Date(r.newExpiryDate).toLocaleDateString('vi-VN')}</span></div>
+													<div><strong>Giá gia hạn:</strong> {renewalPriceFormatted}</div>
+													<div><strong>Thanh toán:</strong> {paymentStatusLabel}</div>
+													{r.note && (
+														<div style={{ marginTop: '6px', padding: '6px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px' }}>
+															<strong>Ghi chú:</strong> {r.note}
+														</div>
+													)}
+												</div>
+											</div>
+										</div>
+									);
+								})}
+
+								{renewals.length === 0 && (
+									<div style={{ marginTop: '8px', padding: '8px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+										Chưa có lần gia hạn nào
+									</div>
+								)}
 							</div>
 						);
 					})()}
 				</div>
 				{hasStuckInventoryLink && (
 					<div className="alert alert-warning mt-2">
-						<strong>⚠️ Cảnh báo:</strong> Đơn hàng này có liên kết kho hàng trong database nhưng không tìm thấy slot nào được gán. 
+						<strong>⚠️ Cảnh báo:</strong> Đơn hàng này có liên kết kho hàng trong database nhưng không tìm thấy slot nào được gán.
 						<button className="btn btn-sm btn-warning mt-2" onClick={handleFixStuckInventoryLink}>
 							Fix liên kết kho hàng
 						</button>

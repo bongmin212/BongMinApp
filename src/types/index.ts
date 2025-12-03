@@ -74,6 +74,7 @@ export interface Order {
   inventoryProfileIds?: string[]; // Array of profile IDs for multi-slot orders
   cogs?: number; // Giá vốn snapshot từ kho tại thời điểm liên kết
   salePrice?: number; // Giá bán snapshot tại thời điểm tạo/cập nhật
+  originalSalePrice?: number; // Giá bán ban đầu khi mua (snapshot tại thời điểm tạo đơn)
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh
   customPrice?: number; // Giá tùy chỉnh
   customFieldValues?: Record<string, string>; // key = PackageCustomField.id -> value nhập khi tạo đơn
@@ -172,6 +173,7 @@ export interface OrderRenewal {
   id: string;
   months: number;
   packageId: string;
+  previousPackageId?: string; // Gói trước khi gia hạn (để hiển thị lịch sử)
   price: number;
   useCustomPrice?: boolean;
   previousExpiryDate: Date;

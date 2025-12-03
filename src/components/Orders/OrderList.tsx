@@ -2919,6 +2919,7 @@ const OrderList: React.FC = () => {
                             id: r.id,
                             months: r.months,
                             packageId: r.packageId,
+                            previousPackageId: r.previousPackageId, // Lưu gói cũ
                             price: r.price,
                             useCustomPrice: r.useCustomPrice,
                             previousExpiryDate: r.previousExpiryDate,

@@ -799,7 +799,9 @@ export class Database {
       code,
       id: generateId(),
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      // Lưu giá ban đầu nếu chưa có
+      originalSalePrice: (order as any).originalSalePrice || (order as any).salePrice || undefined
     };
     orders.push(newOrder);
     saveToStorage(STORAGE_KEYS.ORDERS, orders);
@@ -817,9 +819,15 @@ export class Database {
       throw new Error(`Mã đơn hàng "${updates.code}" đã tồn tại`);
     }
     
+    // Nếu salePrice được cập nhật và originalSalePrice chưa có, lưu nó
+    const finalUpdates: Partial<Order> = { ...updates };
+    if ((updates as any).salePrice && !(orders[index] as any).originalSalePrice) {
+      (finalUpdates as any).originalSalePrice = (updates as any).salePrice;
+    }
+    
     orders[index] = {
       ...orders[index],
-      ...updates,
+      ...finalUpdates,
       updatedAt: new Date()
     };
     saveToStorage(STORAGE_KEYS.ORDERS, orders);
@@ -854,19 +862,38 @@ export class Database {
       ? new Date(opts.customExpiryDate)
       : this.addMonths(base, safeMonths);
 
+    // Lấy giá từ salePrice hiện tại của order (giá tại thời điểm gia hạn)
+    // Đây là giá thực tế đã được thanh toán cho lần gia hạn này
+    const renewalPrice = (() => {
+      // Nếu có customPrice được chỉ định, dùng nó
+      if (opts?.useCustomPrice && typeof opts?.customPrice === 'number' && opts.customPrice > 0) {
+        return opts.customPrice;
+      }
+      // Nếu không, dùng salePrice hiện tại của order (giá tại thời điểm gia hạn)
+      if (typeof (current as any).salePrice === 'number' && (current as any).salePrice > 0) {
+        return (current as any).salePrice;
+      }
+      // Fallback: tính từ package cũ (previousPackageId) - giá của gói đang dùng trước khi gia hạn
+      const prevPkg = this.getPackages().find(p => p.id === current.packageId);
+      const customer = this.getCustomers().find(c => c.id === current.customerId);
+      const defaultPrice = customer?.type === 'CTV' ? (prevPkg?.ctvPrice || 0) : (prevPkg?.retailPrice || 0);
+      return defaultPrice;
+    })();
+
+    // Tính giá cho order sau khi gia hạn (có thể là giá của gói mới)
     const customer = this.getCustomers().find(c => c.id === current.customerId);
     const defaultPrice = customer?.type === 'CTV' ? (pkg?.ctvPrice || 0) : (pkg?.retailPrice || 0);
     const useCustomPrice = !!opts?.useCustomPrice && (opts?.customPrice || 0) > 0;
-    const finalPrice = useCustomPrice ? Math.max(0, Number(opts?.customPrice || 0)) : defaultPrice;
-    const nextCustomPrice = useCustomPrice ? finalPrice : undefined;
-    const nextSalePrice = finalPrice;
+    const nextCustomPrice = useCustomPrice ? Math.max(0, Number(opts?.customPrice || 0)) : undefined;
+    const nextSalePrice = useCustomPrice ? (nextCustomPrice || 0) : defaultPrice;
 
     const renewal = {
       id: (Date.now().toString(36) + Math.random().toString(36).substr(2)),
       months: safeMonths,
       packageId,
-      price: finalPrice,
-      useCustomPrice,
+      previousPackageId: current.packageId, // Lưu gói trước khi gia hạn
+      price: renewalPrice, // Lưu giá tại thời điểm gia hạn (từ salePrice hiện tại)
+      useCustomPrice: !!opts?.useCustomPrice && (opts?.customPrice || 0) > 0,
       previousExpiryDate: new Date(current.expiryDate),
       newExpiryDate: new Date(nextExpiry),
       note: opts?.note,

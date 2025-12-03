@@ -51,6 +51,17 @@ export function reviveDates<T = any>(x: T): T {
   if ((out as any).expiryDate) (out as any).expiryDate = new Date((out as any).expiryDate);
   if ((out as any).timestamp) (out as any).timestamp = new Date((out as any).timestamp);
   if ((out as any).date) (out as any).date = new Date((out as any).date);
+  
+  // Revive dates in renewals array (for orders)
+  if (Array.isArray((out as any).renewals)) {
+    (out as any).renewals = (out as any).renewals.map((r: any) => {
+      if (r.previousExpiryDate) r.previousExpiryDate = new Date(r.previousExpiryDate);
+      if (r.newExpiryDate) r.newExpiryDate = new Date(r.newExpiryDate);
+      if (r.createdAt) r.createdAt = new Date(r.createdAt);
+      return r;
+    });
+  }
+  
   return out as T;
 }
 
