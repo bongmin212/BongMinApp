@@ -296,6 +296,19 @@ export class Database {
     return newEntry;
   }
 
+  static updateInventoryRenewal(id: string, updates: Partial<InventoryRenewal>): InventoryRenewal | null {
+    const renewals = this.getInventoryRenewals();
+    const index = renewals.findIndex(r => r.id === id);
+    if (index === -1) return null;
+    const updatedEntry = {
+      ...renewals[index],
+      ...updates
+    };
+    renewals[index] = updatedEntry as InventoryRenewal;
+    saveToStorage(STORAGE_KEYS.INVENTORY_RENEWALS, renewals);
+    return renewals[index];
+  }
+
   static getAvailableInventoryByPackage(packageId: string): InventoryItem[] {
     const pkg = this.getPackages().find(p => p.id === packageId);
     const products = this.getProducts();

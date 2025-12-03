@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES_FULL, InventoryItem } from '../../types';
+import { InventoryFormData, Product, ProductPackage, InventoryAccountColumn, INVENTORY_PAYMENT_STATUSES_FULL, InventoryItem, InventoryPaymentStatus, InventoryRenewal } from '../../types';
 import { Database } from '../../utils/database';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -34,6 +34,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     accountData: {},
     totalSlots: undefined
   });
+  const [renewals, setRenewals] = useState<InventoryRenewal[]>([]);
+  const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, InventoryPaymentStatus>>({});
+  const [loadingRenewals, setLoadingRenewals] = useState(false);
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
@@ -127,6 +130,70 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       accountData: item.accountData || {},
       totalSlots: item.totalSlots
     });
+  }, [item]);
+
+  useEffect(() => {
+    if (!item) {
+      setRenewals([]);
+      setRenewalPaymentStatuses({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingRenewals(true);
+      try {
+        const sb = getSupabase();
+        let rows: any[] = [];
+        if (sb) {
+          const { data } = await sb
+            .from('inventory_renewals')
+            .select('*')
+            .eq('inventory_id', item.id)
+            .order('created_at', { ascending: true });
+          rows = data || [];
+        } else {
+          rows = Database.getInventoryRenewals().filter(r => r.inventoryId === item.id);
+        }
+        if (cancelled) return;
+        const mapped = rows.map((r: any) => ({
+          id: r.id,
+          inventoryId: r.inventory_id || r.inventoryId,
+          months: Math.max(0, Number(r.months || 0)),
+          amount: Number(r.amount) || 0,
+          previousExpiryDate: r.previous_expiry_date
+            ? new Date(r.previous_expiry_date)
+            : new Date(r.previousExpiryDate),
+          newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(r.newExpiryDate),
+          note: r.note || undefined,
+          paymentStatus: (r.payment_status || r.paymentStatus || 'UNPAID') as InventoryPaymentStatus,
+          createdAt: r.created_at ? new Date(r.created_at) : new Date(r.createdAt || new Date()),
+          createdBy: r.created_by || r.createdBy || 'system'
+        })) as InventoryRenewal[];
+        if (cancelled) return;
+        setRenewals(mapped);
+        setRenewalPaymentStatuses(
+          mapped.reduce((acc, renewal) => {
+            acc[renewal.id] = (renewal.paymentStatus || 'UNPAID') as InventoryPaymentStatus;
+            return acc;
+          }, {} as Record<string, InventoryPaymentStatus>)
+        );
+      } catch {
+        if (cancelled) return;
+        const local = Database.getInventoryRenewals().filter(r => r.inventoryId === item.id);
+        setRenewals(local);
+        setRenewalPaymentStatuses(
+          local.reduce((acc, renewal) => {
+            acc[renewal.id] = (renewal.paymentStatus || 'UNPAID') as InventoryPaymentStatus;
+            return acc;
+          }, {} as Record<string, InventoryPaymentStatus>)
+        );
+      } finally {
+        if (!cancelled) setLoadingRenewals(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [item]);
 
   // Ensure selected product/package remain visible after async products/packages load
@@ -410,6 +477,34 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           // Error updating inventory - ignore
           throw new Error(error.message || 'Không thể cập nhật kho hàng');
         }
+        let renewalStatusChanges: Array<{ id: string; previous: InventoryPaymentStatus; next: InventoryPaymentStatus }> = [];
+        if (renewals.length > 0) {
+          renewalStatusChanges = renewals
+            .map(renewal => {
+              const previous = (renewal.paymentStatus || 'UNPAID') as InventoryPaymentStatus;
+              const next = (renewalPaymentStatuses[renewal.id] || 'UNPAID') as InventoryPaymentStatus;
+              return { id: renewal.id, previous, next };
+            })
+            .filter(change => change.previous !== change.next);
+          for (const change of renewalStatusChanges) {
+            const { error: renewalUpdateError } = await sb
+              .from('inventory_renewals')
+              .update({ payment_status: change.next })
+              .eq('id', change.id);
+            if (renewalUpdateError) {
+              throw new Error(renewalUpdateError.message || 'Không thể cập nhật trạng thái thanh toán gia hạn');
+            }
+            try {
+              Database.updateInventoryRenewal(change.id, { paymentStatus: change.next } as any);
+            } catch {}
+          }
+          if (renewalStatusChanges.length > 0) {
+            setRenewals(prev => prev.map(r => {
+              const change = renewalStatusChanges.find(c => c.id === r.id);
+              return change ? { ...r, paymentStatus: change.next } : r;
+            }));
+          }
+        }
         // Update local inventory and propagate to linked orders
         try {
           const current = Database.getInventory();
@@ -478,6 +573,9 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             if (item.paymentStatus !== formData.paymentStatus) {
               changes.push(`paymentStatus=${item.paymentStatus || '-'}->${formData.paymentStatus || '-'}`);
             }
+            renewalStatusChanges.forEach(change => {
+              changes.push(`renewalPaymentStatus[${change.id.slice(-6)}]=${change.previous || '-'}->${change.next || '-'}`);
+            });
             
             // Track pool warranty months changes for shared inventory
             if (currentProduct?.sharedInventoryPool) {
@@ -752,17 +850,83 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           </div>
 
           <div className="form-group">
-            <label className="form-label">Trạng thái thanh toán</label>
-            <select
-              className="form-control"
-              value={formData.paymentStatus || 'UNPAID'}
-              onChange={(e) => setFormData(prev => ({ ...prev, paymentStatus: e.target.value as any }))}
-            >
-              {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
-                <option key={status.value} value={status.value}>{status.label}</option>
-              ))}
-            </select>
+            <label className="form-label">Thanh toán nhập kho ban đầu</label>
+            <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+              <div className="card-body" style={{ padding: '12px' }}>
+                <div style={{ marginBottom: '6px' }}>
+                  <strong style={{ fontSize: '13px' }}>📥 Nhập kho</strong>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                    {formData.purchaseDate ? new Date(formData.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
+                    {(() => {
+                      const months = currentProduct?.sharedInventoryPool
+                        ? Math.max(1, Number(poolMonths || 1))
+                        : (selectedPkg?.warrantyPeriod || 0);
+                      return months ? ` · ${months} tháng` : '';
+                    })()}
+                  </div>
+                </div>
+                <select
+                  className="form-control form-control-sm"
+                  value={formData.paymentStatus || 'UNPAID'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, paymentStatus: e.target.value as InventoryPaymentStatus }))}
+                >
+                  {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                    <option key={status.value} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
+
+          {item && (
+            <div className="form-group">
+              <label className="form-label">Thanh toán các lần gia hạn kho</label>
+              <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                <div className="card-body" style={{ padding: '12px' }}>
+                  {loadingRenewals && (
+                    <div className="text-muted small">Đang tải lịch sử gia hạn...</div>
+                  )}
+                  {!loadingRenewals && renewals.length === 0 && (
+                    <div className="text-muted small">Chưa có lần gia hạn nào</div>
+                  )}
+                  {!loadingRenewals && renewals.length > 0 && renewals.map((renewal, index) => (
+                    <div
+                      key={renewal.id}
+                      style={{
+                        marginBottom: index < renewals.length - 1 ? '12px' : '0',
+                        paddingBottom: index < renewals.length - 1 ? '12px' : '0',
+                        borderBottom: index < renewals.length - 1 ? '1px solid var(--border-color)' : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <div>
+                          <strong style={{ fontSize: '13px' }}>Gia hạn lần {index + 1}</strong>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                            {(renewal.createdAt ? new Date(renewal.createdAt) : new Date()).toLocaleDateString('vi-VN')} · +{renewal.months} tháng
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                        {new Date(renewal.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: 500 }}>{new Date(renewal.newExpiryDate).toLocaleDateString('vi-VN')}</span>
+                      </div>
+                      <select
+                        className="form-control form-control-sm"
+                        value={renewalPaymentStatuses[renewal.id] || 'UNPAID'}
+                        onChange={(e) => {
+                          const value = e.target.value as InventoryPaymentStatus;
+                          setRenewalPaymentStatuses(prev => ({ ...prev, [renewal.id]: value }));
+                        }}
+                      >
+                        {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                          <option key={status.value} value={status.value}>{status.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
         {/* Shared pool: allow entering months transiently to compute expiry (not persisted) */}
 

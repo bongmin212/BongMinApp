@@ -58,6 +58,8 @@ const WarehouseList: React.FC = () => {
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
+  const [bulkPaymentTarget, setBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
+  const [selectedRenewalIds, setSelectedRenewalIds] = useState<string[]>([]);
   const [latestRenewalMap, setLatestRenewalMap] = useState<Map<string, InventoryRenewal>>(new Map());
   const countAssignedSlots = (item?: InventoryItem | null) => {
     if (!item?.isAccountBased || !Array.isArray(item.profiles)) return 0;
@@ -103,6 +105,16 @@ const WarehouseList: React.FC = () => {
       }
     }
     setLatestRenewalMap(map);
+  }, [inventoryRenewals]);
+
+  const renewalsByInventory = useMemo(() => {
+    const map = new Map<string, InventoryRenewal[]>();
+    for (const renewal of inventoryRenewals) {
+      const arr = map.get(renewal.inventoryId) || [];
+      arr.push(renewal);
+      map.set(renewal.inventoryId, arr);
+    }
+    return map;
   }, [inventoryRenewals]);
 
   useEffect(() => {
@@ -937,6 +949,24 @@ const WarehouseList: React.FC = () => {
     return PAYMENT_STATUSES.find(p => p.value === value)?.label || 'Chưa thanh toán';
   };
 
+  const getInventoryPaymentLabel = (value: InventoryPaymentStatus | undefined) => {
+    return INVENTORY_PAYMENT_STATUSES_FULL.find(p => p.value === value)?.label || 'Chưa thanh toán';
+  };
+
+  const getInventoryDisplayPaymentStatus = (item: InventoryItem | null | undefined): InventoryPaymentStatus => {
+    if (!item) return 'UNPAID';
+    if ((item.paymentStatus || 'UNPAID') !== 'PAID') {
+      return 'UNPAID';
+    }
+    const renewals = renewalsByInventory.get(item.id) || [];
+    const hasUnpaidRenewal = renewals.some(r => (r.paymentStatus || 'UNPAID') !== 'PAID');
+    return hasUnpaidRenewal ? 'UNPAID' : 'PAID';
+  };
+
+  const getInventoryPaymentClass = (status: InventoryPaymentStatus | undefined) => {
+    return status === 'PAID' ? 'status-completed' : 'status-cancelled';
+  };
+
   const buildFullOrderInfo = (order: Order): { lines: string[]; text: string } => {
     const baseLines: string[] = [];
     const pkg = getPackageInfo(order.packageId).pkg;
@@ -1066,7 +1096,7 @@ const isExpiringSoon = (i: InventoryItem) => {
               ? getActualStatus(i) === filterStatus
               : i.status === filterStatus as any
       );
-      const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
+      const matchesPaymentStatus = !filterPaymentStatus || getInventoryDisplayPaymentStatus(i) === filterPaymentStatus as InventoryPaymentStatus;
       const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
       const matchesSource = !filterSource || normalizedSource.includes(filterSource);
 
@@ -1104,10 +1134,15 @@ const isExpiringSoon = (i: InventoryItem) => {
     return Array.from(productSet).map(id => products.find(p => p.id === id)).filter(Boolean) as Product[];
   }, [baseFilteredItems, products, packages, filterPackage]);
 
-  // Sources: unique non-empty sourceNote from base filtered list (case-insensitive)
+  // Sources: unique non-empty sourceNote from base filtered list (case-insensitive),
+  // further constrained by current product/package filters so it reflects the visible list
   const availableSources = useMemo(() => {
     const sourceMap = new Map<string, string>(); // key: normalized (lowercase), value: original label
     baseFilteredItems.forEach(item => {
+      // Respect current product/package filters when building source options
+      if (filterProduct && item.productId !== filterProduct) return;
+      if (filterPackage && item.packageId !== filterPackage) return;
+
       const raw = (item.sourceNote || '').trim();
       if (!raw) return;
       const key = raw.toLowerCase();
@@ -1116,7 +1151,7 @@ const isExpiringSoon = (i: InventoryItem) => {
       }
     });
     return Array.from(sourceMap.values()).sort((a, b) => a.localeCompare(b, 'vi'));
-  }, [baseFilteredItems]);
+  }, [baseFilteredItems, filterProduct, filterPackage]);
 
   // Packages: if product filter is set, only show packages from that product
   const availablePackages = useMemo(() => {
@@ -1213,7 +1248,7 @@ const isExpiringSoon = (i: InventoryItem) => {
               ? getActualStatus(i) === filterStatus
               : i.status === filterStatus as any
       );
-      const matchesPaymentStatus = !filterPaymentStatus || i.paymentStatus === filterPaymentStatus as any;
+      const matchesPaymentStatus = !filterPaymentStatus || getInventoryDisplayPaymentStatus(i) === filterPaymentStatus as InventoryPaymentStatus;
       const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
       const matchesSource = !filterSource || normalizedSource.includes(filterSource);
 
@@ -1313,8 +1348,8 @@ const isExpiringSoon = (i: InventoryItem) => {
         
         // Pricing
         purchasePrice: i.purchasePrice || 0,
-        paymentStatus: i.paymentStatus ? INVENTORY_PAYMENT_STATUSES_FULL.find(p => p.value === i.paymentStatus)?.label || i.paymentStatus : '',
-        paymentStatusValue: i.paymentStatus || '',
+        paymentStatus: getInventoryPaymentLabel(getInventoryDisplayPaymentStatus(i)),
+        paymentStatusValue: getInventoryDisplayPaymentStatus(i),
         
         // Product info
         productInfo: i.productInfo || '',
@@ -1501,6 +1536,8 @@ const isExpiringSoon = (i: InventoryItem) => {
     const selectedItems = pageItems.filter(i => selectedIds.includes(i.id));
     if (selectedItems.length === 0) return;
     setSelectedPaymentStatus('UNPAID'); // Reset to default
+    setBulkPaymentTarget('INITIAL');
+    setSelectedRenewalIds([]);
     setPaymentStatusModal({ selectedIds: selectedItems.map(i => i.id) });
   };
 
@@ -1942,9 +1979,14 @@ const isExpiringSoon = (i: InventoryItem) => {
               <div className="warehouse-card-row">
                 <div className="warehouse-card-label">Thanh toán</div>
                 <div className="warehouse-card-value">
-                  <span className={`status-badge ${item.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
-                    {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === item.paymentStatus)?.label || 'Chưa thanh toán'}
-                  </span>
+                  {(() => {
+                    const paymentStatus = getInventoryDisplayPaymentStatus(item);
+                    return (
+                      <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
+                        {getInventoryPaymentLabel(paymentStatus)}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="warehouse-card-row">
@@ -2100,9 +2142,14 @@ const isExpiringSoon = (i: InventoryItem) => {
                   })()}</td>
                   <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                   <td>
-                    <span className={`status-badge ${i.paymentStatus === 'PAID' ? 'status-completed' : 'status-cancelled'}`}>
-                      {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === i.paymentStatus)?.label || 'Chưa thanh toán'}
-                    </span>
+                    {(() => {
+                      const paymentStatus = getInventoryDisplayPaymentStatus(i);
+                      return (
+                        <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
+                          {getInventoryPaymentLabel(paymentStatus)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td>
                     <div className="d-flex align-items-center gap-2">
@@ -2643,7 +2690,10 @@ const isExpiringSoon = (i: InventoryItem) => {
                 </div>
                 <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
                 <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
-                <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === inv.paymentStatus)?.label || 'Chưa thanh toán'}</div>
+                <div><strong>Thanh toán:</strong> {(() => {
+                  const paymentStatus = getInventoryDisplayPaymentStatus(inv);
+                  return getInventoryPaymentLabel(paymentStatus);
+                })()}</div>
                 {inv.status === 'NEEDS_UPDATE' && inv.previousLinkedOrderId && (() => {
                   const prevOrder = Database.getOrders().find(o => o.id === inv.previousLinkedOrderId);
                   return prevOrder ? (
@@ -3169,10 +3219,35 @@ const isExpiringSoon = (i: InventoryItem) => {
 
       {paymentStatusModal && (() => {
         const selectedItems = pageItems.filter(i => paymentStatusModal.selectedIds.includes(i.id));
-        
+        const renewalOptions = selectedItems.flatMap(item => {
+          const renewals = (renewalsByInventory.get(item.id) || []).slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+          return renewals.map((renewal, idx) => ({
+            id: renewal.id,
+            inventoryId: item.id,
+            code: item.code || `KHO${item.id.slice(-4)}`,
+            months: renewal.months,
+            createdAt: renewal.createdAt,
+            previousExpiryDate: renewal.previousExpiryDate,
+            newExpiryDate: renewal.newExpiryDate,
+            paymentStatus: renewal.paymentStatus || 'UNPAID',
+            indexLabel: `Gia hạn #${renewals.length - idx}`
+          }));
+        });
+        const renewalDisabled = renewalOptions.length === 0;
+        const handleToggleRenewal = (id: string, checked: boolean) => {
+          setSelectedRenewalIds(prev => {
+            if (checked) {
+              if (prev.includes(id)) return prev;
+              return [...prev, id];
+            }
+            return prev.filter(rid => rid !== id);
+          });
+        };
+        const canConfirm = bulkPaymentTarget === 'INITIAL' || (bulkPaymentTarget === 'RENEWAL' && selectedRenewalIds.length > 0);
+
         return (
           <div className="modal" role="dialog" aria-modal>
-            <div className="modal-content" style={{ maxWidth: 420 }}>
+            <div className="modal-content" style={{ maxWidth: 520 }}>
               <div className="modal-header">
                 <h3 className="modal-title">Cập nhật trạng thái thanh toán</h3>
                 <button className="close" onClick={() => setPaymentStatusModal(null)}>×</button>
@@ -3198,37 +3273,161 @@ const isExpiringSoon = (i: InventoryItem) => {
                     ))}
                   </select>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Áp dụng cho</label>
+                  <div className="d-flex flex-column gap-2">
+                    <label className="d-flex align-items-center gap-2">
+                      <input
+                        type="radio"
+                        name="bulkPaymentTarget"
+                        value="INITIAL"
+                        checked={bulkPaymentTarget === 'INITIAL'}
+                        onChange={() => {
+                          setBulkPaymentTarget('INITIAL');
+                          setSelectedRenewalIds([]);
+                        }}
+                      />
+                      <span>Lần nhập kho ban đầu</span>
+                    </label>
+                    <label className="d-flex align-items-center gap-2">
+                      <input
+                        type="radio"
+                        name="bulkPaymentTarget"
+                        value="RENEWAL"
+                        disabled={renewalDisabled}
+                        checked={bulkPaymentTarget === 'RENEWAL'}
+                        onChange={() => {
+                          setBulkPaymentTarget('RENEWAL');
+                          setSelectedRenewalIds(renewalOptions.map(option => option.id));
+                        }}
+                      />
+                      <span>Các lần gia hạn{renewalDisabled ? ' (Không có dữ liệu)' : ''}</span>
+                    </label>
+                  </div>
+                </div>
+                {bulkPaymentTarget === 'RENEWAL' && !renewalDisabled && (
+                  <div className="form-group">
+                    <label className="form-label">Chọn lần gia hạn</label>
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="text-muted small">Đã chọn {selectedRenewalIds.length}/{renewalOptions.length}</div>
+                      <div className="d-flex gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-light"
+                          onClick={() => setSelectedRenewalIds(renewalOptions.map(option => option.id))}
+                        >
+                          Chọn tất
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-light"
+                          onClick={() => setSelectedRenewalIds([])}
+                        >
+                          Bỏ chọn
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 4, padding: '8px' }}>
+                      {renewalOptions.map(option => (
+                        <label key={option.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedRenewalIds.includes(option.id)}
+                            onChange={(e) => handleToggleRenewal(option.id, e.target.checked)}
+                          />
+                          <div>
+                            <div><strong>{option.code}</strong> · {option.indexLabel}</div>
+                            <div className="text-muted small">
+                              {option.createdAt ? formatDate(option.createdAt) : ''} · +{option.months} tháng
+                            </div>
+                            <div className="text-muted small">
+                              {formatDate(option.previousExpiryDate)} → <span style={{ color: '#28a745' }}>{formatDate(option.newExpiryDate)}</span>
+                            </div>
+                            <div className="text-muted small">
+                              Hiện tại: {getInventoryPaymentLabel(option.paymentStatus as InventoryPaymentStatus)}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="d-flex justify-content-end gap-2">
                 <button className="btn btn-secondary" onClick={() => setPaymentStatusModal(null)}>Hủy</button>
-                <button className="btn btn-primary" onClick={async () => {
-                  const sb = getSupabase();
-                  if (!sb) { notify('Không thể cập nhật trạng thái thanh toán', 'error'); return; }
-                  
-                  const { error } = await sb
-                    .from('inventory')
-                    .update({ payment_status: selectedPaymentStatus })
-                    .in('id', paymentStatusModal.selectedIds);
-                  
-                  if (error) {
-                    notify('Không thể cập nhật trạng thái thanh toán', 'error');
-                    return;
-                  }
-                  
-                  try {
-                    const sb2 = getSupabase();
-                    if (sb2) await sb2.from('activity_logs').insert({ 
-                      employee_id: null, 
-                      action: 'Cập nhật trạng thái thanh toán hàng loạt', 
-                      details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}` 
-                    });
-                  } catch {}
-                  
-                  notify(`Đã cập nhật trạng thái thanh toán cho ${selectedItems.length} mục kho`, 'success');
-                  setSelectedIds([]);
-                  setPaymentStatusModal(null);
-                  refresh();
-                }}>Xác nhận</button>
+                <button
+                  className="btn btn-primary"
+                  disabled={!canConfirm}
+                  onClick={async () => {
+                    const sb = getSupabase();
+                    if (!sb) { notify('Không thể cập nhật trạng thái thanh toán', 'error'); return; }
+
+                    if (bulkPaymentTarget === 'INITIAL') {
+                      const { error } = await sb
+                        .from('inventory')
+                        .update({ payment_status: selectedPaymentStatus })
+                        .in('id', paymentStatusModal.selectedIds);
+                      
+                      if (error) {
+                        notify('Không thể cập nhật trạng thái thanh toán', 'error');
+                        return;
+                      }
+
+                      try {
+                        const sb2 = getSupabase();
+                        if (sb2) await sb2.from('activity_logs').insert({ 
+                          employee_id: null, 
+                          action: 'Cập nhật thanh toán kho hàng loạt', 
+                          details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}` 
+                        });
+                      } catch {}
+
+                      notify(`Đã cập nhật trạng thái thanh toán cho ${selectedItems.length} mục kho`, 'success');
+                      setSelectedIds([]);
+                      setPaymentStatusModal(null);
+                      refresh();
+                      return;
+                    }
+
+                    if (selectedRenewalIds.length === 0) {
+                      notify('Vui lòng chọn ít nhất 1 lần gia hạn', 'warning');
+                      return;
+                    }
+
+                    const { error } = await sb
+                      .from('inventory_renewals')
+                      .update({ payment_status: selectedPaymentStatus })
+                      .in('id', selectedRenewalIds);
+
+                    if (error) {
+                      notify('Không thể cập nhật trạng thái thanh toán gia hạn', 'error');
+                      return;
+                    }
+
+                    setInventoryRenewals(prev => prev.map(r => (
+                      selectedRenewalIds.includes(r.id)
+                        ? { ...r, paymentStatus: selectedPaymentStatus }
+                        : r
+                    )));
+
+                    try {
+                      const sb2 = getSupabase();
+                      if (sb2) await sb2.from('activity_logs').insert({ 
+                        employee_id: null, 
+                        action: 'Cập nhật thanh toán gia hạn kho hàng loạt', 
+                        details: `count=${selectedRenewalIds.length}; status=${selectedPaymentStatus}; renewalIds=${selectedRenewalIds.join(',')}` 
+                      });
+                    } catch {}
+
+                    notify(`Đã cập nhật trạng thái thanh toán cho ${selectedRenewalIds.length} lần gia hạn`, 'success');
+                    setPaymentStatusModal(null);
+                    setSelectedRenewalIds([]);
+                    setBulkPaymentTarget('INITIAL');
+                    refresh();
+                  }}
+                >
+                  Xác nhận
+                </button>
               </div>
             </div>
           </div>
