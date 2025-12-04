@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ActivityLog, Employee, Order, Customer, Product, ProductPackage, ORDER_STATUSES, WARRANTY_STATUSES, InventoryItem, Warranty } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../contexts/AuthContext';
@@ -81,12 +81,29 @@ const ActivityLogList: React.FC = () => {
       
       const sb = getSupabase();
       if (!sb) {
-        setError('Không thể kết nối đến cơ sở dữ liệu');
+        setError('Không thể kết nối đến cơ sở dữ liệu. Vui lòng kiểm tra cấu hình Supabase.');
+        setLoading(false);
         return;
       }
+
+      // Check authentication status
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) {
+        console.warn('ActivityLogs: No active session');
+        // Continue anyway - RLS will handle permissions
+      }
       
-      const [logsRes, empRes, ordersRes, customersRes, productsRes, packagesRes, invRes, warrantiesRes] = await Promise.all([
-        sb.from('activity_logs').select('*'),
+      const [
+        logsRes,
+        empRes,
+        ordersRes,
+        customersRes,
+        productsRes,
+        packagesRes,
+        invRes,
+        warrantiesRes
+      ] = await Promise.all([
+        sb.from('activity_logs').select('*').order('timestamp', { ascending: false }),
         sb.from('employees').select('*'),
         sb.from('orders').select('*'),
         sb.from('customers').select('*'),
@@ -96,13 +113,36 @@ const ActivityLogList: React.FC = () => {
         sb.from('warranties').select('*')
       ]);
 
-    const allLogs = (logsRes.data || []).map((r: any) => ({
-      id: r.id,
-      employeeId: r.employee_id || r.employeeId || null,
-      action: r.action || 'Không xác định',
-      details: r.details || undefined,
-      timestamp: r.timestamp ? new Date(r.timestamp) : new Date()
-    })) as ActivityLog[];
+      if (logsRes.error) {
+        // Nếu Supabase chặn truy vấn (thường do Row Level Security / quyền truy cập),
+        // ta ném lỗi để hiển thị thông báo thay vì im lặng trả về danh sách rỗng.
+        console.error('ActivityLogs query error:', logsRes.error);
+        throw logsRes.error;
+      }
+
+
+    const allLogs = (logsRes.data || []).map((r: any) => {
+      // Handle timestamp parsing more robustly
+      let timestamp: Date;
+      if (r.timestamp) {
+        timestamp = new Date(r.timestamp);
+        // Check if date is valid
+        if (isNaN(timestamp.getTime())) {
+          console.warn('Invalid timestamp for log:', r.id, r.timestamp);
+          timestamp = new Date();
+        }
+      } else {
+        timestamp = new Date();
+      }
+      
+      return {
+        id: r.id,
+        employeeId: r.employee_id || r.employeeId || null,
+        action: r.action || 'Không xác định',
+        details: r.details || undefined,
+        timestamp
+      };
+    }) as ActivityLog[];
     const allEmployees = (empRes.data || []).map((r: any) => ({
       id: r.id,
       code: r.code,
@@ -148,6 +188,7 @@ const ActivityLogList: React.FC = () => {
 
     const sortedLogs = allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
+
     if (!mounted) return;
     
     setLogs(sortedLogs);
@@ -164,9 +205,11 @@ const ActivityLogList: React.FC = () => {
     setInventory(allInventory);
     setWarranties(allWarranties);
     setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       if (mounted) {
-        setError('Không thể tải dữ liệu. Vui lòng thử lại.');
+        console.error('ActivityLogs loadData error:', err);
+        const errorMessage = err?.message || err?.error_description || 'Không thể tải dữ liệu. Vui lòng thử lại.';
+        setError(errorMessage);
         setLoading(false);
       }
     }
@@ -425,25 +468,51 @@ const ActivityLogList: React.FC = () => {
     return parts.join(' • ');
   };
 
-  const filteredLogs = logs.filter(log => {
-    if (!log) return false;
+  // Memoize filtered logs to avoid recalculating on every render
+  const filteredLogs = useMemo(() => {
+    // Ensure logs is an array before filtering
+    const logsArray = Array.isArray(logs) ? logs : [];
     
-    const employeeName = getEmployeeName(log.employeeId).toLowerCase();
-    const matchesSearch = 
-      employeeName.includes(debouncedSearchTerm.toLowerCase()) ||
-      (log.action && log.action.toLowerCase().includes(debouncedSearchTerm.toLowerCase())) ||
-      (log.details && log.details.toLowerCase().includes(debouncedSearchTerm.toLowerCase()));
-    
-    const matchesEmployee = !selectedEmployee || log.employeeId === selectedEmployee;
-    
-    return matchesSearch && matchesEmployee;
-  });
+    return logsArray.filter(log => {
+      if (!log) return false;
+      
+      // Employee filter
+      const matchesEmployee = !selectedEmployee || log.employeeId === selectedEmployee;
+      if (!matchesEmployee) return false;
+      
+      // Search filter - if searchTerm is empty, match all
+      if (!debouncedSearchTerm || debouncedSearchTerm.trim() === '') {
+        return true;
+      }
+      
+      const searchLower = debouncedSearchTerm.toLowerCase().trim();
+      const employeeName = getEmployeeName(log.employeeId).toLowerCase();
+      const matchesSearch = 
+        employeeName.includes(searchLower) ||
+        (log.action && log.action.toLowerCase().includes(searchLower)) ||
+        (log.details && log.details.toLowerCase().includes(searchLower));
+      
+      return matchesSearch;
+    });
+  }, [logs, selectedEmployee, debouncedSearchTerm, employees, state]);
 
-  const total = filteredLogs.length;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * limit;
-  const pageItems = filteredLogs.slice(start, start + limit);
+  // Memoize pagination calculations
+  const { total, totalPages, currentPage, pageItems } = useMemo(() => {
+    if (!Array.isArray(filteredLogs) || filteredLogs.length === 0) {
+      return { total: 0, totalPages: 1, currentPage: 1, pageItems: [] };
+    }
+
+    const total = filteredLogs.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const currentPage = Math.min(page, totalPages);
+    const start = Math.max(0, (currentPage - 1) * limit);
+    const end = Math.min(start + limit, filteredLogs.length);
+    const pageItems = filteredLogs.slice(start, end);
+
+
+    return { total, totalPages, currentPage, pageItems };
+  }, [filteredLogs, page, limit]);
+
 
   const exportLogsXlsx = (items: ActivityLog[], filename: string) => {
     const rows = items.map((log) => {
@@ -591,10 +660,18 @@ const ActivityLogList: React.FC = () => {
 
       {pageItems.length === 0 ? (
         <div className="text-center py-4">
-          <p>Không có hoạt động nào</p>
+          <p>
+            {logs.length === 0 
+              ? 'Không có dữ liệu lịch sử hoạt động. Vui lòng kiểm tra console để xem chi tiết.'
+              : 'Không có hoạt động nào phù hợp với bộ lọc hiện tại'}
+          </p>
           {debouncedSearchTerm || selectedEmployee ? (
             <button className="btn btn-light mt-2" onClick={resetFilters}>
               Xóa bộ lọc
+            </button>
+          ) : logs.length === 0 ? (
+            <button className="btn btn-primary mt-2" onClick={loadData}>
+              Tải lại dữ liệu
             </button>
           ) : null}
         </div>
