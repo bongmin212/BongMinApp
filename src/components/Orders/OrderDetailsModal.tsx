@@ -99,6 +99,32 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	}, [order.id, warrantyTick]);
 	const pkgInfo = getPackageInfo(order.packageId);
 	const paymentLabel = (PAYMENT_STATUSES.find(p => p.value === (order as any).paymentStatus)?.label) || 'Chưa thanh toán';
+	const renewalsForStatus = Array.isArray((order as any).renewals) ? ((order as any).renewals || []) : [];
+
+	// Tính toán payment status hiển thị: nếu có ít nhất 1 renewal chưa thanh toán thì hiển thị "Chưa thanh toán"
+	const getDisplayPaymentStatus = (): PaymentStatus => {
+		// Nếu order đã hoàn tiền, giữ nguyên
+		if ((order as any).paymentStatus === 'REFUNDED') {
+			return 'REFUNDED';
+		}
+
+		if (renewalsForStatus.length > 0) {
+			const hasUnpaidRenewal = renewalsForStatus.some((r: any) => {
+				const renewalPaymentStatus = r.paymentStatus || 'UNPAID';
+				return renewalPaymentStatus !== 'PAID' && renewalPaymentStatus !== 'REFUNDED';
+			});
+			if (hasUnpaidRenewal) {
+				return 'UNPAID';
+			}
+		}
+
+		return ((order as any).paymentStatus || 'UNPAID') as PaymentStatus;
+	};
+
+	const displayPaymentStatus = getDisplayPaymentStatus();
+	const displayPaymentLabel = getPaymentLabel
+		? (getPaymentLabel(displayPaymentStatus) || 'Chưa thanh toán')
+		: ((PAYMENT_STATUSES.find(p => p.value === displayPaymentStatus)?.label) || 'Chưa thanh toán');
 
 	// Calculate order price - use provided function if available, otherwise calculate locally
 	const getOrderPrice = () => {
@@ -377,7 +403,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Ngày mua:</strong> {formatDate(order.purchaseDate)}</div>
 					<div><strong>Ngày hết hạn:</strong> {formatDate(order.expiryDate)}</div>
 					<div><strong>Trạng thái:</strong> {getStatusLabel(order.status)}</div>
-					<div><strong>Thanh toán:</strong> {getPaymentLabel ? (getPaymentLabel(order.paymentStatus) || 'Chưa thanh toán') : paymentLabel}</div>
+					<div><strong>Thanh toán:</strong> {displayPaymentLabel}</div>
 					<div><strong>Giá đơn hàng:</strong> {formatPrice ? formatPrice(getOrderPrice()) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getOrderPrice())}</div>
 
 					<div><strong>Ghi chú:</strong> {order.notes && String(order.notes).trim() ? order.notes : 'Không có'}</div>
@@ -498,8 +524,35 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							})();
 
 						const originalPkgInfo = getPackageInfo(originalPackageId);
-						// Lấy giá ban đầu: ưu tiên originalSalePrice, nếu không có thì dùng salePrice hoặc tính lại
-						const originalPrice = (order as any).originalSalePrice || getOrderPrice();
+						// Lấy giá ban đầu:
+						// - Nếu có originalSalePrice thì dùng luôn.
+						// - Nếu không:
+						//   + Nếu có renewal và cả giá hiện tại lẫn giá renewal đầu tiên đều > 0:
+						//       * Nếu giá hiện tại > giá renewal đầu tiên → coi giá hiện tại là giá mua ban đầu (case DH0436: 590k > 55k).
+						//       * Ngược lại → coi giá renewal đầu tiên là giá mua ban đầu (case DH0238: 310k > 160k).
+						//   + Nếu chỉ có 1 trong 2 giá > 0 thì dùng giá đó.
+						//   + Cuối cùng mới fallback sang giá hiện tại.
+						const originalPrice = (() => {
+							const explicit = (order as any).originalSalePrice;
+							if (typeof explicit === 'number' && explicit > 0) {
+								return explicit;
+							}
+							const currentPrice = getOrderPrice();
+							if (renewals.length > 0) {
+								const first = renewals[0];
+								const firstPrice = first && typeof first.price === 'number' ? first.price : 0;
+								if (firstPrice > 0 && currentPrice > 0) {
+									if (currentPrice > firstPrice) {
+										return currentPrice;
+									}
+									return firstPrice;
+								}
+								if (firstPrice > 0) {
+									return firstPrice;
+								}
+							}
+							return currentPrice;
+						})();
 
 						return (
 							<div style={{ marginTop: '16px' }}>
@@ -530,8 +583,27 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 									const prevPkgId = inferPreviousPackageId(index);
 									const prevPkgInfo = getPackageInfo(prevPkgId || order.packageId);
 									const newPkgInfo = getPackageInfo(r.packageId || order.packageId);
-									const renewalPrice = typeof r.price === 'number' ? r.price : 0;
-									const renewalPriceFormatted = formatPrice ? formatPrice(renewalPrice) : (typeof r.price === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(r.price) : '-');
+									// Giá gia hạn:
+									// - Bình thường: dùng r.price.
+									// - Với dữ liệu cũ bị swap (chỉ có 1 lần gia hạn), ta coi:
+									//   + Giá mua ban đầu = price của renewal đầu tiên (đang hiển thị 310k).
+									//   + Giá gia hạn = giá hiện tại của đơn (getOrderPrice, 160k).
+									let renewalPrice = typeof r.price === 'number' ? r.price : 0;
+									if (renewals.length === 1 && index === 0) {
+										const currentOrderPrice = getOrderPrice();
+										if (
+											typeof currentOrderPrice === 'number' &&
+											currentOrderPrice > 0 &&
+											currentOrderPrice !== renewalPrice
+										) {
+											renewalPrice = currentOrderPrice;
+										}
+									}
+									const renewalPriceFormatted = formatPrice
+										? formatPrice(renewalPrice)
+										: (renewalPrice > 0
+											? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(renewalPrice)
+											: '-');
 									const paymentStatusLabel = getPaymentLabel ? getPaymentLabel(r.paymentStatus) : (PAYMENT_STATUSES.find(p => p.value === r.paymentStatus)?.label || '');
 
 									return (

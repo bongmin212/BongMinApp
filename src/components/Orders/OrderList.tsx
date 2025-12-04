@@ -2553,10 +2553,39 @@ const OrderList: React.FC = () => {
             const productName = pkgInfo?.product?.name || 'Không xác định';
             const packageName = pkgInfo?.package?.name || 'Không xác định';
             const statusLabel = getStatusLabel(o.status);
-            const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
+            // Trạng thái thanh toán hiển thị: ưu tiên lần gia hạn mới nhất / các renewal
+            const paymentLabel = getPaymentLabel(getDisplayPaymentStatus(o)) || 'Chưa thanh toán';
             const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
-            const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
-            const price = getOrderPrice(o);
+            // Hạn dùng hiển thị: lấy hạn mới nhất từ renewals (nếu có), ngược lại dùng expiryDate của order
+            const rawRenewals = Array.isArray((o as any).renewals) ? ((o as any).renewals || []) : [];
+            const latestRenewal = rawRenewals.length > 0
+              ? rawRenewals.slice().sort(
+                  (a: any, b: any) =>
+                    +new Date(b.createdAt || b.newExpiryDate || b.new_expiry_date) -
+                    +new Date(a.createdAt || a.newExpiryDate || a.new_expiry_date)
+                )[0]
+              : null;
+            const finalExpiryDate = latestRenewal && (latestRenewal.newExpiryDate || latestRenewal.new_expiry_date)
+              ? new Date(latestRenewal.newExpiryDate || latestRenewal.new_expiry_date)
+              : new Date(o.expiryDate);
+            const expiryDate = finalExpiryDate.toLocaleDateString('vi-VN');
+            // Giá hiển thị:
+            // - Nếu có gia hạn, ưu tiên giá của lần gia hạn mới nhất.
+            // - Với dữ liệu cũ bị swap (chỉ có 1 lần gia hạn), nếu price của renewal khác với giá đơn hàng hiện tại
+            //   thì coi giá đơn hàng hiện tại là giá của lần gia hạn (ví dụ DH0238: renewal.price=310k, orderPrice=160k).
+            const hasRenewals = rawRenewals.length > 0;
+            const currentOrderPrice = getOrderPrice(o);
+            let price: number;
+            if (latestRenewal && typeof latestRenewal.price === 'number') {
+              price = latestRenewal.price;
+              if (hasRenewals && rawRenewals.length === 1 &&
+                typeof currentOrderPrice === 'number' && currentOrderPrice > 0 &&
+                price !== currentOrderPrice) {
+                price = currentOrderPrice;
+              }
+            } else {
+              price = currentOrderPrice;
+            }
             const out: string[] = [];
             out.push(`${o.code || '-'} | ${customerName}`);
             out.push('');

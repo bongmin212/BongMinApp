@@ -867,6 +867,7 @@ export class Database {
     if (index === -1) return null;
 
     const current = orders[index];
+    const previousSalePrice = (current as any).salePrice as number | undefined;
     const pkg = this.getPackages().find(p => p.id === packageId);
     const base = new Date(current.expiryDate);
     const safeMonths = Math.max(1, Math.floor(pkg?.warrantyPeriod || 1));
@@ -876,30 +877,28 @@ export class Database {
       ? new Date(opts.customExpiryDate)
       : this.addMonths(base, safeMonths);
 
-    // Lấy giá từ salePrice hiện tại của order (giá tại thời điểm gia hạn)
-    // Đây là giá thực tế đã được thanh toán cho lần gia hạn này
-    const renewalPrice = (() => {
-      // Nếu có customPrice được chỉ định, dùng nó
-      if (opts?.useCustomPrice && typeof opts?.customPrice === 'number' && opts.customPrice > 0) {
-        return opts.customPrice;
-      }
-      // Nếu không, dùng salePrice hiện tại của order (giá tại thời điểm gia hạn)
-      if (typeof (current as any).salePrice === 'number' && (current as any).salePrice > 0) {
-        return (current as any).salePrice;
-      }
-      // Fallback: tính từ package cũ (previousPackageId) - giá của gói đang dùng trước khi gia hạn
-      const prevPkg = this.getPackages().find(p => p.id === current.packageId);
-      const customer = this.getCustomers().find(c => c.id === current.customerId);
-      const defaultPrice = customer?.type === 'CTV' ? (prevPkg?.ctvPrice || 0) : (prevPkg?.retailPrice || 0);
-      return defaultPrice;
-    })();
-
     // Tính giá cho order sau khi gia hạn (có thể là giá của gói mới)
     const customer = this.getCustomers().find(c => c.id === current.customerId);
     const defaultPrice = customer?.type === 'CTV' ? (pkg?.ctvPrice || 0) : (pkg?.retailPrice || 0);
     const useCustomPrice = !!opts?.useCustomPrice && (opts?.customPrice || 0) > 0;
     const nextCustomPrice = useCustomPrice ? Math.max(0, Number(opts?.customPrice || 0)) : undefined;
     const nextSalePrice = useCustomPrice ? (nextCustomPrice || 0) : defaultPrice;
+
+    // Giá của lần gia hạn: chính là giá của gói mới (hoặc custom price nếu có)
+    const renewalPrice = (() => {
+      // Nếu có customPrice được chỉ định, dùng nó
+      if (useCustomPrice && typeof nextCustomPrice === 'number' && nextCustomPrice > 0) {
+        return nextCustomPrice;
+      }
+      // Ngược lại dùng giá chuẩn của gói mới tại thời điểm gia hạn
+      return nextSalePrice;
+    })();
+
+    // Đảm bảo luôn lưu lại giá mua ban đầu cho cả đơn cũ (chưa có originalSalePrice)
+    let originalSalePrice = (current as any).originalSalePrice as number | undefined;
+    if ((typeof originalSalePrice !== 'number' || originalSalePrice <= 0) && typeof previousSalePrice === 'number' && previousSalePrice > 0) {
+      originalSalePrice = previousSalePrice;
+    }
 
     const renewal = {
       id: (Date.now().toString(36) + Math.random().toString(36).substr(2)),
@@ -927,6 +926,7 @@ export class Database {
       useCustomPrice,
       customPrice: nextCustomPrice,
       salePrice: nextSalePrice,
+      originalSalePrice,
       // Reset renewal message flags khi có gia hạn mới (hạn sử dụng mới, cần gửi tin nhắn lại)
       renewalMessageSent: false,
       renewalMessageSentAt: undefined,
