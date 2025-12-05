@@ -633,20 +633,45 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return;
       }
 
-      // Calculate expiry date (allow override by custom expiry). For renewed orders, recalculate based on purchase date + total months (original + all renewals).
+      // Calculate expiry date (allow override by custom expiry). For renewed orders, prefer keeping the latest renewal expiry to avoid shortening when editing unrelated fields.
       const purchaseDate = new Date(formData.purchaseDate);
+      const renewals = Array.isArray((order as any)?.renewals) ? ((order as any).renewals || []) : [];
+      const latestRenewalExpiry = (() => {
+        if (!renewals.length) return null;
+        const sorted = renewals.slice().sort((a: any, b: any) => {
+          const da = new Date(a?.newExpiryDate || a?.new_expiry_date || a?.createdAt || a?.created_at || 0).getTime();
+          const db = new Date(b?.newExpiryDate || b?.new_expiry_date || b?.createdAt || b?.created_at || 0).getTime();
+          return db - da;
+        });
+        for (const r of sorted) {
+          const raw = (r as any).newExpiryDate || (r as any).new_expiry_date;
+          if (raw) {
+            const d = new Date(raw);
+            if (!isNaN(d.getTime())) return d;
+          }
+        }
+        const existing = order?.expiryDate ? new Date(order.expiryDate) : null;
+        return existing && !isNaN(existing.getTime()) ? existing : null;
+      })();
       const computedExpiry = (() => {
         if (formData.useCustomExpiry && formData.customExpiryDate) {
           return new Date(formData.customExpiryDate);
         }
+
+        // For existing orders that have renewals, keep the stored/renewal expiry instead of recomputing from the current package (which may have changed).
+        if (order && renewals.length > 0) {
+          if (latestRenewalExpiry) return latestRenewalExpiry;
+          const existing = order.expiryDate ? new Date(order.expiryDate) : null;
+          if (existing && !isNaN(existing.getTime())) return existing;
+        }
+
         const baseMonths = selectedPackage.warrantyPeriod;
-        // Check if order has renewals - if so, calculate total months from original warranty + all renewal months
-        const renewals = Array.isArray((order as any)?.renewals) ? ((order as any).renewals || []) : [];
         let totalMonths = baseMonths;
         if (renewals.length > 0) {
-          // Sum all renewal months
+          // Sum all renewal months (support both number and string)
           const renewalMonths = renewals.reduce((sum: number, r: any) => {
-            const months = typeof r.months === 'number' ? r.months : 0;
+            const monthsRaw = (r as any).months;
+            const months = typeof monthsRaw === 'number' ? monthsRaw : Number(monthsRaw) || 0;
             return sum + Math.max(0, months);
           }, 0);
           totalMonths = baseMonths + renewalMonths;
