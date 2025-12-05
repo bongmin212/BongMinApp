@@ -61,6 +61,12 @@ const OrderList: React.FC = () => {
   const [orderBulkPaymentTarget, setOrderBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
   const [selectedOrderRenewalIds, setSelectedOrderRenewalIds] = useState<string[]>([]);
 
+  // Helper: update payment-related fields locally (orders + viewingOrder)
+  const applyOrderPaymentPatch = useCallback((orderId: string, patch: any) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...patch } as any : o));
+    setViewingOrder(prev => prev && prev.id === orderId ? { ...prev, ...patch } as any : prev);
+  }, []);
+
   const renewalsByOrder = useMemo(() => {
     const map = new Map<string, any[]>();
     orders.forEach(order => {
@@ -1120,6 +1126,14 @@ const OrderList: React.FC = () => {
           console.error('Single order payment update error for ID', orderId, ':', singleError);
           return notify(`Không thể cập nhật thanh toán đơn hàng ${orderId}: ${singleError.message}`, 'error');
         }
+
+        // Cập nhật ngay trong state & modal đang mở để không cần refresh
+        applyOrderPaymentPatch(orderId, {
+          paymentStatus: payload.payment_status as PaymentStatus,
+          status: (payload as any).status ?? (orders.find(o => o.id === orderId)?.status as OrderStatus),
+          refundAmount: (payload as any).refund_amount ?? (orders.find(o => o.id === orderId) as any)?.refundAmount,
+          refundAt: (payload as any).refund_at ? new Date((payload as any).refund_at) : (orders.find(o => o.id === orderId) as any)?.refundAt
+        });
       }
       
       const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
@@ -1128,7 +1142,12 @@ const OrderList: React.FC = () => {
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
       } catch {}
       setSelectedIds([]);
-      loadData();
+      await loadData();
+      // Đảm bảo không bị loadData ghi đè trạng thái mới
+      validIds.forEach(id => applyOrderPaymentPatch(id, {
+        paymentStatus: paymentStatus,
+        status: paymentStatus === 'REFUNDED' ? 'CANCELLED' as OrderStatus : orders.find(o => o.id === id)?.status
+      }));
       notify('Đã cập nhật thanh toán', 'success');
     })();
   };
@@ -2884,7 +2903,11 @@ const OrderList: React.FC = () => {
                       setOrderPaymentModal(null);
                       setSelectedOrderRenewalIds([]);
                       setOrderBulkPaymentTarget('INITIAL');
+                      // Cập nhật state để hiển thị ngay (bảng + modal xem đơn)
+                      validIds.forEach(id => applyOrderPaymentPatch(id, { paymentStatus: selectedOrderPaymentStatus }));
                       await loadData();
+                      // Đảm bảo loadData không ghi đè trạng thái mới
+                      validIds.forEach(id => applyOrderPaymentPatch(id, { paymentStatus: selectedOrderPaymentStatus }));
                       notify(
                         `Đã cập nhật trạng thái thanh toán cho ${validIds.length} đơn hàng`,
                         'success'
@@ -2969,7 +2992,31 @@ const OrderList: React.FC = () => {
                       setOrderPaymentModal(null);
                       setSelectedOrderRenewalIds([]);
                       setOrderBulkPaymentTarget('INITIAL');
+                      // Cập nhật state renewals & modal đang xem để không cần refresh
+                      setOrders(prev => prev.map(o => {
+                        const target = ordersToUpdate.find(x => x.order.id === o.id);
+                        if (!target) return o;
+                        return { ...o, renewals: target.renewals } as any;
+                      }));
+                      setViewingOrder(prev => {
+                        if (!prev) return prev;
+                        const target = ordersToUpdate.find(x => x.order.id === prev.id);
+                        if (!target) return prev;
+                        return { ...prev, renewals: target.renewals } as any;
+                      });
                       await loadData();
+                      // Đảm bảo loadData không ghi đè trạng thái mới
+                      setOrders(prev => prev.map(o => {
+                        const target = ordersToUpdate.find(x => x.order.id === o.id);
+                        if (!target) return o;
+                        return { ...o, renewals: target.renewals } as any;
+                      }));
+                      setViewingOrder(prev => {
+                        if (!prev) return prev;
+                        const target = ordersToUpdate.find(x => x.order.id === prev.id);
+                        if (!target) return prev;
+                        return { ...prev, renewals: target.renewals } as any;
+                      });
                       notify(
                         `Đã cập nhật trạng thái thanh toán cho ${selectedOrderRenewalIds.length} lần gia hạn`,
                         'success'
