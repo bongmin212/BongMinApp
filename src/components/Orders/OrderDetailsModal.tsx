@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Order, PaymentStatus, PAYMENT_STATUSES, WARRANTY_STATUSES } from '../../types';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
+import { useToast } from '../../contexts/ToastContext';
 
 type Getters = {
 	getCustomerName: (customerId: string) => string;
@@ -47,6 +48,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	getOrderPrice: getOrderPriceProp,
 	onOrderUpdated
 }) => {
+	const { notify } = useToast();
 	// Local warranties state to ensure live updates without hard refresh
 	const [warranties, setWarranties] = useState<any[]>([]);
 	// Force re-render when warranties for this order change (realtime)
@@ -328,23 +330,41 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
 						return (
 							<div style={{ marginTop: 12 }}>
-								<strong>Thông tin tài khoản:</strong>
+								<strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
 								<div style={{ marginTop: 6 }}>
 									{columnsWithData.map((col: any) => {
 										const value = accountData[col.id] || '';
 										return (
 											<div key={col.id} style={{ marginBottom: 8 }}>
 												<div><strong>{col.title}:</strong></div>
-												<pre style={{
-													whiteSpace: 'pre-wrap',
-													margin: 0,
-													padding: '8px',
-													backgroundColor: 'var(--bg-tertiary)',
-													color: 'var(--text-primary)',
-													borderRadius: '4px',
-													fontSize: '14px',
-													border: '1px solid var(--border-color)'
-												}}>
+												<pre
+													style={{
+														whiteSpace: 'pre-wrap',
+														margin: 0,
+														padding: '8px',
+														backgroundColor: 'var(--bg-tertiary)',
+														color: 'var(--text-primary)',
+														borderRadius: '4px',
+														fontSize: '14px',
+														border: '1px solid var(--border-color)',
+														cursor: 'pointer',
+														transition: 'background-color 0.2s'
+													}}
+													onClick={() => {
+														navigator.clipboard.writeText(value).then(() => {
+															notify(`Đã copy ${col.title}`, 'success');
+														}).catch(() => {
+															notify('Không thể copy', 'error');
+														});
+													}}
+													onMouseEnter={(e) => {
+														(e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+													}}
+													onMouseLeave={(e) => {
+														(e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+													}}
+													title={`Bấm để copy ${col.title}`}
+												>
 													{value}
 												</pre>
 											</div>
@@ -376,7 +396,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 		return (
 			<div className="card mt-2">
 				<div className="card-header">
-					<strong>📝 Trường tùy chỉnh</strong>
+					<strong>📝 Trường tùy chỉnh</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Bấm vào để copy)</span>
 				</div>
 				<div className="card-body">
 					{fieldsWithValues.map((cf: any) => {
@@ -384,16 +404,34 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 						return (
 							<div key={cf.id} style={{ marginBottom: 8 }}>
 								<div><strong>{cf.title}:</strong></div>
-								<pre style={{
-									whiteSpace: 'pre-wrap',
-									margin: 0,
-									padding: '8px',
-									backgroundColor: 'var(--bg-tertiary)',
-									color: 'var(--text-primary)',
-									borderRadius: '4px',
-									fontSize: '14px',
-									border: '1px solid var(--border-color)'
-								}}>
+								<pre
+									style={{
+										whiteSpace: 'pre-wrap',
+										margin: 0,
+										padding: '8px',
+										backgroundColor: 'var(--bg-tertiary)',
+										color: 'var(--text-primary)',
+										borderRadius: '4px',
+										fontSize: '14px',
+										border: '1px solid var(--border-color)',
+										cursor: 'pointer',
+										transition: 'background-color 0.2s'
+									}}
+									onClick={() => {
+										navigator.clipboard.writeText(String(value).trim()).then(() => {
+											notify(`Đã copy ${cf.title}`, 'success');
+										}).catch(() => {
+											notify('Không thể copy', 'error');
+										});
+									}}
+									onMouseEnter={(e) => {
+										(e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+									}}
+									onMouseLeave={(e) => {
+										(e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+									}}
+									title={`Bấm để copy ${cf.title}`}
+								>
 									{String(value).trim()}
 								</pre>
 							</div>

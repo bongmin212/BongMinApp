@@ -2794,23 +2794,41 @@ const WarehouseList: React.FC = () => {
 
                   return (
                     <div style={{ marginTop: 12 }}>
-                      <strong>Thông tin tài khoản:</strong>
+                      <strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
                       <div style={{ marginTop: 6 }}>
                         {columnsWithData.map((col: any) => {
                           const value = accountData[col.id] || '';
                           return (
                             <div key={col.id} style={{ marginBottom: 8 }}>
                               <div><strong>{col.title}:</strong></div>
-                              <pre style={{
-                                whiteSpace: 'pre-wrap',
-                                margin: 0,
-                                padding: '8px',
-                                backgroundColor: 'var(--bg-tertiary)',
-                                color: 'var(--text-primary)',
-                                borderRadius: '4px',
-                                fontSize: '14px',
-                                border: '1px solid var(--border-color)'
-                              }}>
+                              <pre
+                                style={{
+                                  whiteSpace: 'pre-wrap',
+                                  margin: 0,
+                                  padding: '8px',
+                                  backgroundColor: 'var(--bg-tertiary)',
+                                  color: 'var(--text-primary)',
+                                  borderRadius: '4px',
+                                  fontSize: '14px',
+                                  border: '1px solid var(--border-color)',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(value).then(() => {
+                                    notify(`Đã copy ${col.title}`, 'success');
+                                  }).catch(() => {
+                                    notify('Không thể copy', 'error');
+                                  });
+                                }}
+                                onMouseEnter={(e) => {
+                                  (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+                                }}
+                                title={`Bấm để copy ${col.title}`}
+                              >
                                 {value}
                               </pre>
                             </div>
