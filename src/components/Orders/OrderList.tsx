@@ -1228,10 +1228,13 @@ const OrderList: React.FC = () => {
   };
 
   const getOrderAccountColumns = useCallback((orderPackageId?: string, linkedInventory?: any) => {
-    // Priority 1: Check inventory accountColumns (both camelCase and snake_case)
-    const invCols = linkedInventory?.accountColumns || linkedInventory?.account_columns;
-    if (invCols && Array.isArray(invCols) && invCols.length > 0) {
-      return invCols;
+    // Priority 1: Check order package accountColumns first (contains correct visibility settings)
+    if (orderPackageId) {
+      const orderPackage = packageMap.get(orderPackageId);
+      const orderPkgCols = orderPackage?.accountColumns || (orderPackage as any)?.account_columns;
+      if (orderPkgCols && Array.isArray(orderPkgCols) && orderPkgCols.length > 0) {
+        return orderPkgCols;
+      }
     }
     // Priority 2: Check package from inventory accountColumns (inventory's package)
     if (linkedInventory?.packageId) {
@@ -1241,13 +1244,10 @@ const OrderList: React.FC = () => {
         return invPkgCols;
       }
     }
-    // Priority 3: Fallback to order package accountColumns (for non-shared-pool cases)
-    if (orderPackageId) {
-      const orderPackage = packageMap.get(orderPackageId);
-      const orderPkgCols = orderPackage?.accountColumns || (orderPackage as any)?.account_columns;
-      if (orderPkgCols && Array.isArray(orderPkgCols) && orderPkgCols.length > 0) {
-        return orderPkgCols;
-      }
+    // Priority 3: Fallback to inventory accountColumns (both camelCase and snake_case)
+    const invCols = linkedInventory?.accountColumns || linkedInventory?.account_columns;
+    if (invCols && Array.isArray(invCols) && invCols.length > 0) {
+      return invCols;
     }
     return [];
   }, [packageMap]);
