@@ -727,8 +727,20 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         useCustomPrice: formData.useCustomPrice || false,
         customPrice: formData.useCustomPrice ? formData.customPrice : undefined,
         customFieldValues,
-        // For existing orders, preserve current form status (e.g., EXPIRED)
-        status: (order ? formData.status : (selectedInventoryId ? 'COMPLETED' : 'PROCESSING')) as OrderStatus,
+        // For existing orders, preserve current form status (e.g., EXPIRED) but auto-complete when inventory is linked
+        // For new orders: auto-complete if inventory selected, otherwise use form status
+        status: (() => {
+          // Keep EXPIRED or CANCELLED status locked
+          if (formData.status === 'EXPIRED' || formData.status === 'CANCELLED') {
+            return formData.status;
+          }
+          // If inventory is selected, auto-complete
+          if (selectedInventoryId) {
+            return 'COMPLETED';
+          }
+          // Otherwise, use form's selected status (allows manual change between PROCESSING and COMPLETED)
+          return formData.status;
+        })() as OrderStatus,
         salePrice: finalSalePrice
       };
 
@@ -1979,8 +1991,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                   <div className="mb-2">
                                     <strong>Trạng thái:</strong>
                                     <span className={`badge ms-1 ${item.status === 'AVAILABLE' ? 'bg-success' :
-                                        item.status === 'SOLD' ? 'bg-danger' :
-                                          item.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
+                                      item.status === 'SOLD' ? 'bg-danger' :
+                                        item.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
                                       }`}>
                                       {item.status === 'AVAILABLE' ? 'Có sẵn' :
                                         item.status === 'SOLD' ? 'Đã bán' :
@@ -2264,21 +2276,29 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   const val = e.target.value as any;
                   // Lock when expired or refunded
                   if (formData.status === 'EXPIRED' || formData.paymentStatus === 'REFUNDED') return;
-                  // Only allow cancelling manually
-                  if (val === 'CANCELLED') {
-                    setFormData(prev => ({ ...prev, status: 'CANCELLED' }));
+                  // Allow changing status between PROCESSING, COMPLETED, and CANCELLED
+                  if (['PROCESSING', 'COMPLETED', 'CANCELLED'].includes(val)) {
+                    setFormData(prev => ({ ...prev, status: val }));
                   }
                 }}
               >
-                <option value={formData.status}>{ORDER_STATUSES.find(s => s.value === formData.status)?.label || formData.status}</option>
-                {formData.status !== 'EXPIRED' && formData.paymentStatus !== 'REFUNDED' && (
-                  <option value="CANCELLED">Đã hủy</option>
+                {formData.status === 'EXPIRED' ? (
+                  <option value="EXPIRED">Đã hết hạn</option>
+                ) : (
+                  <>
+                    <option value="PROCESSING">Đang xử lý</option>
+                    <option value="COMPLETED">Đã hoàn thành</option>
+                    {formData.paymentStatus !== 'REFUNDED' && (
+                      <option value="CANCELLED">Đã hủy</option>
+                    )}
+                  </>
                 )}
               </select>
               <small className="text-muted">
                 {formData.status === 'EXPIRED' ? 'Đơn đã hết hạn: trạng thái bị khóa.'
                   : formData.paymentStatus === 'REFUNDED' ? 'Đơn đã hoàn tiền: trạng thái bị khóa ở "Đã hủy".'
-                    : 'Trạng thái tự động: Hoàn thành khi đã chọn kho, Đang xử lý nếu chưa chọn.'}
+                    : selectedInventoryId ? 'Trạng thái tự động chuyển thành "Đã hoàn thành" khi có liên kết kho.'
+                      : 'Bạn có thể thay đổi trạng thái thủ công giữa "Đang xử lý" và "Đã hoàn thành".'}
               </small>
             </div>
 
