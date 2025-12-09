@@ -249,20 +249,26 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 				.map(p => (p.label || p.id))
 			: [];
 		const accountColumns = (() => {
+			// Priority 1: Check inventory accountColumns (both camelCase and snake_case)
+			const invCols = inv.accountColumns || (inv as any).account_columns;
+			if (invCols && Array.isArray(invCols) && invCols.length > 0) {
+				return invCols;
+			}
+			// Priority 2: Check package from inventory accountColumns (inventory's package, not order's package)
+			const pkgCols = packageInfo?.accountColumns || (packageInfo as any)?.account_columns;
+			if (pkgCols && Array.isArray(pkgCols) && pkgCols.length > 0) {
+				return pkgCols;
+			}
+			// Priority 3: Fallback to order package accountColumns (for non-shared-pool cases)
 			const orderPackage = pkgInfo?.package;
-			if (orderPackage?.accountColumns && orderPackage.accountColumns.length > 0) {
-				return orderPackage.accountColumns;
-			}
-			if (inv.accountColumns && inv.accountColumns.length > 0) {
-				return inv.accountColumns;
-			}
-			if (packageInfo?.accountColumns && packageInfo.accountColumns.length > 0) {
-				return packageInfo.accountColumns;
+			const orderPkgCols = orderPackage?.accountColumns || (orderPackage as any)?.account_columns;
+			if (orderPkgCols && Array.isArray(orderPkgCols) && orderPkgCols.length > 0) {
+				return orderPkgCols;
 			}
 			return [];
 		})();
 		const displayColumns = Array.isArray(accountColumns) ? accountColumns : [];
-		const accountData = inv.accountData || {};
+		const accountData = inv.accountData || (inv as any).account_data || {};
 		return (
 			<div className="card mt-2">
 				<div className="card-header">
@@ -458,13 +464,13 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							const currentProductId = pkgInfo?.product?.id;
 							// Ưu tiên tìm gói cùng productId trước
 							if (currentProductId) {
-								const matchingPackage = packages.find((p: any) => 
+								const matchingPackage = packages.find((p: any) =>
 									p.productId === currentProductId && Math.floor(p.warrantyPeriod || 0) === months
 								);
 								if (matchingPackage) return matchingPackage.id;
 							}
 							// Nếu không tìm thấy, tìm bất kỳ gói nào có warrantyPeriod khớp
-							const matchingPackage = packages.find((p: any) => 
+							const matchingPackage = packages.find((p: any) =>
 								Math.floor(p.warrantyPeriod || 0) === months
 							);
 							return matchingPackage?.id;
@@ -475,7 +481,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							const r = renewals[renewalIndex];
 							// Nếu đã có previousPackageId, dùng nó
 							if (r.previousPackageId) return r.previousPackageId;
-							
+
 							// Nếu là renewal đầu tiên, cần tìm packageId ban đầu
 							if (renewalIndex === 0) {
 								// Suy luận từ hạn sử dụng ban đầu (previousExpiryDate) và purchaseDate
@@ -484,17 +490,17 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 									const inferredPackageId = findPackageByWarrantyPeriod(months);
 									if (inferredPackageId) return inferredPackageId;
 								}
-								
+
 								// Fallback: Nếu order.packageId khác với packageId của renewal đầu tiên,
 								// thì order.packageId có thể là package ban đầu
 								if (order.packageId !== (r.packageId || order.packageId)) {
 									return order.packageId;
 								}
-								
+
 								// Nếu không suy luận được, trả về undefined
 								return undefined;
 							}
-							
+
 							// Các renewal sau: dùng packageId của renewal trước đó
 							const prevRenewal = renewals[renewalIndex - 1];
 							return prevRenewal?.packageId || order.packageId;
@@ -503,7 +509,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 						// Tính toán packageId ban đầu (trước tất cả các renewals)
 						// Nếu có renewals, packageId ban đầu là previousPackageId của renewal đầu tiên
 						// Nếu không có hoặc không thể suy luận, dùng order.packageId hiện tại
-						const originalPackageId = renewals.length > 0 
+						const originalPackageId = renewals.length > 0
 							? (inferPreviousPackageId(0) || order.packageId)
 							: order.packageId;
 
@@ -557,7 +563,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 						return (
 							<div style={{ marginTop: '16px' }}>
 								<strong style={{ fontSize: '16px' }}>Lịch sử gia hạn:</strong>
-								
+
 								{/* Timeline: Mua ban đầu */}
 								<div className="card mt-3" style={{ borderLeft: '4px solid #28a745', backgroundColor: 'var(--bg-secondary)' }}>
 									<div className="card-body" style={{ padding: '12px' }}>
@@ -619,7 +625,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 												</div>
 												<div style={{ fontSize: '13px', lineHeight: '1.6' }}>
 													<div style={{ marginBottom: '6px' }}>
-														<strong>Gói:</strong> 
+														<strong>Gói:</strong>
 														<span style={{ marginLeft: '4px', color: 'var(--text-secondary)' }}>
 															{prevPkgInfo?.package?.name || 'Không xác định'}
 														</span>

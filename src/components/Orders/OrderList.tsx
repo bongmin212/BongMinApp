@@ -95,7 +95,7 @@ const OrderList: React.FC = () => {
       const nowIso = new Date().toISOString();
       try {
         Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(nowIso), renewalMessageSentBy: state.user?.id || 'system' } as any);
-      } catch {}
+      } catch { }
       return notify('Đã đánh dấu gửi tin nhắn gia hạn', 'success');
     }
     const nowIso = new Date().toISOString();
@@ -108,7 +108,7 @@ const OrderList: React.FC = () => {
       // If Supabase write fails, keep state and persist locally
       try {
         Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(nowIso), renewalMessageSentBy: state.user?.id || 'system' } as any);
-      } catch {}
+      } catch { }
       // Soft-notify success to avoid blocking workflow
       notify('Đã đánh dấu gửi tin nhắn gia hạn (offline)', 'success');
       return;
@@ -116,7 +116,7 @@ const OrderList: React.FC = () => {
     try {
       const sb2 = getSupabase();
       if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu đã gửi tin nhắn gia hạn', details: `orderId=${orderId}; orderCode=${orders.find(o => o.id === orderId)?.code || ''}` });
-    } catch {}
+    } catch { }
     // Mirror into local DB for consistency and trigger any dependent recomputations
     Database.updateOrder(orderId, { renewalMessageSent: true, renewalMessageSentAt: new Date(nowIso), renewalMessageSentBy: state.user?.id || 'system' } as any);
     notify('Đã đánh dấu gửi tin nhắn gia hạn', 'success');
@@ -137,8 +137,8 @@ const OrderList: React.FC = () => {
       const notSent = params.get('onlyExpiringNotSent') === '1';
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || '10'), 10);
-      
-      
+
+
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
       setFilterStatus(status);
@@ -178,7 +178,7 @@ const OrderList: React.FC = () => {
         const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
         const notSent = params.get('onlyExpiringNotSent') === '1';
         const p = parseInt(params.get('page') || '1', 10);
-        
+
         // Only update if values are different to avoid infinite loops
         if (status !== filterStatus) setFilterStatus(status);
         if (payment !== filterPayment) setFilterPayment(payment);
@@ -187,7 +187,7 @@ const OrderList: React.FC = () => {
         if (expiry !== expiryFilter) setExpiryFilter(expiry);
         if (notSent !== onlyExpiringNotSent) setOnlyExpiringNotSent(notSent);
         if (p !== page) setPage(p);
-      } catch {}
+      } catch { }
     }, 100);
 
     return () => clearTimeout(timer);
@@ -209,7 +209,7 @@ const OrderList: React.FC = () => {
     const handlePackagesUpdate = () => {
       loadData();
     };
-    
+
     window.addEventListener('packagesUpdated', handlePackagesUpdate);
     return () => window.removeEventListener('packagesUpdated', handlePackagesUpdate);
   }, []);
@@ -245,7 +245,7 @@ const OrderList: React.FC = () => {
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
-    } catch {}
+    } catch { }
   }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
 
   const loadData = async () => {
@@ -323,10 +323,10 @@ const OrderList: React.FC = () => {
         createdAt: x.createdAt ? new Date(x.createdAt) : (x.created_at ? new Date(x.created_at) : undefined)
       }));
       // Ensure refunded orders have CANCELLED status
-      const normalizedStatus = r.payment_status === 'REFUNDED' && r.status !== 'CANCELLED' 
-        ? 'CANCELLED' 
+      const normalizedStatus = r.payment_status === 'REFUNDED' && r.status !== 'CANCELLED'
+        ? 'CANCELLED'
         : r.status;
-      
+
       return {
         id: r.id,
         code: r.code,
@@ -363,9 +363,9 @@ const OrderList: React.FC = () => {
         if (!local) return o;
         return { ...o, renewals: Array.isArray(local.renewals) ? local.renewals : (o as any).renewals } as any;
       });
-    } catch {}
+    } catch { }
     setOrders(allOrders);
-    
+
     const allCustomers = (customersRes.data || []).map((r: any) => {
       return {
         ...r,
@@ -374,7 +374,7 @@ const OrderList: React.FC = () => {
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
     }) as Customer[];
-    
+
     const allPackages = (packagesRes.data || []).map((r: any) => {
       return {
         ...r,
@@ -391,7 +391,7 @@ const OrderList: React.FC = () => {
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
     }) as ProductPackage[];
-    
+
     const allProducts = (productsRes.data || []).map((r: any) => {
       return {
         ...r,
@@ -400,16 +400,16 @@ const OrderList: React.FC = () => {
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
     }) as Product[];
-    
+
     setCustomers(allCustomers);
     setPackages(allPackages);
     setProducts(allProducts);
-    
+
     // Process inventory data properly like in WarehouseList
     const processedInventory = (inventoryRes.data || []).map((r: any) => {
       const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
       let expiryDate = r.expiry_date ? new Date(r.expiry_date) : null;
-      
+
       // If no expiry date, calculate based on product type
       if (!expiryDate) {
         const product = allProducts.find((p: any) => p.id === r.product_id);
@@ -425,7 +425,7 @@ const OrderList: React.FC = () => {
           expiryDate.setMonth(expiryDate.getMonth() + warrantyPeriod);
         }
       }
-      
+
       return {
         id: r.id,
         code: r.code,
@@ -473,9 +473,9 @@ const OrderList: React.FC = () => {
         loadData();
       })
       .subscribe();
-    return () => { 
-      try { 
-        channel.unsubscribe(); 
+    return () => {
+      try {
+        channel.unsubscribe();
       } catch (error) {
         // Error unsubscribing from realtime channel - ignore
       }
@@ -547,19 +547,19 @@ const OrderList: React.FC = () => {
               .from('inventory')
               .select('id')
               .eq('linked_order_id', id);
-            
+
             if (classicError) {
               notify('Lỗi khi giải phóng kho hàng liên kết', 'error');
               return;
             }
-            
+
             const classicIds = (classicLinked || []).map((r: any) => r.id);
             if (classicIds.length) {
               const { error: updateError } = await sb
                 .from('inventory')
                 .update({ status: 'AVAILABLE', linked_order_id: null })
                 .in('id', classicIds);
-              
+
               if (updateError) {
                 notify('Lỗi khi cập nhật trạng thái kho hàng', 'error');
                 return;
@@ -571,12 +571,12 @@ const OrderList: React.FC = () => {
               .from('inventory')
               .select('*')
               .eq('is_account_based', true);
-              
+
             if (accountError) {
               notify('Lỗi khi giải phóng kho hàng dạng tài khoản', 'error');
               return;
             }
-            
+
             const toUpdate = (accountItems || []).filter((it: any) => Array.isArray(it.profiles) && it.profiles.some((p: any) => p.assignedOrderId === id));
             for (const it of toUpdate) {
               const nextProfiles = (Array.isArray(it.profiles) ? it.profiles : []).map((p: any) => (
@@ -584,17 +584,17 @@ const OrderList: React.FC = () => {
                   ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
                   : p
               ));
-              
+
               // Check if there are any free slots remaining
-              const hasFreeSlots = nextProfiles.some((p: any) => 
+              const hasFreeSlots = nextProfiles.some((p: any) =>
                 !p.isAssigned && !(p as any).needsUpdate
               );
-              
-              const { error: profileError } = await sb.from('inventory').update({ 
+
+              const { error: profileError } = await sb.from('inventory').update({
                 profiles: nextProfiles,
                 status: hasFreeSlots ? 'AVAILABLE' : 'SOLD'
               }).eq('id', it.id);
-              
+
               if (profileError) {
                 notify('Lỗi khi cập nhật profile tài khoản', 'error');
                 return;
@@ -609,7 +609,7 @@ const OrderList: React.FC = () => {
             // Update local storage immediately
             const currentOrders = Database.getOrders();
             Database.setOrders(currentOrders.filter(o => o.id !== id));
-            
+
             // Force refresh form if it's open
             if (showForm && !editingOrder) {
               setShowForm(false);
@@ -617,11 +617,11 @@ const OrderList: React.FC = () => {
                 setShowForm(true);
               }, 50); // Reduced delay for better UX
             }
-            
+
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa đơn hàng', details: (() => { const o = orders.find(x => x.id === id); return `orderId=${id}; orderCode=${o?.code}`; })() });
-            } catch {}
+            } catch { }
             loadData();
             notify('Xóa đơn hàng thành công', 'success');
           } else {
@@ -636,7 +636,7 @@ const OrderList: React.FC = () => {
   const isSlotReturned = (order: any) => {
     // Find linked inventory using same logic as handleReturnSlot
     let invLinked: any = null;
-    
+
     // Method 1: Try by inventoryItemId
     if (order.inventoryItemId) {
       const found = inventory.find((i: any) => i.id === order.inventoryItemId);
@@ -651,20 +651,20 @@ const OrderList: React.FC = () => {
         }
       }
     }
-    
+
     // Method 2: If still not found, search ALL inventory by profiles
     if (!invLinked) {
       invLinked = inventory.find((i: any) => Array.isArray(i.profiles) && i.profiles.length > 0 && i.profiles.some((p: any) => p.assignedOrderId === order.id));
     }
-    
+
     // Method 3: Fallback to classic linked_order_id
     if (!invLinked) {
       invLinked = inventory.find((i: any) => i.linked_order_id === order.id);
     }
-    
+
     // If no linked inventory found, consider slot as returned (no slot to return)
     if (!invLinked) return true;
-    
+
     // Check if slot is still assigned to this order
     if (invLinked.is_account_based || (Array.isArray(invLinked.profiles) && invLinked.profiles.length > 0)) {
       // For account-based or slot-based inventory, check if any profile is still assigned
@@ -678,10 +678,10 @@ const OrderList: React.FC = () => {
   const handleReturnSlot = (id: string) => {
     const order = orders.find(o => o.id === id);
     if (!order) return;
-    
+
     // Find linked inventory using same logic as OrderForm
     let invLinked: any = null;
-    
+
     // Method 1: Try by inventoryItemId (same as OrderForm line 84-92)
     if ((order as any).inventoryItemId) {
       const found = inventory.find((i: any) => i.id === (order as any).inventoryItemId);
@@ -696,17 +696,17 @@ const OrderList: React.FC = () => {
         }
       }
     }
-    
+
     // Method 2: If still not found, search ALL inventory by profiles (not just account-based)
     if (!invLinked) {
       invLinked = inventory.find((i: any) => Array.isArray(i.profiles) && i.profiles.length > 0 && i.profiles.some((p: any) => p.assignedOrderId === id));
     }
-    
+
     // Method 3: Fallback to classic linked_order_id
     if (!invLinked) {
       invLinked = inventory.find((i: any) => i.linked_order_id === id);
     }
-    
+
     if (!invLinked) {
       notify('Đơn này không có slot liên kết để trả', 'warning');
       return;
@@ -725,7 +725,7 @@ const OrderList: React.FC = () => {
           notify('Không thể kết nối database', 'error');
           return;
         }
-        
+
         try {
           // Release inventory using direct Supabase query with error handling (same as OrderForm)
           let inventoryUpdateSuccess = false;
@@ -733,12 +733,12 @@ const OrderList: React.FC = () => {
             // Release account-based slots or slot-based inventory
             const profiles = invLinked.profiles || [];
             const orderProfileIds = (order as any).inventory_profile_ids || [];
-            
+
             // Release all profiles assigned to this order (by assignedOrderId or by profile ID in inventory_profile_ids)
             const updatedProfiles = profiles.map((profile: any) => {
               const isAssignedToOrder = profile.assignedOrderId === order.id;
               const isInOrderProfileIds = Array.isArray(orderProfileIds) && orderProfileIds.includes(profile.id);
-              
+
               if (isAssignedToOrder || isInOrderProfileIds) {
                 return {
                   ...profile,
@@ -750,18 +750,18 @@ const OrderList: React.FC = () => {
               }
               return profile;
             });
-            
+
             // Check if there are any free slots remaining
-            const hasFreeSlots = updatedProfiles.some((p: any) => 
+            const hasFreeSlots = updatedProfiles.some((p: any) =>
               !p.isAssigned && !(p as any).needsUpdate
             );
-            
+
             const { error: updateError } = await sb.from('inventory').update({
               profiles: updatedProfiles,
               status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
               updated_at: new Date().toISOString()
             }).eq('id', invLinked.id);
-            
+
             if (updateError) {
               notify('Lỗi khi giải phóng slot kho hàng', 'error');
               console.error('Inventory update error:', updateError);
@@ -776,7 +776,7 @@ const OrderList: React.FC = () => {
               linked_order_id: null,
               updated_at: new Date().toISOString()
             }).eq('id', invLinked.id);
-            
+
             if (updateError) {
               notify('Lỗi khi giải phóng kho hàng', 'error');
               console.error('Inventory update error:', updateError);
@@ -785,32 +785,32 @@ const OrderList: React.FC = () => {
               inventoryUpdateSuccess = true;
             }
           }
-          
+
           // Always clear order's inventory link, even if inventory update had errors
-          const { error: orderUpdateError } = await sb.from('orders').update({ 
+          const { error: orderUpdateError } = await sb.from('orders').update({
             inventory_item_id: null,
-            inventory_profile_ids: null 
+            inventory_profile_ids: null
           }).eq('id', order.id);
-          
+
           if (orderUpdateError) {
             notify('Lỗi khi cập nhật đơn hàng', 'error');
             console.error('Order update error:', orderUpdateError);
             return;
           }
-          
+
           if (!inventoryUpdateSuccess) {
             notify('Đã xóa liên kết đơn hàng nhưng có lỗi khi cập nhật kho hàng', 'warning');
           }
-          
+
           // Log activity
           try {
-            await sb.from('activity_logs').insert({ 
-              employee_id: null, 
-              action: 'Trả slot về kho', 
-              details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked.id}; inventoryCode=${invLinked.code}` 
+            await sb.from('activity_logs').insert({
+              employee_id: null,
+              action: 'Trả slot về kho',
+              details: `orderId=${order.id}; orderCode=${order.code}; inventoryId=${invLinked.id}; inventoryCode=${invLinked.code}`
             });
-          } catch {}
-          
+          } catch { }
+
           loadData();
           notify('Đã trả slot về kho', 'success');
         } catch (error) {
@@ -826,17 +826,17 @@ const OrderList: React.FC = () => {
     return orders.filter(order => {
       const hasInventoryLink = (order as any).inventoryItemId || ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds) && (order as any).inventoryProfileIds.length > 0);
       if (!hasInventoryLink) return false;
-      
+
       // Try to find actual inventory link (same logic as OrderDetailsModal)
       let inv = null;
-      
+
       // First try by inventoryItemId
       if ((order as any).inventoryItemId) {
         const found = inventory.find(i => i.id === (order as any).inventoryItemId);
         if (found) {
           if (found.is_account_based || found.isAccountBased) {
             const profiles = found.profiles || [];
-            const hasAssignedSlot = profiles.some((p: any) => 
+            const hasAssignedSlot = profiles.some((p: any) =>
               p.isAssigned && p.assignedOrderId === order.id
             );
             if (hasAssignedSlot) inv = found;
@@ -857,13 +857,13 @@ const OrderList: React.FC = () => {
           }
         }
       }
-      
+
       // Fallback: find by linkedOrderId
       if (!inv) {
         const byLinked = inventory.find(i => i.linked_order_id === order.id || i.linkedOrderId === order.id);
         if (byLinked) inv = byLinked;
       }
-      
+
       // Fallback: account-based items with assigned profiles
       if (!inv) {
         const orderProfileIds = (order as any).inventoryProfileIds;
@@ -879,14 +879,14 @@ const OrderList: React.FC = () => {
           if (found) inv = found;
         }
       }
-      
+
       // Fallback: account-based items where profile is assigned
       if (!inv) {
         inv = inventory.find(i => i.is_account_based || i.isAccountBased
           ? (i.profiles || []).some((p: any) => p.assignedOrderId === order.id && p.isAssigned)
           : false);
       }
-      
+
       // If has inventory link but no actual inventory found, it's stuck
       return !inv;
     });
@@ -924,7 +924,7 @@ const OrderList: React.FC = () => {
       notify('Không có đơn hàng nào cần fix', 'info');
       return;
     }
-    
+
     setConfirmState({
       message: `Bạn có chắc chắn muốn fix ${stuckOrders.length} đơn hàng có liên kết kho hàng lỗi?`,
       onConfirm: async () => {
@@ -933,29 +933,29 @@ const OrderList: React.FC = () => {
           notify('Không thể kết nối database', 'error');
           return;
         }
-        
+
         try {
           const orderIds = stuckOrders.map(o => o.id);
           const { error } = await sb.from('orders').update({
             inventory_item_id: null,
             inventory_profile_ids: null
           }).in('id', orderIds);
-          
+
           if (error) {
             notify('Lỗi khi fix liên kết kho hàng', 'error');
             console.error('Error fixing stuck inventory links:', error);
             return;
           }
-          
+
           // Log activity
           try {
-            await sb.from('activity_logs').insert({ 
-              employee_id: state.user?.id || null, 
-              action: 'Fix liên kết kho hàng lỗi (hàng loạt)', 
-              details: `orderIds=${orderIds.join(',')}; count=${orderIds.length}` 
+            await sb.from('activity_logs').insert({
+              employee_id: state.user?.id || null,
+              action: 'Fix liên kết kho hàng lỗi (hàng loạt)',
+              details: `orderIds=${orderIds.join(',')}; count=${orderIds.length}`
             });
-          } catch {}
-          
+          } catch { }
+
           loadData();
           notify(`Đã fix ${stuckOrders.length} đơn hàng có liên kết kho hàng lỗi`, 'success');
         } catch (error) {
@@ -1001,7 +1001,7 @@ const OrderList: React.FC = () => {
           detailEntries.push(`${order.code || order.id}: ${oldStr} -> ${latestIso.split('T')[0]}`);
           try {
             Database.updateOrder(order.id, { expiryDate: new Date(latest) } as any);
-          } catch {}
+          } catch { }
         }
 
         if (success > 0) {
@@ -1012,7 +1012,7 @@ const OrderList: React.FC = () => {
               action: 'Fix hạn đơn',
               details: `count=${success}; entries=${detailEntries.join(', ')}`
             });
-          } catch {}
+          } catch { }
           notify(
             failed > 0
               ? `Đã cập nhật hạn cho ${success} đơn, ${failed} lỗi`
@@ -1053,7 +1053,7 @@ const OrderList: React.FC = () => {
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt đơn hàng', details: `orderCodes=${codes.join(',')}` });
-        } catch {}
+        } catch { }
         setSelectedIds([]);
         loadData();
         notify('Đã xóa đơn hàng đã chọn', 'success');
@@ -1066,14 +1066,14 @@ const OrderList: React.FC = () => {
     (async () => {
       const sb = getSupabase();
       if (!sb) return notify('Không thể cập nhật trạng thái', 'error');
-      
+
       // Validate that all selected IDs exist
       const validIds = selectedIds.filter(id => orders.some(o => o.id === id));
       if (validIds.length === 0) {
         notify('Không tìm thấy đơn hàng hợp lệ', 'error');
         return;
       }
-      
+
       for (const orderId of validIds) {
         const { error: singleError } = await sb.from('orders').update({ status }).eq('id', orderId);
         if (singleError) {
@@ -1081,12 +1081,12 @@ const OrderList: React.FC = () => {
           return notify(`Không thể cập nhật đơn hàng ${orderId}: ${singleError.message}`, 'error');
         }
       }
-      
+
       const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
       try {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật trạng thái hàng loạt', details: `status=${status}; orderCodes=${codes.join(',')}` });
-      } catch {}
+      } catch { }
       setSelectedIds([]);
       loadData();
       notify('Đã cập nhật trạng thái', 'success');
@@ -1098,14 +1098,14 @@ const OrderList: React.FC = () => {
     (async () => {
       const sb = getSupabase();
       if (!sb) return notify('Không thể cập nhật thanh toán', 'error');
-      
+
       // Validate that all selected IDs exist
       const validIds = selectedIds.filter(id => orders.some(o => o.id === id));
       if (validIds.length === 0) {
         notify('Không tìm thấy đơn hàng hợp lệ', 'error');
         return;
       }
-      
+
       const nowIso = new Date().toISOString();
       for (const orderId of validIds) {
         // When marking as REFUNDED, also record refund amount and timestamp, and cancel the order
@@ -1135,12 +1135,12 @@ const OrderList: React.FC = () => {
           refundAt: (payload as any).refund_at ? new Date((payload as any).refund_at) : (orders.find(o => o.id === orderId) as any)?.refundAt
         });
       }
-      
+
       const codes = validIds.map(id => orders.find(o => o.id === id)?.code).filter(Boolean) as string[];
       try {
         const sb2 = getSupabase();
         if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật thanh toán hàng loạt', details: `paymentStatus=${paymentStatus}; orderCodes=${codes.join(',')}` });
-      } catch {}
+      } catch { }
       setSelectedIds([]);
       await loadData();
       // Đảm bảo không bị loadData ghi đè trạng thái mới
@@ -1215,7 +1215,7 @@ const OrderList: React.FC = () => {
     return m;
   }, [packages]);
 
-    const getCustomerName = (customerId: string) => {
+  const getCustomerName = (customerId: string) => {
     const customer = customerMap.get(customerId);
     return customer ? customer.name : 'Không xác định';
   };
@@ -1228,19 +1228,25 @@ const OrderList: React.FC = () => {
   };
 
   const getOrderAccountColumns = useCallback((orderPackageId?: string, linkedInventory?: any) => {
-    if (orderPackageId) {
-      const orderPackage = packageMap.get(orderPackageId);
-      if (orderPackage?.accountColumns && orderPackage.accountColumns.length > 0) {
-        return orderPackage.accountColumns;
-      }
+    // Priority 1: Check inventory accountColumns (both camelCase and snake_case)
+    const invCols = linkedInventory?.accountColumns || linkedInventory?.account_columns;
+    if (invCols && Array.isArray(invCols) && invCols.length > 0) {
+      return invCols;
     }
-    if (linkedInventory?.accountColumns && linkedInventory.accountColumns.length > 0) {
-      return linkedInventory.accountColumns;
-    }
+    // Priority 2: Check package from inventory accountColumns (inventory's package)
     if (linkedInventory?.packageId) {
       const inventoryPackage = packageMap.get(linkedInventory.packageId);
-      if (inventoryPackage?.accountColumns && inventoryPackage.accountColumns.length > 0) {
-        return inventoryPackage.accountColumns;
+      const invPkgCols = inventoryPackage?.accountColumns || (inventoryPackage as any)?.account_columns;
+      if (invPkgCols && Array.isArray(invPkgCols) && invPkgCols.length > 0) {
+        return invPkgCols;
+      }
+    }
+    // Priority 3: Fallback to order package accountColumns (for non-shared-pool cases)
+    if (orderPackageId) {
+      const orderPackage = packageMap.get(orderPackageId);
+      const orderPkgCols = orderPackage?.accountColumns || (orderPackage as any)?.account_columns;
+      if (orderPkgCols && Array.isArray(orderPkgCols) && orderPkgCols.length > 0) {
+        return orderPkgCols;
       }
     }
     return [];
@@ -1273,7 +1279,7 @@ const OrderList: React.FC = () => {
     if (order.paymentStatus === 'REFUNDED') {
       return 'REFUNDED';
     }
-    
+
     // Kiểm tra các lần gia hạn
     const renewals = Array.isArray((order as any).renewals) ? ((order as any).renewals || []) : [];
     if (renewals.length > 0) {
@@ -1286,7 +1292,7 @@ const OrderList: React.FC = () => {
         return 'UNPAID';
       }
     }
-    
+
     // Trả về payment status của order chính
     return order.paymentStatus || 'UNPAID';
   };
@@ -1364,12 +1370,12 @@ const OrderList: React.FC = () => {
     const nowTs = Date.now();
     const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
     const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
-    
+
     return orders.filter(order => {
       // Search
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
-      
+
       // Find linked inventory for this order
       const linkedInventory = (() => {
         if (order.inventoryItemId) {
@@ -1380,7 +1386,7 @@ const OrderList: React.FC = () => {
         if (byLinked) return byLinked;
         return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === order.id));
       })();
-      
+
       // Build inventory search text
       let inventorySearchText = '';
       if (linkedInventory) {
@@ -1392,7 +1398,7 @@ const OrderList: React.FC = () => {
           linkedInventory.supplierName || '',
           linkedInventory.supplierId || ''
         ].join(' ').toLowerCase();
-        
+
         // Add account data if available
         if (linkedInventory.accountData) {
           Object.values(linkedInventory.accountData).forEach(value => {
@@ -1402,7 +1408,7 @@ const OrderList: React.FC = () => {
           });
         }
       }
-      
+
       // Build custom field values search text
       let customFieldsSearchText = '';
       const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
@@ -1414,7 +1420,7 @@ const OrderList: React.FC = () => {
           }
         });
       }
-      
+
       const matchesSearch =
         (order.code || '').toLowerCase().includes(normalizedSearch) ||
         (customerNameLower.get(order.customerId) || '').includes(normalizedSearch) ||
@@ -1533,13 +1539,13 @@ const OrderList: React.FC = () => {
     const nowTs = Date.now();
     const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
     const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
-    
-    
+
+
     const filtered = orders.filter(order => {
       // Search
       const pkg = packageMap.get(order.packageId);
       const product = pkg ? productMap.get(pkg.productId) : undefined;
-      
+
       // Find linked inventory for this order
       const linkedInventory = (() => {
         if (order.inventoryItemId) {
@@ -1550,7 +1556,7 @@ const OrderList: React.FC = () => {
         if (byLinked) return byLinked;
         return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === order.id));
       })();
-      
+
       // Build inventory search text
       let inventorySearchText = '';
       if (linkedInventory) {
@@ -1562,7 +1568,7 @@ const OrderList: React.FC = () => {
           linkedInventory.supplierName || '',
           linkedInventory.supplierId || ''
         ].join(' ').toLowerCase();
-        
+
         // Add account data if available
         if (linkedInventory.accountData) {
           Object.values(linkedInventory.accountData).forEach(value => {
@@ -1572,7 +1578,7 @@ const OrderList: React.FC = () => {
           });
         }
       }
-      
+
       // Build custom field values search text
       let customFieldsSearchText = '';
       const custom = ((order as any).customFieldValues || {}) as Record<string, string>;
@@ -1584,7 +1590,7 @@ const OrderList: React.FC = () => {
           }
         });
       }
-      
+
       const purchaseDateStrings: string[] = [];
       if (order.purchaseDate) {
         const purchaseDateObj = new Date(order.purchaseDate);
@@ -1672,8 +1678,8 @@ const OrderList: React.FC = () => {
 
       return true;
     });
-    
-    
+
+
     return filtered;
   }, [orders, debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
 
@@ -1776,7 +1782,7 @@ const OrderList: React.FC = () => {
       const customer = customerMap.get(o.customerId);
       const product = pkgInfo?.product;
       const packageInfo = pkgInfo?.package;
-      
+
       // Get linked inventory information
       const linkedInventory = (() => {
         if (o.inventoryItemId) {
@@ -1787,14 +1793,14 @@ const OrderList: React.FC = () => {
         if (byLinked) return byLinked;
         return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
       })();
-      
+
       // Build custom field values
       const customFieldValues = (o as any).customFieldValues || {};
       const customFieldsText = packageInfo?.customFields?.map(cf => {
         const value = customFieldValues[cf.id];
         return value ? `${cf.title}: ${value}` : null;
       }).filter(Boolean).join('; ') || '';
-      
+
       // Build inventory account data
       let inventoryAccountData = '';
       if (linkedInventory && linkedInventory.is_account_based && linkedInventory.accountData) {
@@ -1805,14 +1811,14 @@ const OrderList: React.FC = () => {
           return value ? `${col.title}: ${value}` : null;
         }).filter(Boolean).join('; ');
       }
-      
+
       // Build renewal history
       const renewalHistory = (o.renewals || []).map(r => {
         const renewalDate = new Date(r.createdAt).toLocaleDateString('vi-VN');
         const price = r.useCustomPrice ? (r as any).customPrice : r.price;
         return `${renewalDate}: ${formatPrice(price)} (${r.months} tháng)`;
       }).join('; ');
-      
+
       return {
         // Basic order info
         code: o.code || `#${idx + 1}`,
@@ -1824,7 +1830,7 @@ const OrderList: React.FC = () => {
         customerSource: customer?.source ? (CUSTOMER_SOURCES.find(s => s.value === customer.source)?.label || customer.source) : '',
         customerSourceDetail: customer?.sourceDetail || '',
         customerNotes: customer?.notes || '',
-        
+
         // Product info
         productName: product?.name || '',
         productCode: product?.code || '',
@@ -1832,13 +1838,13 @@ const OrderList: React.FC = () => {
         packageName: packageInfo?.name || '',
         packageCode: packageInfo?.code || '',
         warrantyPeriod: packageInfo?.warrantyPeriod ? `${packageInfo.warrantyPeriod} tháng` : '',
-        
+
         // Order details
         purchaseDate: new Date(o.purchaseDate).toLocaleDateString('vi-VN'),
         expiryDate: new Date(o.expiryDate).toLocaleDateString('vi-VN'),
         status: getStatusLabel(o.status),
         paymentStatus: getPaymentLabel(getDisplayPaymentStatus(o)),
-        
+
         // Pricing
         costPrice: packageInfo?.costPrice || 0,
         ctvPrice: packageInfo?.ctvPrice || 0,
@@ -1848,10 +1854,10 @@ const OrderList: React.FC = () => {
         customPrice: o.customPrice || '',
         cogs: o.cogs || '',
         salePrice: o.salePrice || '',
-        
+
         notes: o.notes || '',
         customFields: customFieldsText,
-        
+
         // Inventory info
         inventoryCode: linkedInventory?.code || '',
         inventoryProductInfo: linkedInventory?.productInfo || '',
@@ -1862,20 +1868,20 @@ const OrderList: React.FC = () => {
         inventoryAccountData: inventoryAccountData,
         inventoryTotalSlots: linkedInventory?.totalSlots || '',
         inventoryAssignedSlots: linkedInventory?.profiles?.filter((p: any) => p.isAssigned).length || '',
-        
+
         // Renewal info
         renewalMessageSent: o.renewalMessageSent ? 'Đã gửi' : 'Chưa gửi',
         renewalMessageSentBy: o.renewalMessageSentBy || '',
         renewalMessageSentAt: o.renewalMessageSentAt ? new Date(o.renewalMessageSentAt).toLocaleDateString('vi-VN') : '',
         renewalHistory: renewalHistory,
-        
+
         // System info
         createdBy: o.createdBy || '',
         createdAt: new Date(o.createdAt).toLocaleDateString('vi-VN'),
         updatedAt: new Date(o.updatedAt).toLocaleDateString('vi-VN'),
       };
     });
-    
+
     exportToXlsx(rows, [
       // Basic order info
       { header: 'Mã đơn', key: 'code', width: 14 },
@@ -1883,7 +1889,7 @@ const OrderList: React.FC = () => {
       { header: 'Ngày hết hạn', key: 'expiryDate', width: 14 },
       { header: 'Trạng thái', key: 'status', width: 14 },
       { header: 'Thanh toán', key: 'paymentStatus', width: 14 },
-      
+
       // Customer info
       { header: 'Tên khách hàng', key: 'customerName', width: 24 },
       { header: 'Mã khách hàng', key: 'customerCode', width: 16 },
@@ -1893,7 +1899,7 @@ const OrderList: React.FC = () => {
       { header: 'Nguồn khách', key: 'customerSource', width: 16 },
       { header: 'Chi tiết nguồn', key: 'customerSourceDetail', width: 20 },
       { header: 'Ghi chú khách', key: 'customerNotes', width: 20 },
-      
+
       // Product info
       { header: 'Tên sản phẩm', key: 'productName', width: 24 },
       { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
@@ -1901,7 +1907,7 @@ const OrderList: React.FC = () => {
       { header: 'Tên gói', key: 'packageName', width: 20 },
       { header: 'Mã gói', key: 'packageCode', width: 16 },
       { header: 'Thời hạn bảo hành', key: 'warrantyPeriod', width: 16 },
-      
+
       // Pricing
       { header: 'Giá vốn', key: 'costPrice', width: 12 },
       { header: 'Giá CTV', key: 'ctvPrice', width: 12 },
@@ -1911,11 +1917,11 @@ const OrderList: React.FC = () => {
       { header: 'Giá tùy chỉnh', key: 'customPrice', width: 12 },
       { header: 'Giá vốn snapshot', key: 'cogs', width: 12 },
       { header: 'Giá bán snapshot', key: 'salePrice', width: 12 },
-      
+
       // Order details
       { header: 'Ghi chú', key: 'notes', width: 20 },
       { header: 'Trường tùy chỉnh', key: 'customFields', width: 30 },
-      
+
       // Inventory info
       { header: 'Mã kho hàng', key: 'inventoryCode', width: 16 },
       { header: 'Thông tin sản phẩm kho', key: 'inventoryProductInfo', width: 30 },
@@ -1926,13 +1932,13 @@ const OrderList: React.FC = () => {
       { header: 'Dữ liệu tài khoản', key: 'inventoryAccountData', width: 30 },
       { header: 'Tổng slot', key: 'inventoryTotalSlots', width: 10 },
       { header: 'Slot đã gán', key: 'inventoryAssignedSlots', width: 12 },
-      
+
       // Renewal info
       { header: 'Đã gửi tin nhắn gia hạn', key: 'renewalMessageSent', width: 20 },
       { header: 'Người gửi tin nhắn', key: 'renewalMessageSentBy', width: 16 },
       { header: 'Ngày gửi tin nhắn', key: 'renewalMessageSentAt', width: 16 },
       { header: 'Lịch sử gia hạn', key: 'renewalHistory', width: 30 },
-      
+
       // System info
       { header: 'Người tạo', key: 'createdBy', width: 16 },
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
@@ -1992,7 +1998,7 @@ const OrderList: React.FC = () => {
     for (let i = 0; i < selectedIds.length; i++) {
       const order = filteredOrders.find(o => o.id === selectedIds[i]);
       if (!order) continue;
-      
+
       if (order.paymentStatus === 'REFUNDED') {
         continue; // Skip refunded orders
       } else if ((order.status === 'COMPLETED' || order.status === 'EXPIRED') && order.paymentStatus === 'PAID') {
@@ -2242,8 +2248,8 @@ const OrderList: React.FC = () => {
               const stuckCount = stuckInventoryLinks.length;
               if (stuckCount > 0) {
                 return (
-                  <button 
-                    className="btn btn-warning" 
+                  <button
+                    className="btn btn-warning"
                     onClick={handleFixAllStuckInventoryLinks}
                     title={`Fix ${stuckCount} đơn hàng có liên kết kho hàng lỗi`}
                   >
@@ -2579,10 +2585,10 @@ const OrderList: React.FC = () => {
             const rawRenewals = Array.isArray((o as any).renewals) ? ((o as any).renewals || []) : [];
             const latestRenewal = rawRenewals.length > 0
               ? rawRenewals.slice().sort(
-                  (a: any, b: any) =>
-                    +new Date(b.createdAt || b.newExpiryDate || b.new_expiry_date) -
-                    +new Date(a.createdAt || a.newExpiryDate || a.new_expiry_date)
-                )[0]
+                (a: any, b: any) =>
+                  +new Date(b.createdAt || b.newExpiryDate || b.new_expiry_date) -
+                  +new Date(a.createdAt || a.newExpiryDate || a.new_expiry_date)
+              )[0]
               : null;
             const finalExpiryDate = latestRenewal && (latestRenewal.newExpiryDate || latestRenewal.new_expiry_date)
               ? new Date(latestRenewal.newExpiryDate || latestRenewal.new_expiry_date)
@@ -2628,7 +2634,7 @@ const OrderList: React.FC = () => {
               if (displayColumns.length > 0) {
                 out.push('');
                 displayColumns.forEach((col: any) => {
-                  const value = (inv.accountData || {})[col.id] || '';
+                  const value = (inv.accountData || inv.account_data || {})[col.id] || '';
                   if (String(value).trim()) {
                     out.push(`${col.title}: ${value}`);
                   }
@@ -2816,18 +2822,18 @@ const OrderList: React.FC = () => {
                               <div className="text-muted small">
                                 {option.previousExpiryDate
                                   ? formatDate(
-                                      option.previousExpiryDate instanceof Date
-                                        ? option.previousExpiryDate
-                                        : new Date(option.previousExpiryDate)
-                                    )
+                                    option.previousExpiryDate instanceof Date
+                                      ? option.previousExpiryDate
+                                      : new Date(option.previousExpiryDate)
+                                  )
                                   : ''}
                                 {' → '}
                                 {option.newExpiryDate
                                   ? formatDate(
-                                      option.newExpiryDate instanceof Date
-                                        ? option.newExpiryDate
-                                        : new Date(option.newExpiryDate)
-                                    )
+                                    option.newExpiryDate instanceof Date
+                                      ? option.newExpiryDate
+                                      : new Date(option.newExpiryDate)
+                                  )
                                   : ''}
                               </div>
                             )}
@@ -2897,7 +2903,7 @@ const OrderList: React.FC = () => {
                             details: `count=${validIds.length}; status=${selectedOrderPaymentStatus}; codes=${codes}`
                           });
                         }
-                      } catch {}
+                      } catch { }
 
                       setSelectedIds([]);
                       setOrderPaymentModal(null);
@@ -2971,7 +2977,7 @@ const OrderList: React.FC = () => {
                         if (error) {
                           notify(
                             `Không thể cập nhật thanh toán gia hạn cho đơn ${item.order.code ||
-                              item.order.id}`,
+                            item.order.id}`,
                             'error'
                           );
                           return;
@@ -2987,7 +2993,7 @@ const OrderList: React.FC = () => {
                             details: `renewalCount=${selectedOrderRenewalIds.length}; status=${selectedOrderPaymentStatus}`
                           });
                         }
-                      } catch {}
+                      } catch { }
 
                       setOrderPaymentModal(null);
                       setSelectedOrderRenewalIds([]);
@@ -3188,7 +3194,7 @@ const OrderList: React.FC = () => {
                           onChange={async (e) => {
                             const checked = e.target.checked;
                             setRenewState(prev => prev ? { ...prev, markMessageSent: checked } : prev);
-                            
+
                             // Update immediately in Supabase
                             const sb = getSupabase();
                             if (sb) {
@@ -3200,7 +3206,7 @@ const OrderList: React.FC = () => {
                                   renewal_message_sent_at: nowIso,
                                   renewal_message_sent_by: state.user?.id || null
                                 }).eq('id', renewState.order.id);
-                                
+
                                 // Update local state
                                 setOrders(prev => prev.map(o => o.id === renewState.order.id ? { ...o, renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: state.user?.id || 'system' } : o));
                               } else {
@@ -3210,7 +3216,7 @@ const OrderList: React.FC = () => {
                                   renewal_message_sent_at: null,
                                   renewal_message_sent_by: null
                                 }).eq('id', renewState.order.id);
-                                
+
                                 // Update local state
                                 setOrders(prev => prev.map(o => o.id === renewState.order.id ? { ...o, renewalMessageSent: false, renewalMessageSentAt: undefined, renewalMessageSentBy: undefined } : o));
                               }
@@ -3222,9 +3228,9 @@ const OrderList: React.FC = () => {
                                 } else {
                                   Database.updateOrder(renewState.order.id, { renewalMessageSent: false, renewalMessageSentAt: undefined, renewalMessageSentBy: undefined } as any);
                                 }
-                              } catch {}
+                              } catch { }
                             }
-                            
+
                             // Reload data to update table
                             await loadData();
                           }}
@@ -3272,7 +3278,7 @@ const OrderList: React.FC = () => {
                   lines.push(`- Gói: ${packageName}`);
                   lines.push(`- Ngày mua: ${new Date(o.purchaseDate).toLocaleDateString('vi-VN')}`);
                   lines.push(`- Ngày hết hạn: ${new Date(o.expiryDate).toLocaleDateString('vi-VN')}`);
-                  
+
                   // Append filtered warehouse fields under a header
                   {
                     const inv = (() => {
@@ -3284,11 +3290,11 @@ const OrderList: React.FC = () => {
                       if (byLinked) return byLinked;
                       return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
                     })();
-                    
+
                     if (inv) {
                       const accountColumns = getOrderAccountColumns(o.packageId, inv);
                       const displayColumns = filterVisibleAccountColumns(accountColumns);
-                      
+
                       if (displayColumns.length > 0) {
                         lines.push('- Thông tin đơn hàng:');
                         displayColumns.forEach((col: any) => {
@@ -3302,7 +3308,7 @@ const OrderList: React.FC = () => {
                       }
                     }
                   }
-                  
+
                   // Add custom fields if they exist
                   const customFieldValues = (o as any).customFieldValues || {};
                   if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
@@ -3389,8 +3395,8 @@ const OrderList: React.FC = () => {
                         }).eq('id', o.id);
                         await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
                       }
-                    } catch {}
-                    
+                    } catch { }
+
                     setRenewState(null);
                     setViewingOrder(updated);
                     loadData();
@@ -3453,14 +3459,14 @@ const OrderList: React.FC = () => {
                         if (byLinked) return byLinked;
                         return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
                       })();
-                      
+
                       if (!inv) return null;
-                      
+
                       const accountColumns = getOrderAccountColumns(o.packageId, inv);
                       const columns = Array.isArray(accountColumns) ? accountColumns : [];
-                      
+
                       if (columns.length === 0) return null;
-                      
+
                       return (
                         <div style={{ marginTop: '8px' }}>
                           <strong>Thông tin đơn hàng:</strong>
@@ -3560,7 +3566,7 @@ const OrderList: React.FC = () => {
                     `Ngày lỗi: ${new Date(refundState.errorDate).toLocaleDateString('vi-VN')}`,
                     `Số tiền hoàn: ${formatPrice(refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount)}`
                   ];
-                  
+
                   // Get filtered warehouse fields for copy
                   const inv = (() => {
                     if (o.inventoryItemId) {
@@ -3571,11 +3577,11 @@ const OrderList: React.FC = () => {
                     if (byLinked) return byLinked;
                     return inventory.find((i: any) => i.is_account_based && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
                   })();
-                  
+
                   if (inv) {
                     const accountColumns = getOrderAccountColumns(o.packageId, inv);
                     const displayColumns = filterVisibleAccountColumns(accountColumns);
-                    
+
                     if (displayColumns.length > 0) {
                       baseLines.push('', 'Thông tin đơn hàng:');
                       displayColumns.forEach((col: any) => {
@@ -3588,7 +3594,7 @@ const OrderList: React.FC = () => {
                       });
                     }
                   }
-                  
+
                   // Add custom fields if they exist
                   const customFieldValues = (o as any).customFieldValues || {};
                   if (pkgInfo?.package?.customFields && Object.keys(customFieldValues).length > 0) {
@@ -3630,7 +3636,7 @@ const OrderList: React.FC = () => {
                       }).eq('id', o.id);
                       await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}` });
                     }
-                  } catch {}
+                  } catch { }
                   setRefundState(null);
                   setViewingOrder(null);
                   loadData();
@@ -3673,7 +3679,7 @@ const OrderList: React.FC = () => {
                   ? 'Đơn này đã hết hạn. Trước khi trả slot về kho, vui lòng xác nhận rằng bạn đã xóa slot/tài khoản khỏi hệ thống đích.'
                   : 'Đơn này đã hết hạn. Trước khi xóa đơn và trả slot về kho, vui lòng xác nhận rằng bạn đã xóa slot/tài khoản khỏi hệ thống đích.'}
               </div>
-              
+
               {/* Thông tin kho hàng */}
               {(() => {
                 const invItem = inventory.find((i: any) => i.id === returnConfirmState.inventoryId);
@@ -3686,7 +3692,7 @@ const OrderList: React.FC = () => {
                 const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
                 const purchaseDate = invItem.purchaseDate || invItem.purchase_date;
                 const expiryDate = invItem.expiryDate || invItem.expiry_date;
-                
+
                 return (
                   <div className="card mb-3">
                     <div className="card-header">
@@ -3712,11 +3718,11 @@ const OrderList: React.FC = () => {
                       <div style={{ marginTop: 6 }}>
                         <strong>Ghi chú nội bộ:</strong>
                         {invItem.notes ? (
-                          <pre style={{ 
-                            whiteSpace: 'pre-wrap', 
-                            margin: '4px 0 0 0', 
-                            padding: '8px', 
-                            backgroundColor: 'var(--bg-tertiary)', 
+                          <pre style={{
+                            whiteSpace: 'pre-wrap',
+                            margin: '4px 0 0 0',
+                            padding: '8px',
+                            backgroundColor: 'var(--bg-tertiary)',
                             color: 'var(--text-primary)',
                             borderRadius: '4px',
                             fontSize: '14px',
@@ -3728,7 +3734,7 @@ const OrderList: React.FC = () => {
                           <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
                         )}
                       </div>
-                      
+
                       {/* Account Information Section */}
                       {invItem.isAccountBased && invItem.accountColumns && invItem.accountColumns.length > 0 && (
                         <div style={{ marginTop: 12 }}>
@@ -3740,11 +3746,11 @@ const OrderList: React.FC = () => {
                               return (
                                 <div key={col.id} style={{ marginBottom: 8 }}>
                                   <div><strong>{col.title}:</strong></div>
-                                  <pre style={{ 
-                                    whiteSpace: 'pre-wrap', 
-                                    margin: 0, 
-                                    padding: '8px', 
-                                    backgroundColor: 'var(--bg-tertiary)', 
+                                  <pre style={{
+                                    whiteSpace: 'pre-wrap',
+                                    margin: 0,
+                                    padding: '8px',
+                                    backgroundColor: 'var(--bg-tertiary)',
                                     color: 'var(--text-primary)',
                                     borderRadius: '4px',
                                     fontSize: '14px',
@@ -3758,9 +3764,9 @@ const OrderList: React.FC = () => {
                           </div>
                         </div>
                       )}
-                      
+
                       {/* Slot totals removed as requested */}
-                      
+
                       {/* Custom Fields from Order */}
                       {(() => {
                         const order = orders.find(o => o.id === returnConfirmState.order.id);
@@ -3804,7 +3810,7 @@ const OrderList: React.FC = () => {
                   </div>
                 );
               })()}
-              
+
               <div className="d-flex align-items-center gap-2">
                 <input
                   id="ack-slot-removed"
@@ -3826,32 +3832,32 @@ const OrderList: React.FC = () => {
                 onClick={async () => {
                   if (!returnConfirmState) return;
                   const { order, inventoryId, mode } = returnConfirmState;
-                  
+
                   const sb = getSupabase();
                   if (!sb) {
                     notify('Không thể kết nối database', 'error');
                     return;
                   }
-                  
+
                   try {
                     const invItem = inventory.find((i: any) => i.id === inventoryId);
                     if (!invItem) {
                       notify('Không tìm thấy kho hàng', 'error');
                       return;
                     }
-                    
+
                     // Release inventory using direct Supabase query with error handling (same as OrderForm)
                     let inventoryUpdateSuccess = false;
                     if (invItem.is_account_based || (Array.isArray(invItem.profiles) && invItem.profiles.length > 0)) {
                       // Release account-based slots or slot-based inventory
                       const profiles = invItem.profiles || [];
                       const orderProfileIds = (order as any).inventory_profile_ids || [];
-                      
+
                       // Release all profiles assigned to this order (by assignedOrderId or by profile ID in inventory_profile_ids)
                       const updatedProfiles = profiles.map((profile: any) => {
                         const isAssignedToOrder = profile.assignedOrderId === order.id;
                         const isInOrderProfileIds = Array.isArray(orderProfileIds) && orderProfileIds.includes(profile.id);
-                        
+
                         if (isAssignedToOrder || isInOrderProfileIds) {
                           return {
                             ...profile,
@@ -3863,18 +3869,18 @@ const OrderList: React.FC = () => {
                         }
                         return profile;
                       });
-                      
+
                       // Check if there are any free slots remaining
-                      const hasFreeSlots = updatedProfiles.some((p: any) => 
+                      const hasFreeSlots = updatedProfiles.some((p: any) =>
                         !p.isAssigned && !(p as any).needsUpdate
                       );
-                      
+
                       const { error: updateError } = await sb.from('inventory').update({
                         profiles: updatedProfiles,
                         status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
-                      
+
                       if (updateError) {
                         notify('Lỗi khi giải phóng slot kho hàng', 'error');
                         console.error('Inventory update error:', updateError);
@@ -3889,7 +3895,7 @@ const OrderList: React.FC = () => {
                         linked_order_id: null,
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
-                      
+
                       if (updateError) {
                         notify('Lỗi khi giải phóng kho hàng', 'error');
                         console.error('Inventory update error:', updateError);
@@ -3898,54 +3904,54 @@ const OrderList: React.FC = () => {
                         inventoryUpdateSuccess = true;
                       }
                     }
-                    
+
                     // Always clear order's inventory link, even if inventory update had errors
-                    const { error: orderUpdateError } = await sb.from('orders').update({ 
+                    const { error: orderUpdateError } = await sb.from('orders').update({
                       inventory_item_id: null,
-                      inventory_profile_ids: null 
+                      inventory_profile_ids: null
                     }).eq('id', order.id);
-                    
+
                     if (orderUpdateError) {
                       notify('Lỗi khi cập nhật đơn hàng', 'error');
                       console.error('Order update error:', orderUpdateError);
                       return;
                     }
-                    
+
                     if (!inventoryUpdateSuccess) {
                       notify('Đã xóa liên kết đơn hàng nhưng có lỗi khi cập nhật kho hàng', 'warning');
                     }
-                    
+
                     // Log activity
                     try {
-                      await sb.from('activity_logs').insert({ 
-                        employee_id: null, 
-                        action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho', 
-                        details: `orderId=${order.id}; inventoryId=${inventoryId}` 
+                      await sb.from('activity_logs').insert({
+                        employee_id: null,
+                        action: mode === 'RETURN_ONLY' ? 'Trả slot về kho' : 'Xác nhận xóa slot & trả về kho',
+                        details: `orderId=${order.id}; inventoryId=${inventoryId}`
                       });
-                    } catch {}
-                    
+                    } catch { }
+
                     if (mode === 'RETURN_ONLY') {
                       setReturnConfirmState(null);
                       loadData();
                       notify('Đã trả slot về kho', 'success');
                       return;
                     }
-                    
+
                     // DELETE_AND_RETURN mode: also delete the order
                     const { error: deleteError } = await sb.from('orders').delete().eq('id', order.id);
                     if (deleteError) {
                       notify('Không thể xóa đơn hàng', 'error');
                       return;
                     }
-                    
+
                     try {
-                      await sb.from('activity_logs').insert({ 
-                        employee_id: null, 
-                        action: 'Xóa đơn hàng', 
-                        details: `orderId=${order.id}; orderCode=${order.code}` 
+                      await sb.from('activity_logs').insert({
+                        employee_id: null,
+                        action: 'Xóa đơn hàng',
+                        details: `orderId=${order.id}; orderCode=${order.code}`
                       });
-                    } catch {}
-                    
+                    } catch { }
+
                     setReturnConfirmState(null);
                     loadData();
                     notify('Đã trả slot về kho và xóa đơn', 'success');
