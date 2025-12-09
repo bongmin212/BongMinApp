@@ -175,7 +175,7 @@ const WarehouseList: React.FC = () => {
               action: 'Fix hạn kho',
               details: `count=${success}; items=${details.join(', ')}`
             });
-          } catch {}
+          } catch { }
           notify(
             failed > 0
               ? `Đã cập nhật hạn sử dụng cho ${success} kho, ${failed} lỗi`
@@ -192,57 +192,57 @@ const WarehouseList: React.FC = () => {
   const fixOrphanedSlots = async () => {
     const sb = getSupabase();
     if (!sb) return notify('Không thể kết nối database', 'error');
-    
+
     setConfirmState({
       message: 'Tìm và fix các slot kho hàng bị kẹt (slot thường và account-based)?',
       onConfirm: async () => {
         try {
           let fixedCount = 0;
           const fixedDetails: string[] = [];
-          
+
           // Get all existing order IDs first
           const { data: orders, error: ordersError } = await sb
             .from('orders')
             .select('id');
-          
+
           if (ordersError) {
             // Error fetching orders - ignore
             notify('Lỗi khi kiểm tra đơn hàng', 'error');
             return;
           }
-          
+
           const existingOrderIds = new Set((orders || []).map(o => o.id));
-          
+
           // 1. Fix regular slots: SOLD but no linked_order_id OR linked_order_id points to non-existent order
           // BUT exclude account-based inventory (they use profiles, not linked_order_id)
           const { data: allSoldSlots, error: fetchError } = await sb
             .from('inventory')
             .select('id, code, status, linked_order_id, is_account_based')
             .eq('status', 'SOLD');
-          
+
           if (fetchError) {
             // Error fetching orphaned slots - ignore
             notify('Lỗi khi tìm slot bị kẹt', 'error');
             return;
           }
-          
+
           // Only fix non-account-based slots for orphaned status
-          const orphanedSlots = (allSoldSlots || []).filter(slot => 
+          const orphanedSlots = (allSoldSlots || []).filter(slot =>
             !slot.is_account_based && (!slot.linked_order_id || !existingOrderIds.has(slot.linked_order_id))
           );
-          
+
           if (orphanedSlots.length > 0) {
             // Fixing orphaned slots
-            
+
             const slotIds = orphanedSlots.map(slot => slot.id);
             // Slot IDs to fix
-            
+
             const { data: updateResult, error: updateError } = await sb
               .from('inventory')
               .update({ status: 'AVAILABLE', linked_order_id: null })
               .in('id', slotIds)
               .select('id, code, status, linked_order_id');
-            
+
             if (updateError) {
               // Error fixing orphaned slots - ignore
               notify('Lỗi khi fix slot thường bị kẹt', 'error');
@@ -255,86 +255,86 @@ const WarehouseList: React.FC = () => {
               notify('Không có slot nào được cập nhật. Có thể có vấn đề với database.', 'warning');
             }
           }
-          
+
           // 2. Fix account-based slots: profiles with assignedOrderId pointing to non-existent orders
-          
+
           const { data: accountBasedItems, error: accountError } = await sb
             .from('inventory')
             .select('id, code, profiles')
             .eq('is_account_based', true);
-          
+
           if (accountError) {
             // Error fetching account-based items - ignore
             notify('Lỗi khi tìm account-based slot bị kẹt', 'error');
             return;
           }
-          
+
           let accountFixedCount = 0;
           if (accountBasedItems) {
             for (const item of accountBasedItems) {
               const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-              const stuckProfiles = profiles.filter((p: any) => 
+              const stuckProfiles = profiles.filter((p: any) =>
                 p.assignedOrderId && !existingOrderIds.has(p.assignedOrderId)
               );
-              
+
               if (stuckProfiles.length > 0) {
                 const nextProfiles = profiles.map((p: any) => (
                   p.assignedOrderId && !existingOrderIds.has(p.assignedOrderId)
                     ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null }
                     : p
                 ));
-                
+
                 const { error: updateError } = await sb
                   .from('inventory')
                   .update({ profiles: nextProfiles })
                   .eq('id', item.id);
-                
+
                 if (!updateError) {
                   accountFixedCount += stuckProfiles.length;
                 }
               }
             }
           }
-          
+
           if (accountFixedCount > 0) {
             fixedCount += accountFixedCount;
             fixedDetails.push(`${accountFixedCount} profile account-based`);
           }
-          
+
           // 3. Fix orders with inventory_item_id but no actual link
           const { data: allOrders, error: ordersFetchError } = await sb
             .from('orders')
             .select('id, code, inventory_item_id, inventory_profile_ids');
-          
+
           if (!ordersFetchError && allOrders) {
             // Get all inventory items
             const { data: allInventory, error: invFetchError } = await sb
               .from('inventory')
               .select('id, is_account_based, profiles, linked_order_id');
-            
+
             if (!invFetchError && allInventory) {
               const inventoryMap = new Map(allInventory.map((inv: any) => [inv.id, inv]));
               let ordersFixedCount = 0;
               const ordersToFix: string[] = [];
-              
+
               for (const order of allOrders) {
                 if (!order.inventory_item_id) continue;
-                
+
                 const inv = inventoryMap.get(order.inventory_item_id);
                 if (!inv) {
                   // Inventory item doesn't exist, clear the link
                   ordersToFix.push(order.id);
                   continue;
                 }
-                
+
                 // Check if there's an actual link
                 if (inv.is_account_based) {
                   // For account-based, check if any profile is assigned to this order
                   const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
-                  const hasAssignedSlot = profiles.some((p: any) => 
+                  const hasAssignedSlot = profiles.some((p: any) =>
                     p.isAssigned && p.assignedOrderId === order.id
                   );
-                  
+
                   // Also check inventory_profile_ids
                   const orderProfileIds = order.inventory_profile_ids;
                   let hasValidProfileId = false;
@@ -344,7 +344,7 @@ const WarehouseList: React.FC = () => {
                       return profile && profile.isAssigned && profile.assignedOrderId === order.id;
                     });
                   }
-                  
+
                   if (!hasAssignedSlot && !hasValidProfileId) {
                     // No actual link, clear the order's inventory references
                     ordersToFix.push(order.id);
@@ -357,16 +357,16 @@ const WarehouseList: React.FC = () => {
                   }
                 }
               }
-              
+
               if (ordersToFix.length > 0) {
                 const { error: ordersUpdateError } = await sb
                   .from('orders')
-                  .update({ 
+                  .update({
                     inventory_item_id: null,
                     inventory_profile_ids: null
                   })
                   .in('id', ordersToFix);
-                
+
                 if (!ordersUpdateError) {
                   ordersFixedCount = ordersToFix.length;
                   fixedCount += ordersFixedCount;
@@ -375,28 +375,28 @@ const WarehouseList: React.FC = () => {
               }
             }
           }
-          
+
           if (fixedCount === 0) {
             notify('Không tìm thấy slot nào bị kẹt', 'info');
             return;
           }
-          
+
           // 4. Log hoạt động
           try {
             const sb2 = getSupabase();
-            if (sb2) await sb2.from('activity_logs').insert({ 
-              employee_id: null, 
-              action: 'Fix slot bị kẹt', 
-              details: `Fixed ${fixedCount} slots: ${fixedDetails.join(', ')}` 
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: null,
+              action: 'Fix slot bị kẹt',
+              details: `Fixed ${fixedCount} slots: ${fixedDetails.join(', ')}`
             });
-          } catch {}
-          
+          } catch { }
+
           notify(`Đã fix ${fixedCount} slot bị kẹt (${fixedDetails.join(', ')})`, 'success');
           // Force refresh with delay to ensure database sync
           setTimeout(() => {
             refresh();
           }, 1000);
-          
+
         } catch (error) {
           // Unexpected error fixing orphaned slots - ignore
           notify('Lỗi không mong muốn khi fix slot', 'error');
@@ -428,7 +428,7 @@ const WarehouseList: React.FC = () => {
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Giải phóng slot kẹt', details: `inventoryId=${inventoryId}; inventoryCode=${items.find(i => i.id === inventoryId)?.code || ''}` });
-        } catch {}
+        } catch { }
         notify('Đã quét và giải phóng slot kẹt', 'success');
         refresh();
       } else {
@@ -446,27 +446,27 @@ const WarehouseList: React.FC = () => {
       const { data: inv } = await sb.from('inventory').select('*').eq('id', inventoryId).single();
       if (!inv || !inv.is_account_based) return;
       const profiles = Array.isArray(inv.profiles) ? inv.profiles : [];
-      
+
       // Find the order that has this profile ID
       const profile = profiles.find((p: any) => p.id === profileId);
       const orderId = profile?.assignedOrderId;
-      
+
       const nextProfiles = profiles.map((p: any) => (
         p.id === profileId ? { ...p, isAssigned: false, assignedOrderId: null, assignedAt: null, expiryAt: null } : p
       ));
       await sb.from('inventory').update({ profiles: nextProfiles }).eq('id', inventoryId);
-      
+
       // Clear the profile ID from the order's inventory_profile_ids if it exists
       if (orderId) {
         const { data: order } = await sb.from('orders').select('inventory_profile_ids').eq('id', orderId).single();
         if (order && order.inventory_profile_ids && Array.isArray(order.inventory_profile_ids)) {
           const updatedProfileIds = order.inventory_profile_ids.filter((id: string) => id !== profileId);
-          await sb.from('orders').update({ 
-            inventory_profile_ids: updatedProfileIds.length > 0 ? updatedProfileIds : null 
+          await sb.from('orders').update({
+            inventory_profile_ids: updatedProfileIds.length > 0 ? updatedProfileIds : null
           }).eq('id', orderId);
         }
       }
-      
+
       notify('Đã giải phóng slot', 'success');
       refresh();
     } catch {
@@ -502,54 +502,54 @@ const WarehouseList: React.FC = () => {
   const checkForStuckSlots = async () => {
     const sb = getSupabase();
     if (!sb) return;
-    
+
     try {
       // Get all existing order IDs first
       const { data: orders, error: ordersError } = await sb
         .from('orders')
         .select('id');
-      
+
       if (ordersError) {
         // Error fetching orders - ignore
         return;
       }
-      
+
       const existingOrderIds = new Set((orders || []).map(o => o.id));
-      
+
       // 1. Check regular slots: SOLD but no linked_order_id OR linked_order_id points to non-existent order
       // BUT exclude account-based inventory (they use profiles, not linked_order_id)
       const { data: allSoldSlots, error: fetchError } = await sb
         .from('inventory')
         .select('id, code, status, linked_order_id, is_account_based')
         .eq('status', 'SOLD');
-      
+
       if (fetchError) {
         // Error checking orphaned slots - ignore
         return;
       }
-      
+
       // Only check non-account-based slots for orphaned status
-      const orphanedSlots = (allSoldSlots || []).filter(slot => 
+      const orphanedSlots = (allSoldSlots || []).filter(slot =>
         !slot.is_account_based && (!slot.linked_order_id || !existingOrderIds.has(slot.linked_order_id))
       );
-      
+
       // 2. Check account-based slots: profiles with assignedOrderId pointing to non-existent orders
       const { data: accountBasedItems, error: accountError } = await sb
         .from('inventory')
         .select('id, code, profiles')
         .eq('is_account_based', true);
-      
+
       if (accountError) {
         // Error checking account-based items - ignore
         return;
       }
-      
+
       // Check for stuck account-based profiles
       let hasStuckAccountProfiles = false;
       if (accountBasedItems) {
         for (const item of accountBasedItems) {
           const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-          const stuckProfiles = profiles.filter((p: any) => 
+          const stuckProfiles = profiles.filter((p: any) =>
             p.assignedOrderId && !existingOrderIds.has(p.assignedOrderId)
           );
           if (stuckProfiles.length > 0) {
@@ -558,16 +558,16 @@ const WarehouseList: React.FC = () => {
           }
         }
       }
-      
+
       // Set hasStuckSlots based on findings
       const hasRegularStuckSlots = orphanedSlots.length > 0;
       setHasStuckSlots(hasRegularStuckSlots || hasStuckAccountProfiles);
-      
+
       // Debug logging
       if (hasRegularStuckSlots) {
         // Found regular stuck slots
       }
-      
+
     } catch (error) {
       // Error checking for stuck slots - ignore
     }
@@ -584,7 +584,7 @@ const WarehouseList: React.FC = () => {
       sb.from('packages').select('*').order('created_at', { ascending: true }),
       sb.from('customers').select('*').order('created_at', { ascending: true })
     ]);
-    
+
     // WarehouseList: Data loaded
 
     // Auto-update inventory status based on expiry_date
@@ -631,7 +631,7 @@ const WarehouseList: React.FC = () => {
 
       for (const r of accountBasedItems) {
         const profiles = Array.isArray(r.profiles) ? r.profiles : [];
-        
+
         // If no profiles array or empty, consider it as having free slots
         if (profiles.length === 0) {
           if (r.status === 'SOLD') {
@@ -639,10 +639,10 @@ const WarehouseList: React.FC = () => {
           }
           continue;
         }
-        
+
         // Check if there are any free slots (not assigned and not needsUpdate)
         const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
-        
+
         if (!hasFreeSlot && r.status !== 'SOLD') {
           toMarkSold.push(r.id);
         } else if (hasFreeSlot && r.status === 'SOLD') {
@@ -663,7 +663,7 @@ const WarehouseList: React.FC = () => {
     const inv = (invRes.data || []).map((r: any) => {
       const purchaseDate = r.purchase_date ? new Date(r.purchase_date) : new Date();
       let expiryDate = r.expiry_date ? new Date(r.expiry_date) : null;
-      
+
       // If no expiry date, calculate based on product type
       if (!expiryDate) {
         const product = (prodRes.data || []).find((p: any) => p.id === r.product_id);
@@ -679,7 +679,7 @@ const WarehouseList: React.FC = () => {
           expiryDate.setMonth(expiryDate.getMonth() + warrantyPeriod);
         }
       }
-      
+
       return {
         id: r.id,
         code: r.code,
@@ -687,75 +687,75 @@ const WarehouseList: React.FC = () => {
         packageId: r.package_id,
         purchaseDate,
         expiryDate,
-      sourceNote: r.source_note || '',
-      purchasePrice: r.purchase_price,
-      productInfo: r.product_info || '',
-      notes: r.notes || '',
-      status: r.status,
-      paymentStatus: r.payment_status || 'UNPAID',
-      isAccountBased: !!r.is_account_based,
-      accountColumns: r.account_columns || [],
-      accountData: r.account_data || {},
-      totalSlots: r.total_slots || 0,
-      poolWarrantyMonths: r.pool_warranty_months || undefined,
-      profiles: (() => {
-        const profiles = Array.isArray(r.profiles) ? r.profiles : [];
-        // Generate missing profiles for account-based inventory
-        if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
-          return Array.from({ length: r.total_slots || 0 }, (_, idx) => ({
-            id: `slot-${idx + 1}`,
-            label: `Slot ${idx + 1}`,
-            isAssigned: false
-          }));
-        }
-        
-        // UI resilience: if profiles are empty but we can infer links from orders
-        if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
-          // Try to find linked orders by searching through orders table
-          // This is a fallback for display purposes only
-          const linkedOrders = Database.getOrders().filter((order: any) => 
-            order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
-            order.inventoryProfileIds.some((profileId: string) => 
-              profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= (r.total_slots || 0)
-            )
-          );
-          
-          if (linkedOrders.length > 0) {
-            // Generate profiles with inferred assignments
-            return Array.from({ length: r.total_slots || 0 }, (_, idx) => {
-              const slotId = `slot-${idx + 1}`;
-              const linkedOrder = linkedOrders.find((order: any) => 
-                order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
-              );
-              
-              return {
-                id: slotId,
-                label: `Slot ${idx + 1}`,
-                isAssigned: !!linkedOrder,
-                assignedOrderId: linkedOrder?.id,
-                assignedAt: linkedOrder?.createdAt,
-                expiryAt: linkedOrder?.expiryDate
-              };
-            });
+        sourceNote: r.source_note || '',
+        purchasePrice: r.purchase_price,
+        productInfo: r.product_info || '',
+        notes: r.notes || '',
+        status: r.status,
+        paymentStatus: r.payment_status || 'UNPAID',
+        isAccountBased: !!r.is_account_based,
+        accountColumns: r.account_columns || [],
+        accountData: r.account_data || {},
+        totalSlots: r.total_slots || 0,
+        poolWarrantyMonths: r.pool_warranty_months || undefined,
+        profiles: (() => {
+          const profiles = Array.isArray(r.profiles) ? r.profiles : [];
+          // Generate missing profiles for account-based inventory
+          if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
+            return Array.from({ length: r.total_slots || 0 }, (_, idx) => ({
+              id: `slot-${idx + 1}`,
+              label: `Slot ${idx + 1}`,
+              isAssigned: false
+            }));
           }
-        }
-        
-        return profiles;
-      })(),
-      linkedOrderId: r.linked_order_id || undefined,
-      previousLinkedOrderId: r.previous_linked_order_id || undefined,
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    };
+
+          // UI resilience: if profiles are empty but we can infer links from orders
+          if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
+            // Try to find linked orders by searching through orders table
+            // This is a fallback for display purposes only
+            const linkedOrders = Database.getOrders().filter((order: any) =>
+              order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+              order.inventoryProfileIds.some((profileId: string) =>
+                profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= (r.total_slots || 0)
+              )
+            );
+
+            if (linkedOrders.length > 0) {
+              // Generate profiles with inferred assignments
+              return Array.from({ length: r.total_slots || 0 }, (_, idx) => {
+                const slotId = `slot-${idx + 1}`;
+                const linkedOrder = linkedOrders.find((order: any) =>
+                  order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
+                );
+
+                return {
+                  id: slotId,
+                  label: `Slot ${idx + 1}`,
+                  isAssigned: !!linkedOrder,
+                  assignedOrderId: linkedOrder?.id,
+                  assignedAt: linkedOrder?.createdAt,
+                  expiryAt: linkedOrder?.expiryDate
+                };
+              });
+            }
+          }
+
+          return profiles;
+        })(),
+        linkedOrderId: r.linked_order_id || undefined,
+        previousLinkedOrderId: r.previous_linked_order_id || undefined,
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      };
     }) as InventoryItem[];
-    
+
     const prods = (prodRes.data || []).map((r: any) => ({
       ...r,
       sharedInventoryPool: r.shared_inventory_pool || r.sharedInventoryPool,
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Product[];
-    
+
     const pkgs = (pkgRes.data || []).map((r: any) => ({
       ...r,
       productId: r.product_id || r.productId,
@@ -770,13 +770,13 @@ const WarehouseList: React.FC = () => {
       createdAt: r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as ProductPackage[];
-    
+
     const custs = (custRes.data || []) as Customer[];
     setItems(inv);
     setProducts(prods);
     setPackages(pkgs);
     setCustomers(custs);
-    
+
     // Check for stuck slots after data is loaded
     checkForStuckSlots();
   };
@@ -797,7 +797,7 @@ const WarehouseList: React.FC = () => {
       const free = params.get('free') === '1';
       const p = parseInt(params.get('page') || '1', 10);
       const l = parseInt((params.get('limit') || localStorage.getItem('warehouseList.limit') || '10'), 10);
-      
+
       // Update all states in a batch to avoid timing issues
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
@@ -833,7 +833,7 @@ const WarehouseList: React.FC = () => {
         const accounts = params.get('accounts') === '1';
         const free = params.get('free') === '1';
         const p = parseInt(params.get('page') || '1', 10);
-        
+
         // Only update if values are different to avoid infinite loops
         if (status !== filterStatus) setFilterStatus(status);
         if (paymentStatus !== filterPaymentStatus) setFilterPaymentStatus(paymentStatus);
@@ -846,7 +846,7 @@ const WarehouseList: React.FC = () => {
         if (accounts !== onlyAccounts) setOnlyAccounts(accounts);
         if (free !== onlyFreeSlots) setOnlyFreeSlots(free);
         if (p !== page) setPage(p);
-      } catch {}
+      } catch { }
     }, 100);
 
     return () => clearTimeout(timer);
@@ -861,7 +861,7 @@ const WarehouseList: React.FC = () => {
     const handlePackagesUpdate = () => {
       refresh();
     };
-    
+
     window.addEventListener('packagesUpdated', handlePackagesUpdate);
     return () => window.removeEventListener('packagesUpdated', handlePackagesUpdate);
   }, []);
@@ -892,7 +892,7 @@ const WarehouseList: React.FC = () => {
         refresh();
       })
       .subscribe();
-    return () => { try { ch.unsubscribe(); } catch {} };
+    return () => { try { ch.unsubscribe(); } catch { } };
   }, []);
 
   // Debounce search
@@ -908,7 +908,7 @@ const WarehouseList: React.FC = () => {
 
   // Persist limit
   useEffect(() => {
-    try { localStorage.setItem('warehouseList.limit', String(limit)); } catch {}
+    try { localStorage.setItem('warehouseList.limit', String(limit)); } catch { }
   }, [limit]);
 
   // Sync URL
@@ -931,7 +931,7 @@ const WarehouseList: React.FC = () => {
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
-    } catch {}
+    } catch { }
   }, [debouncedSearchTerm, filterStatus, filterPaymentStatus, filterProduct, filterPackage, filterSource, dateFrom, dateTo, expiryFilter, onlyAccounts, onlyFreeSlots, page, limit]);
 
   const productMap = useMemo(() => new Map(products.map(p => [p.id, p.name])), [products]);
@@ -989,67 +989,67 @@ const WarehouseList: React.FC = () => {
     return { lines: baseLines, text };
   };
 
-const EXPIRY_SOON_WINDOW_MS = 7 * 24 * 3600 * 1000;
+  const EXPIRY_SOON_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
-const getExpiryTimestamp = (date: Date | string) => {
-  const normalized = normalizeExpiryDate(date);
-  return normalized ? normalized.getTime() : null;
-};
+  const getExpiryTimestamp = (date: Date | string) => {
+    const normalized = normalizeExpiryDate(date);
+    return normalized ? normalized.getTime() : null;
+  };
 
-const deriveBaseStatus = (item: InventoryItem) => {
-  // For account-based items, compute status from profiles only (ignore expiry override here)
-  if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
-    const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-    const totalSlots = item.totalSlots || profiles.length;
+  const deriveBaseStatus = (item: InventoryItem) => {
+    // For account-based items, compute status from profiles only (ignore expiry override here)
+    if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
+      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+      const totalSlots = item.totalSlots || profiles.length;
 
-    if (totalSlots === 0) return item.status;
+      if (totalSlots === 0) return item.status;
 
-    const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
+      const hasFreeSlot = profiles.some((p: any) => !p.isAssigned && !p.needsUpdate);
 
-    if (profiles.length === 0) {
+      if (profiles.length === 0) {
+        return 'AVAILABLE';
+      }
+
+      if (!profiles.some((p: any) => p.isAssigned)) {
+        return 'AVAILABLE';
+      }
+
+      if (!hasFreeSlot) {
+        return 'SOLD';
+      }
       return 'AVAILABLE';
     }
 
-    if (!profiles.some((p: any) => p.isAssigned)) {
-      return 'AVAILABLE';
+    // Regular inventory: fall back to stored status (but clear legacy EXPIRED flag)
+    if (item.status === 'EXPIRED') return 'AVAILABLE';
+    return item.status;
+  };
+
+  const getActualStatus = (item: InventoryItem) => {
+    const expiryTs = getExpiryTimestamp(item.expiryDate);
+    if (expiryTs !== null && expiryTs < Date.now()) {
+      return 'EXPIRED';
     }
+    return deriveBaseStatus(item);
+  };
 
-    if (!hasFreeSlot) {
-      return 'SOLD';
-    }
-    return 'AVAILABLE';
-  }
-
-  // Regular inventory: fall back to stored status (but clear legacy EXPIRED flag)
-  if (item.status === 'EXPIRED') return 'AVAILABLE';
-  return item.status;
-};
-
-const getActualStatus = (item: InventoryItem) => {
-  const expiryTs = getExpiryTimestamp(item.expiryDate);
-  if (expiryTs !== null && expiryTs < Date.now()) {
-    return 'EXPIRED';
-  }
-  return deriveBaseStatus(item);
-};
-
-const isExpiringSoon = (i: InventoryItem) => {
-  const expiryTs = getExpiryTimestamp(i.expiryDate);
-  if (expiryTs === null) return false;
-  const now = Date.now();
-  if (expiryTs <= now) return false;
-  return expiryTs - now <= EXPIRY_SOON_WINDOW_MS;
-};
+  const isExpiringSoon = (i: InventoryItem) => {
+    const expiryTs = getExpiryTimestamp(i.expiryDate);
+    if (expiryTs === null) return false;
+    const now = Date.now();
+    if (expiryTs <= now) return false;
+    return expiryTs - now <= EXPIRY_SOON_WINDOW_MS;
+  };
 
   // Base filtered list (without product/package filters) - used to determine available filter options
   const baseFilteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
-    
+
     return items.filter(i => {
       // Search in account data fields
       const accountDataMatches = !norm || (() => {
         if (!i.accountData || typeof i.accountData !== 'object') return false;
-        return Object.values(i.accountData).some(value => 
+        return Object.values(i.accountData).some(value =>
           String(value || '').toLowerCase().includes(norm)
         );
       })();
@@ -1212,14 +1212,14 @@ const isExpiringSoon = (i: InventoryItem) => {
 
   const filteredItems = useMemo(() => {
     const norm = debouncedSearchTerm.trim().toLowerCase();
-    
+
     // WarehouseList: Filtering items
-    
+
     const filtered = items.filter(i => {
       // Search in account data fields
       const accountDataMatches = !norm || (() => {
         if (!i.accountData || typeof i.accountData !== 'object') return false;
-        return Object.values(i.accountData).some(value => 
+        return Object.values(i.accountData).some(value =>
           String(value || '').toLowerCase().includes(norm)
         );
       })();
@@ -1310,9 +1310,9 @@ const isExpiringSoon = (i: InventoryItem) => {
 
       return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk;
     });
-    
+
     // WarehouseList: Filtered results
-    
+
     return filtered;
   }, [items, filterStatus, filterPaymentStatus, filterSource, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
 
@@ -1342,20 +1342,20 @@ const isExpiringSoon = (i: InventoryItem) => {
       const packageInfo = packages.find(p => p.id === i.packageId);
       const linkedOrder = i.linkedOrderId ? Database.getOrders().find(o => o.id === i.linkedOrderId) : null;
       const linkedCustomer = linkedOrder ? customers.find(c => c.id === linkedOrder.customerId) : null;
-      
+
       // Build account data info
       const accountDataInfo = i.accountData ? Object.entries(i.accountData).map(([key, value]) => `${key}: ${value}`).join('; ') : '';
-      
+
       // Build profiles info
       const profilesInfo = i.profiles?.map(p => `${p.label}: ${p.isAssigned ? 'Đã gán' : 'Trống'}`).join('; ') || '';
-      
+
       // Build renewal history (placeholder - renewals not available in InventoryItem)
       const renewalHistory = '';
-      
+
       const isAcc = (i.isAccountBased || packageInfo?.isAccountBased);
       const used = (i.profiles || []).filter(p => p.isAssigned).length;
       const totalSlots = i.totalSlots || 0;
-      
+
       return {
         // Basic info
         code: i.code || `KHO${idx + 1}`,
@@ -1364,13 +1364,13 @@ const isExpiringSoon = (i: InventoryItem) => {
         productDescription: product?.description || '',
         packageName: packageInfo?.name || 'Không xác định',
         packageCode: packageInfo?.code || '',
-        
+
         // Dates
         purchaseDate: new Date(i.purchaseDate).toLocaleDateString('vi-VN'),
         expiryDate: new Date(i.expiryDate).toLocaleDateString('vi-VN'),
         purchaseDateRaw: i.purchaseDate.toISOString().split('T')[0],
         expiryDateRaw: i.expiryDate.toISOString().split('T')[0],
-        
+
         // Warranty info
         warrantyMonths: (() => {
           if (product?.sharedInventoryPool) {
@@ -1380,23 +1380,23 @@ const isExpiringSoon = (i: InventoryItem) => {
         })(),
         warrantyMonthsValue: product?.sharedInventoryPool ? (i.poolWarrantyMonths || 0) : (packageInfo?.warrantyPeriod || 0),
         isSharedPool: product?.sharedInventoryPool ? 'Có' : 'Không',
-        
+
         // Source info
         sourceNote: i.sourceNote || '',
         supplierName: i.supplierName || '',
         supplierId: i.supplierId || '',
         currency: i.currency || '',
-        
+
         // Pricing
         purchasePrice: i.purchasePrice || 0,
         paymentStatus: getInventoryPaymentLabel(getInventoryDisplayPaymentStatus(i)),
         paymentStatusValue: getInventoryDisplayPaymentStatus(i),
-        
+
         // Product info
         productInfo: i.productInfo || '',
         notes: i.notes || '',
         status: i.status,
-        
+
         // Account-based info
         isAccountBased: isAcc ? 'Có' : 'Không',
         isAccountBasedValue: isAcc,
@@ -1408,17 +1408,17 @@ const isExpiringSoon = (i: InventoryItem) => {
         freeSlots: totalSlots - used,
         slotsInfo: isAcc ? `${used}/${totalSlots}` : '-',
         profiles: profilesInfo,
-        
+
         // Linked order info
         linkedOrderCode: linkedOrder?.code || '',
         linkedCustomerName: linkedCustomer?.name || '',
         linkedCustomerCode: linkedCustomer?.code || '',
         previousLinkedOrderId: i.previousLinkedOrderId || '',
-        
+
         // Renewal info
         renewalHistory: renewalHistory,
         renewalCount: 0,
-        
+
         // System info
         createdAt: new Date(i.createdAt).toLocaleDateString('vi-VN'),
         updatedAt: new Date(i.updatedAt).toLocaleDateString('vi-VN'),
@@ -1426,7 +1426,7 @@ const isExpiringSoon = (i: InventoryItem) => {
         updatedAtRaw: i.updatedAt.toISOString(),
       };
     });
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Mã kho', key: 'code', width: 14 },
@@ -1435,34 +1435,34 @@ const isExpiringSoon = (i: InventoryItem) => {
       { header: 'Mô tả sản phẩm', key: 'productDescription', width: 30 },
       { header: 'Tên gói', key: 'packageName', width: 20 },
       { header: 'Mã gói', key: 'packageCode', width: 16 },
-      
+
       // Source
       { header: 'Nguồn', key: 'sourceNote', width: 20 },
-      
+
       // Dates
       { header: 'Ngày nhập', key: 'purchaseDate', width: 14 },
       { header: 'Ngày hết hạn', key: 'expiryDate', width: 14 },
-      
+
       // Warranty info
       { header: 'Thời hạn bảo hành', key: 'warrantyMonths', width: 16 },
       { header: 'Thời hạn (tháng)', key: 'warrantyMonthsValue', width: 14 },
       { header: 'Kho chung', key: 'isSharedPool', width: 12 },
-      
+
       // Supplier info
       { header: 'Nhà cung cấp', key: 'supplierName', width: 20 },
       { header: 'Mã nhà cung cấp', key: 'supplierId', width: 16 },
       { header: 'Tiền tệ', key: 'currency', width: 10 },
-      
+
       // Pricing
       { header: 'Giá nhập', key: 'purchasePrice', width: 14 },
       { header: 'Trạng thái thanh toán', key: 'paymentStatus', width: 16 },
       { header: 'Trạng thái thanh toán (giá trị)', key: 'paymentStatusValue', width: 20 },
-      
+
       // Product info
       { header: 'Thông tin sản phẩm', key: 'productInfo', width: 50 },
       { header: 'Ghi chú', key: 'notes', width: 32 },
       { header: 'Trạng thái', key: 'status', width: 14 },
-      
+
       // Account-based info
       { header: 'Dạng tài khoản', key: 'isAccountBased', width: 14 },
       { header: 'Dạng tài khoản (giá trị)', key: 'isAccountBasedValue', width: 18 },
@@ -1474,17 +1474,17 @@ const isExpiringSoon = (i: InventoryItem) => {
       { header: 'Slot trống', key: 'freeSlots', width: 10 },
       { header: 'Thông tin slot', key: 'slotsInfo', width: 12 },
       { header: 'Chi tiết profile', key: 'profiles', width: 40 },
-      
+
       // Linked order info
       { header: 'Mã đơn liên kết', key: 'linkedOrderCode', width: 16 },
       { header: 'Tên khách liên kết', key: 'linkedCustomerName', width: 20 },
       { header: 'Mã khách liên kết', key: 'linkedCustomerCode', width: 16 },
       { header: 'Đơn liên kết trước', key: 'previousLinkedOrderId', width: 18 },
-      
+
       // Renewal info
       { header: 'Lịch sử gia hạn', key: 'renewalHistory', width: 40 },
       { header: 'Số lần gia hạn', key: 'renewalCount', width: 14 },
-      
+
       // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
       { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
@@ -1519,7 +1519,7 @@ const isExpiringSoon = (i: InventoryItem) => {
           // Update local storage immediately
           const currentInventory = Database.getInventory();
           Database.setInventory(currentInventory.filter(i => !deletable.includes(i.id)));
-          
+
           // Force refresh form if it's open
           if (showForm && !editingItem) {
             setShowForm(false);
@@ -1527,12 +1527,12 @@ const isExpiringSoon = (i: InventoryItem) => {
               setShowForm(true);
             }, 50); // Reduced delay for better UX
           }
-          
+
           try {
             const sb2 = getSupabase();
             const codes = deletable.map(id => pageItems.find(i => i.id === id)?.code).filter(Boolean);
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt kho', details: `codes=${codes.join(',')}` });
-          } catch {}
+          } catch { }
           setSelectedIds(prev => prev.filter(id => !deletable.includes(id)));
           refresh();
           notify('Đã xóa mục kho đã chọn', 'success');
@@ -1565,7 +1565,7 @@ const isExpiringSoon = (i: InventoryItem) => {
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gỡ liên kết kho hàng loạt', details: `codes=${unlinkables.map(id => items.find(i => i.id === id)?.code).filter(Boolean).join(',')}` });
-        } catch {}
+        } catch { }
         setSelectedIds([]);
         refresh();
         notify('Đã gỡ liên kết các mục kho', 'success');
@@ -1621,7 +1621,7 @@ const isExpiringSoon = (i: InventoryItem) => {
           // Update local storage immediately
           const currentInventory = Database.getInventory();
           Database.setInventory(currentInventory.filter(i => i.id !== id));
-          
+
           // Force refresh form if it's open
           if (showForm && !editingItem) {
             setShowForm(false);
@@ -1629,11 +1629,11 @@ const isExpiringSoon = (i: InventoryItem) => {
               setShowForm(true);
             }, 50); // Reduced delay for better UX
           }
-          
+
           try {
             const sb2 = getSupabase();
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa khỏi kho', details: `inventoryId=${id}; inventoryCode=${snapshot?.code || ''}; productId=${snapshot?.productId || ''}; packageId=${snapshot?.packageId || ''}; productInfo=${snapshot?.productInfo || ''}` });
-          } catch {}
+          } catch { }
           notify('Đã xóa khỏi kho', 'success');
         } else {
           notify('Không thể xóa mục này khỏi kho', 'error');
@@ -1662,7 +1662,7 @@ const isExpiringSoon = (i: InventoryItem) => {
         try {
           const sb2 = getSupabase();
           if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gỡ liên kết kho khỏi đơn', details: `inventoryId=${id}; inventoryCode=${inv.code || ''}; orderId=${inv.linkedOrderId}` });
-        } catch {}
+        } catch { }
         notify('Đã gỡ liên kết khỏi đơn và đặt trạng thái Sẵn có', 'success');
         refresh();
       }
@@ -1701,10 +1701,10 @@ const isExpiringSoon = (i: InventoryItem) => {
     const cls = actualStatus === 'AVAILABLE'
       ? 'status-completed'
       : actualStatus === 'SOLD'
-      ? 'status-completed'
-      : actualStatus === 'NEEDS_UPDATE'
-      ? 'status-processing'
-      : 'status-cancelled';
+        ? 'status-completed'
+        : actualStatus === 'NEEDS_UPDATE'
+          ? 'status-processing'
+          : 'status-cancelled';
     const content = <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
     if (actualStatus !== 'SOLD') return content;
     // When SOLD, allow click to view linked orders (classic and account-based)
@@ -1826,8 +1826,8 @@ const isExpiringSoon = (i: InventoryItem) => {
                 <button className="btn btn-info" onClick={bulkUpdatePaymentStatus}>Cập nhật thanh toán</button>
               </>
             )}
-            <button className="btn btn-primary" onClick={() => { 
-              setEditingItem(null); 
+            <button className="btn btn-primary" onClick={() => {
+              setEditingItem(null);
               setShowForm(false); // Force close first
               setTimeout(() => {
                 setShowForm(true); // Then open with fresh state
@@ -1986,242 +1986,82 @@ const isExpiringSoon = (i: InventoryItem) => {
         </div>
       ) : (
         <>
-        {/* Mobile cards */}
-        <div className="warehouse-mobile">
-          {pageItems.map((item, index) => (
-            <div key={item.id} className="warehouse-card">
-              <div className="warehouse-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="warehouse-card-title">{item.code || `KHO${index + 1}`}</div>
-                </div>
-                <div className="warehouse-card-subtitle">{formatDate(item.purchaseDate)}</div>
-              </div>
-
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Sản phẩm</div>
-                <div className="warehouse-card-value">{productMap.get(item.productId) || item.productId}</div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Gói/Pool</div>
-                <div className="warehouse-card-value">{(() => {
-                  const prod = products.find(p => p.id === item.productId);
-                  if (prod?.sharedInventoryPool) {
-                    return 'Pool chung';
-                  }
-                  return packageMap.get(item.packageId) || item.packageId;
-                })()}</div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Hết hạn</div>
-                <div className="warehouse-card-value">{formatDate(item.expiryDate)}</div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Thời hạn</div>
-                <div className="warehouse-card-value">{(() => {
-                  const prod = products.find(p => p.id === item.productId);
-                  if (prod?.sharedInventoryPool) {
-                    return item.poolWarrantyMonths ? `${item.poolWarrantyMonths} tháng` : '-';
-                  }
-                  const pkg = packages.find(p => p.id === item.packageId);
-                  return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
-                })()}</div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Giá mua</div>
-                <div className="warehouse-card-value">{item.purchasePrice ? formatPrice(item.purchasePrice) : '-'}</div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Thanh toán</div>
-                <div className="warehouse-card-value">
-                  {(() => {
-                    const paymentStatus = getInventoryDisplayPaymentStatus(item);
-                    return (
-                      <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
-                        {getInventoryPaymentLabel(paymentStatus)}
-                      </span>
-                    );
-                  })()}
-                </div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Trạng thái</div>
-                <div className="warehouse-card-value">
+          {/* Mobile cards */}
+          <div className="warehouse-mobile">
+            {pageItems.map((item, index) => (
+              <div key={item.id} className="warehouse-card">
+                <div className="warehouse-card-header">
                   <div className="d-flex align-items-center gap-2">
-                    {statusBadge(item)}
-                    {item.status === 'NEEDS_UPDATE' && (
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={() => setConfirmState({
-                          message: `Chuyển ${item.code} từ Cần update -> Sẵn có?`,
-                          onConfirm: async () => {
-                            const sb = getSupabase();
-                            if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                            const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', item.id);
-                            if (error) return notify('Không thể cập nhật trạng thái', 'error');
-                            try {
-                              const sb2 = getSupabase();
-                              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; inventoryCode=${item.code}` });
-                            } catch {}
-                            notify('Đã chuyển về Sẵn có', 'success');
-                            refresh();
-                          }
-                        })}
-                        title="Đặt lại trạng thái Sẵn có"
-                      >
-                        Mark Sẵn có
-                      </button>
-                    )}
+                    <div className="warehouse-card-title">{item.code || `KHO${index + 1}`}</div>
                   </div>
+                  <div className="warehouse-card-subtitle">{formatDate(item.purchaseDate)}</div>
                 </div>
-              </div>
-              <div className="warehouse-card-row">
-                <div className="warehouse-card-label">Slot</div>
-                <div className="warehouse-card-value">
-                  {(item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased) ? (() => {
-                    const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-                    const total = item.totalSlots || 0;
-                    
-                    // Count assigned slots from profiles
-                    let used = profiles.filter(p => p.isAssigned).length;
-                    
-                    // Fallback: if profiles are empty but we have linked orders, count from orders
-                    if (profiles.length === 0 && total > 0) {
-                      const linkedOrders = Database.getOrders().filter((order: any) => 
-                        order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
-                        order.inventoryProfileIds.some((profileId: string) => 
-                          profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
-                        )
-                      );
-                      
-                      if (linkedOrders.length > 0) {
-                        // Count unique slot IDs from all linked orders
-                        const allSlotIds = new Set();
-                        linkedOrders.forEach((order: any) => {
-                          order.inventoryProfileIds.forEach((profileId: string) => {
-                            if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
-                              allSlotIds.add(profileId);
-                            }
-                          });
-                        });
-                        used = allSlotIds.size;
-                      }
-                    }
-                    
-                    return (
-                      <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item })}>
-                        {used}/{total}
-                      </button>
-                    );
-                  })() : '-'}
+
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Sản phẩm</div>
+                  <div className="warehouse-card-value">{productMap.get(item.productId) || item.productId}</div>
                 </div>
-              </div>
-
-              <div className="warehouse-card-actions">
-                <button className="btn btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
-                <button className="btn btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Desktop table */}
-        <div className="table-responsive warehouse-table">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
-                  <input
-                    type="checkbox"
-                    checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
-                    disabled={pageItems.length === 0}
-                    onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
-                  />
-                </th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
-                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
-                <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Nguồn</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá mua</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
-                <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Slot</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map((i, index) => (
-                <tr key={i.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(i.id)}
-                      onChange={(e) => toggleSelect(i.id, e.target.checked)}
-                    />
-                  </td>
-                  <td className="text-truncate" title={i.code || `KHO${index + 1}`}>{i.code || `KHO${index + 1}`}</td>
-                  <td className="text-truncate" title={productMap.get(i.productId) || i.productId}>{productMap.get(i.productId) || i.productId}</td>
-                  <td className="text-truncate" title={(() => {
-                    const prod = products.find(p => p.id === i.productId);
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Gói/Pool</div>
+                  <div className="warehouse-card-value">{(() => {
+                    const prod = products.find(p => p.id === item.productId);
                     if (prod?.sharedInventoryPool) {
                       return 'Pool chung';
                     }
-                    return packageMap.get(i.packageId) || i.packageId;
-                  })()}>{(() => {
-                    const prod = products.find(p => p.id === i.productId);
+                    return packageMap.get(item.packageId) || item.packageId;
+                  })()}</div>
+                </div>
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Hết hạn</div>
+                  <div className="warehouse-card-value">{formatDate(item.expiryDate)}</div>
+                </div>
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Thời hạn</div>
+                  <div className="warehouse-card-value">{(() => {
+                    const prod = products.find(p => p.id === item.productId);
                     if (prod?.sharedInventoryPool) {
-                      return <span className="text-muted">Pool chung</span>;
+                      return item.poolWarrantyMonths ? `${item.poolWarrantyMonths} tháng` : '-';
                     }
-                    return packageMap.get(i.packageId) || i.packageId;
-                  })()}</td>
-                  <td style={{ wordWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }} title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
-                  <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
-                  <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
-                  <td className="text-truncate" title={(() => {
-                    const prod = products.find(p => p.id === i.productId);
-                    if (prod?.sharedInventoryPool) {
-                      return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
-                    }
-                    const pkg = packages.find(p => p.id === i.packageId);
+                    const pkg = packages.find(p => p.id === item.packageId);
                     return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
-                  })()}>{(() => {
-                    const prod = products.find(p => p.id === i.productId);
-                    if (prod?.sharedInventoryPool) {
-                      return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
-                    }
-                    const pkg = packages.find(p => p.id === i.packageId);
-                    return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
-                  })()}</td>
-                  <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
-                  <td>
+                  })()}</div>
+                </div>
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Giá mua</div>
+                  <div className="warehouse-card-value">{item.purchasePrice ? formatPrice(item.purchasePrice) : '-'}</div>
+                </div>
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Thanh toán</div>
+                  <div className="warehouse-card-value">
                     {(() => {
-                      const paymentStatus = getInventoryDisplayPaymentStatus(i);
+                      const paymentStatus = getInventoryDisplayPaymentStatus(item);
                       return (
                         <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
                           {getInventoryPaymentLabel(paymentStatus)}
                         </span>
                       );
                     })()}
-                  </td>
-                  <td>
+                  </div>
+                </div>
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Trạng thái</div>
+                  <div className="warehouse-card-value">
                     <div className="d-flex align-items-center gap-2">
-                      {statusBadge(i)}
-                      {i.status === 'NEEDS_UPDATE' && (
+                      {statusBadge(item)}
+                      {item.status === 'NEEDS_UPDATE' && (
                         <button
                           className="btn btn-sm btn-primary"
                           onClick={() => setConfirmState({
-                            message: `Chuyển ${i.code} từ Cần update -> Sẵn có?`,
+                            message: `Chuyển ${item.code} từ Cần update -> Sẵn có?`,
                             onConfirm: async () => {
                               const sb = getSupabase();
                               if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                              const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', i.id);
+                              const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', item.id);
                               if (error) return notify('Không thể cập nhật trạng thái', 'error');
                               try {
                                 const sb2 = getSupabase();
-                                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; inventoryCode=${i.code}` });
-                              } catch {}
+                                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; inventoryCode=${item.code}` });
+                              } catch { }
                               notify('Đã chuyển về Sẵn có', 'success');
                               refresh();
                             }
@@ -2232,56 +2072,216 @@ const isExpiringSoon = (i: InventoryItem) => {
                         </button>
                       )}
                     </div>
-                  </td>
-                  <td>
-                  {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
-                    const profiles = Array.isArray(i.profiles) ? i.profiles : [];
-                    const total = i.totalSlots || 0;
-                    
-                    // Count assigned slots from profiles
-                    let used = profiles.filter(p => p.isAssigned).length;
-                    
-                    // Fallback: if profiles are empty but we have linked orders, count from orders
-                    if (profiles.length === 0 && total > 0) {
-                      const linkedOrders = Database.getOrders().filter((order: any) => 
-                        order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
-                        order.inventoryProfileIds.some((profileId: string) => 
-                          profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
-                        )
-                      );
-                      
-                      if (linkedOrders.length > 0) {
-                        // Count unique slot IDs from all linked orders
-                        const allSlotIds = new Set();
-                        linkedOrders.forEach((order: any) => {
-                          order.inventoryProfileIds.forEach((profileId: string) => {
-                            if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
-                              allSlotIds.add(profileId);
-                            }
+                  </div>
+                </div>
+                <div className="warehouse-card-row">
+                  <div className="warehouse-card-label">Slot</div>
+                  <div className="warehouse-card-value">
+                    {(item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased) ? (() => {
+                      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+                      const total = item.totalSlots || 0;
+
+                      // Count assigned slots from profiles
+                      let used = profiles.filter(p => p.isAssigned).length;
+
+                      // Fallback: if profiles are empty but we have linked orders, count from orders
+                      if (profiles.length === 0 && total > 0) {
+                        const linkedOrders = Database.getOrders().filter((order: any) =>
+                          order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+                          order.inventoryProfileIds.some((profileId: string) =>
+                            profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
+                          )
+                        );
+
+                        if (linkedOrders.length > 0) {
+                          // Count unique slot IDs from all linked orders
+                          const allSlotIds = new Set();
+                          linkedOrders.forEach((order: any) => {
+                            order.inventoryProfileIds.forEach((profileId: string) => {
+                              if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
+                                allSlotIds.add(profileId);
+                              }
+                            });
                           });
-                        });
-                        used = allSlotIds.size;
+                          used = allSlotIds.size;
+                        }
                       }
-                    }
-                    
-                    return (
-                      <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item: i })}>
-                        {used}/{total}
-                      </button>
-                    );
-                  })() : '-'}
-                  </td>
-                  <td>
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(i)}>Xem</button>
-                      <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
-                    </div>
-                  </td>
+
+                      return (
+                        <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item })}>
+                          {used}/{total}
+                        </button>
+                      );
+                    })() : '-'}
+                  </div>
+                </div>
+
+                <div className="warehouse-card-actions">
+                  <button className="btn btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
+                  <button className="btn btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="table-responsive warehouse-table">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
+                      disabled={pageItems.length === 0}
+                      onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
+                    />
+                  </th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
+                  <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Nguồn</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá mua</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
+                  <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Slot</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {pageItems.map((i, index) => (
+                  <tr key={i.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(i.id)}
+                        onChange={(e) => toggleSelect(i.id, e.target.checked)}
+                      />
+                    </td>
+                    <td className="text-truncate" title={i.code || `KHO${index + 1}`}>{i.code || `KHO${index + 1}`}</td>
+                    <td className="text-truncate" title={productMap.get(i.productId) || i.productId}>{productMap.get(i.productId) || i.productId}</td>
+                    <td className="text-truncate" title={(() => {
+                      const prod = products.find(p => p.id === i.productId);
+                      if (prod?.sharedInventoryPool) {
+                        return 'Pool chung';
+                      }
+                      return packageMap.get(i.packageId) || i.packageId;
+                    })()}>{(() => {
+                      const prod = products.find(p => p.id === i.productId);
+                      if (prod?.sharedInventoryPool) {
+                        return <span className="text-muted">Pool chung</span>;
+                      }
+                      return packageMap.get(i.packageId) || i.packageId;
+                    })()}</td>
+                    <td style={{ wordWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }} title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
+                    <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
+                    <td className="text-truncate" title={(() => {
+                      const prod = products.find(p => p.id === i.productId);
+                      if (prod?.sharedInventoryPool) {
+                        return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
+                      }
+                      const pkg = packages.find(p => p.id === i.packageId);
+                      return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                    })()}>{(() => {
+                      const prod = products.find(p => p.id === i.productId);
+                      if (prod?.sharedInventoryPool) {
+                        return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
+                      }
+                      const pkg = packages.find(p => p.id === i.packageId);
+                      return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                    })()}</td>
+                    <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
+                    <td>
+                      {(() => {
+                        const paymentStatus = getInventoryDisplayPaymentStatus(i);
+                        return (
+                          <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
+                            {getInventoryPaymentLabel(paymentStatus)}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td>
+                      <div className="d-flex align-items-center gap-2">
+                        {statusBadge(i)}
+                        {i.status === 'NEEDS_UPDATE' && (
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={() => setConfirmState({
+                              message: `Chuyển ${i.code} từ Cần update -> Sẵn có?`,
+                              onConfirm: async () => {
+                                const sb = getSupabase();
+                                if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
+                                const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', i.id);
+                                if (error) return notify('Không thể cập nhật trạng thái', 'error');
+                                try {
+                                  const sb2 = getSupabase();
+                                  if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; inventoryCode=${i.code}` });
+                                } catch { }
+                                notify('Đã chuyển về Sẵn có', 'success');
+                                refresh();
+                              }
+                            })}
+                            title="Đặt lại trạng thái Sẵn có"
+                          >
+                            Mark Sẵn có
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
+                        const profiles = Array.isArray(i.profiles) ? i.profiles : [];
+                        const total = i.totalSlots || 0;
+
+                        // Count assigned slots from profiles
+                        let used = profiles.filter(p => p.isAssigned).length;
+
+                        // Fallback: if profiles are empty but we have linked orders, count from orders
+                        if (profiles.length === 0 && total > 0) {
+                          const linkedOrders = Database.getOrders().filter((order: any) =>
+                            order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+                            order.inventoryProfileIds.some((profileId: string) =>
+                              profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
+                            )
+                          );
+
+                          if (linkedOrders.length > 0) {
+                            // Count unique slot IDs from all linked orders
+                            const allSlotIds = new Set();
+                            linkedOrders.forEach((order: any) => {
+                              order.inventoryProfileIds.forEach((profileId: string) => {
+                                if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
+                                  allSlotIds.add(profileId);
+                                }
+                              });
+                            });
+                            used = allSlotIds.size;
+                          }
+                        }
+
+                        return (
+                          <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item: i })}>
+                            {used}/{total}
+                          </button>
+                        );
+                      })() : '-'}
+                    </td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(i)}>Xem</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
@@ -2319,24 +2319,24 @@ const isExpiringSoon = (i: InventoryItem) => {
                 const item = items.find(x => x.id === profilesModal.item.id) || profilesModal.item;
                 let profiles = item.profiles || [];
                 const totalSlots = item.totalSlots || 0;
-                
+
                 // If profiles are empty but we have totalSlots, generate fallback profiles from orders
                 if (profiles.length === 0 && totalSlots > 0) {
-                  const linkedOrders = Database.getOrders().filter((order: any) => 
+                  const linkedOrders = Database.getOrders().filter((order: any) =>
                     order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
-                    order.inventoryProfileIds.some((profileId: string) => 
+                    order.inventoryProfileIds.some((profileId: string) =>
                       profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= totalSlots
                     )
                   );
-                  
+
                   if (linkedOrders.length > 0) {
                     // Generate profiles with inferred assignments
                     profiles = Array.from({ length: totalSlots }, (_, idx) => {
                       const slotId = `slot-${idx + 1}`;
-                      const linkedOrder = linkedOrders.find((order: any) => 
+                      const linkedOrder = linkedOrders.find((order: any) =>
                         order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
                       );
-                      
+
                       return {
                         id: slotId,
                         label: `Slot ${idx + 1}`,
@@ -2355,7 +2355,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                     }));
                   }
                 }
-                
+
                 if (!profiles.length) return <div className="text-muted">Không có slot</div>;
                 return (
                   <div className="table-responsive">
@@ -2375,7 +2375,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                           const order = orderId ? Database.getOrders().find(o => o.id === orderId) : null;
                           const prevOrderId = (p as any).previousOrderId;
                           const prevOrder = prevOrderId ? Database.getOrders().find(o => o.id === prevOrderId) : null;
-                          
+
                           return (
                             <tr key={p.id}>
                               <td>{p.label}</td>
@@ -2448,12 +2448,12 @@ const isExpiringSoon = (i: InventoryItem) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Giá gia hạn (VND)</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
+                  <input
+                    type="text"
+                    className="form-control"
                     value={
-                      renewalDialog.amount === 0 
-                        ? '' 
+                      renewalDialog.amount === 0
+                        ? ''
                         : new Intl.NumberFormat('vi-VN').format(renewalDialog.amount) + ' đ'
                     }
                     onChange={e => {
@@ -2471,9 +2471,9 @@ const isExpiringSoon = (i: InventoryItem) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Trạng thái thanh toán</label>
-                  <select 
-                    className="form-control" 
-                    value={renewalDialog.paymentStatus} 
+                  <select
+                    className="form-control"
+                    value={renewalDialog.paymentStatus}
                     onChange={e => setRenewalDialog({ ...renewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
                   >
                     {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
@@ -2501,7 +2501,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                   const currentExpiry = new Date(inv.expiryDate);
                   const newExpiry = new Date(currentExpiry);
                   newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
-                  const { error } = await sb.from('inventory').update({ 
+                  const { error } = await sb.from('inventory').update({
                     // Chỉ cập nhật hạn mới, không đụng tới trạng thái thanh toán lần nhập kho ban đầu
                     expiry_date: newExpiry.toISOString()
                   }).eq('id', inv.id);
@@ -2516,7 +2516,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                       note: renewalDialog.note,
                       payment_status: renewalDialog.paymentStatus
                     });
-                    
+
                     if (!renewalError) {
                       // Also store locally for backward compatibility
                       Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, paymentStatus: renewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
@@ -2537,11 +2537,11 @@ const isExpiringSoon = (i: InventoryItem) => {
                         }
                       ]));
                     }
-                    
+
                     try {
                       const sb2 = getSupabase();
                       if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; inventoryCode=${inv.code || ''}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}; paymentStatus=${renewalDialog.paymentStatus}` });
-                    } catch {}
+                    } catch { }
                     notify('Gia hạn thành công', 'success');
                     setRenewalDialog(null);
                     refresh();
@@ -2578,7 +2578,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Giá gia hạn cho mỗi kho (VND)</label>
-                  <input 
+                  <input
                     type="text"
                     className="form-control"
                     value={
@@ -2597,18 +2597,18 @@ const isExpiringSoon = (i: InventoryItem) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Ghi chú</label>
-                  <input 
-                    type="text" 
-                    className="form-control" 
-                    value={bulkRenewalDialog.note} 
-                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, note: e.target.value })} 
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={bulkRenewalDialog.note}
+                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, note: e.target.value })}
                   />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Trạng thái thanh toán</label>
-                  <select 
-                    className="form-control" 
-                    value={bulkRenewalDialog.paymentStatus} 
+                  <select
+                    className="form-control"
+                    value={bulkRenewalDialog.paymentStatus}
                     onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
                   >
                     {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
@@ -2635,7 +2635,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                       const newExpiry = new Date(currentExpiry);
                       const monthsAdded = Math.max(1, bulkRenewalDialog.months || 1);
                       newExpiry.setMonth(newExpiry.getMonth() + monthsAdded);
-                      const { error } = await sb.from('inventory').update({ 
+                      const { error } = await sb.from('inventory').update({
                         expiry_date: newExpiry.toISOString(),
                         payment_status: bulkRenewalDialog.paymentStatus
                       }).eq('id', inv.id);
@@ -2678,12 +2678,12 @@ const isExpiringSoon = (i: InventoryItem) => {
                   if (successCount > 0) {
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ 
+                      if (sb2) await sb2.from('activity_logs').insert({
                         employee_id: state.user?.id || null,
                         action: 'Gia hạn hàng loạt kho hàng',
                         details: `count=${successCount}; months=${bulkRenewalDialog.months}; amount=${bulkRenewalDialog.amount}; paymentStatus=${bulkRenewalDialog.paymentStatus}; ids=${renewablesNow.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}`
                       });
-                    } catch {}
+                    } catch { }
                   }
                   if (errorCount === 0) {
                     notify(`Đã gia hạn thành công ${successCount} kho hàng`, 'success');
@@ -2711,18 +2711,18 @@ const isExpiringSoon = (i: InventoryItem) => {
         const isSharedPool = product?.sharedInventoryPool;
         const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
         const renewals = inventoryRenewals.filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-        
+
         // Get the latest renewal's new expiry date if it's newer than current expiry
         const latestRenewal = renewals.length > 0 ? renewals[0] : null;
-        const actualExpiryDate = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate) 
-          ? latestRenewal.newExpiryDate 
+        const actualExpiryDate = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate)
+          ? latestRenewal.newExpiryDate
           : inv.expiryDate;
         const expiryDateMismatch = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate);
-        
+
         // Get account columns from package or inventory item
         const accountColumns = pkg?.accountColumns || inv.accountColumns || [];
         const accountData = inv.accountData || {};
-        
+
         return (
           <div className="modal" role="dialog" aria-modal>
             <div className="modal-content" style={{ maxWidth: 600 }}>
@@ -2765,11 +2765,11 @@ const isExpiringSoon = (i: InventoryItem) => {
                 <div style={{ marginTop: 6 }}>
                   <strong>Ghi chú nội bộ:</strong>
                   {inv.notes ? (
-                    <pre style={{ 
-                      whiteSpace: 'pre-wrap', 
-                      margin: '4px 0 0 0', 
-                      padding: '8px', 
-                      backgroundColor: 'var(--bg-tertiary)', 
+                    <pre style={{
+                      whiteSpace: 'pre-wrap',
+                      margin: '4px 0 0 0',
+                      padding: '8px',
+                      backgroundColor: 'var(--bg-tertiary)',
                       color: 'var(--text-primary)',
                       borderRadius: '4px',
                       fontSize: '14px',
@@ -2781,38 +2781,48 @@ const isExpiringSoon = (i: InventoryItem) => {
                     <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
                   )}
                 </div>
-                
-                {/* Account Information Section */}
-                {accountColumns.length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <strong>Thông tin tài khoản:</strong>
-                    <div style={{ marginTop: 6 }}>
-                      {accountColumns.map((col: any) => {
-                        const value = accountData[col.id] || '';
-                        return (
-                          <div key={col.id} style={{ marginBottom: 8 }}>
-                            <div><strong>{col.title}:</strong></div>
-                            <pre style={{ 
-                              whiteSpace: 'pre-wrap', 
-                              margin: 0, 
-                              padding: '8px', 
-                              backgroundColor: 'var(--bg-tertiary)', 
-                              color: 'var(--text-primary)',
-                              borderRadius: '4px',
-                              fontSize: '14px',
-                              border: '1px solid var(--border-color)'
-                            }}>
-                              {value || '-'}
-                            </pre>
-                          </div>
-                        );
-                      })}
+
+                {/* Account Information Section - only show columns that have data */}
+                {(() => {
+                  // Filter to only columns that have actual data
+                  const columnsWithData = accountColumns.filter((col: any) => {
+                    const value = accountData[col.id];
+                    return value !== undefined && value !== null && String(value).trim() !== '';
+                  });
+
+                  if (columnsWithData.length === 0) return null;
+
+                  return (
+                    <div style={{ marginTop: 12 }}>
+                      <strong>Thông tin tài khoản:</strong>
+                      <div style={{ marginTop: 6 }}>
+                        {columnsWithData.map((col: any) => {
+                          const value = accountData[col.id] || '';
+                          return (
+                            <div key={col.id} style={{ marginBottom: 8 }}>
+                              <div><strong>{col.title}:</strong></div>
+                              <pre style={{
+                                whiteSpace: 'pre-wrap',
+                                margin: 0,
+                                padding: '8px',
+                                backgroundColor: 'var(--bg-tertiary)',
+                                color: 'var(--text-primary)',
+                                borderRadius: '4px',
+                                fontSize: '14px',
+                                border: '1px solid var(--border-color)'
+                              }}>
+                                {value}
+                              </pre>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
                 <div style={{ marginTop: '16px' }}>
                   <strong style={{ fontSize: '16px' }}>Lịch sử gia hạn:</strong>
-                  
+
                   {/* Timeline: Nhập kho ban đầu */}
                   {(() => {
                     // Tính hạn sử dụng ban đầu: nếu có renewals, dùng previousExpiryDate của renewal cũ nhất
@@ -2821,14 +2831,14 @@ const isExpiringSoon = (i: InventoryItem) => {
                     const originalExpiryDate = sortedRenewals.length > 0 && sortedRenewals[0].previousExpiryDate
                       ? new Date(sortedRenewals[0].previousExpiryDate)
                       : (() => {
-                          if (pkg?.warrantyPeriod) {
-                            const expiry = new Date(inv.purchaseDate);
-                            expiry.setMonth(expiry.getMonth() + Math.floor(pkg.warrantyPeriod));
-                            return expiry;
-                          }
-                          return inv.expiryDate;
-                        })();
-                    
+                        if (pkg?.warrantyPeriod) {
+                          const expiry = new Date(inv.purchaseDate);
+                          expiry.setMonth(expiry.getMonth() + Math.floor(pkg.warrantyPeriod));
+                          return expiry;
+                        }
+                        return inv.expiryDate;
+                      })();
+
                     return (
                       <div className="card mt-3" style={{ borderLeft: '4px solid #28a745', backgroundColor: 'var(--bg-secondary)' }}>
                         <div className="card-body" style={{ padding: '12px' }}>
@@ -2859,36 +2869,36 @@ const isExpiringSoon = (i: InventoryItem) => {
                       (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)
                     );
                     return sortedTimeline.map((r, index) => {
-                    const paymentStatusLabel = r.paymentStatus 
-                      ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
-                      : 'Chưa thanh toán';
-                    
-                    return (
-                      <div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>
-                        <div className="card-body" style={{ padding: '12px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                            <div>
-                              <strong style={{ color: '#007bff', fontSize: '14px' }}>🔄 Gia hạn lần {index + 1}</strong>
-                            </div>
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              {new Date(r.createdAt).toLocaleDateString('vi-VN')}
-                            </div>
-                          </div>
-                          <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                            <div><strong>Thời gian gia hạn:</strong> +{r.months} tháng</div>
-                            <div><strong>Hạn sử dụng:</strong> {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: '500' }}>{new Date(r.newExpiryDate).toLocaleDateString('vi-VN')}</span></div>
-                            <div><strong>Giá gia hạn:</strong> {formatPrice(r.amount)}</div>
-                            <div><strong>Thanh toán:</strong> {paymentStatusLabel}</div>
-                            {r.note && (
-                              <div style={{ marginTop: '6px', padding: '6px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px' }}>
-                                <strong>Ghi chú:</strong> {r.note}
+                      const paymentStatusLabel = r.paymentStatus
+                        ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
+                        : 'Chưa thanh toán';
+
+                      return (
+                        <div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>
+                          <div className="card-body" style={{ padding: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                              <div>
+                                <strong style={{ color: '#007bff', fontSize: '14px' }}>🔄 Gia hạn lần {index + 1}</strong>
                               </div>
-                            )}
+                              <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                              </div>
+                            </div>
+                            <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                              <div><strong>Thời gian gia hạn:</strong> +{r.months} tháng</div>
+                              <div><strong>Hạn sử dụng:</strong> {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: '500' }}>{new Date(r.newExpiryDate).toLocaleDateString('vi-VN')}</span></div>
+                              <div><strong>Giá gia hạn:</strong> {formatPrice(r.amount)}</div>
+                              <div><strong>Thanh toán:</strong> {paymentStatusLabel}</div>
+                              {r.note && (
+                                <div style={{ marginTop: '6px', padding: '6px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px' }}>
+                                  <strong>Ghi chú:</strong> {r.note}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  });
+                      );
+                    });
                   })()}
 
                   {renewals.length === 0 && (
@@ -3233,7 +3243,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                                 } else {
                                   Database.updateOrder(renewState.order.id, { renewalMessageSent: false, renewalMessageSentAt: undefined, renewalMessageSentBy: undefined } as any);
                                 }
-                              } catch {}
+                              } catch { }
                             }
                             // Optional: could refresh local orders cache if needed
                           }}
@@ -3326,9 +3336,9 @@ const isExpiringSoon = (i: InventoryItem) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Trạng thái thanh toán mới</label>
-                  <select 
-                    className="form-control" 
-                    value={selectedPaymentStatus} 
+                  <select
+                    className="form-control"
+                    value={selectedPaymentStatus}
                     onChange={(e) => setSelectedPaymentStatus(e.target.value as InventoryPaymentStatus)}
                   >
                     {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
@@ -3430,7 +3440,7 @@ const isExpiringSoon = (i: InventoryItem) => {
                         .from('inventory')
                         .update({ payment_status: selectedPaymentStatus })
                         .in('id', paymentStatusModal.selectedIds);
-                      
+
                       if (error) {
                         notify('Không thể cập nhật trạng thái thanh toán', 'error');
                         return;
@@ -3438,12 +3448,12 @@ const isExpiringSoon = (i: InventoryItem) => {
 
                       try {
                         const sb2 = getSupabase();
-                        if (sb2) await sb2.from('activity_logs').insert({ 
-                          employee_id: null, 
-                          action: 'Cập nhật thanh toán kho hàng loạt', 
-                          details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}` 
+                        if (sb2) await sb2.from('activity_logs').insert({
+                          employee_id: null,
+                          action: 'Cập nhật thanh toán kho hàng loạt',
+                          details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}`
                         });
-                      } catch {}
+                      } catch { }
 
                       notify(`Đã cập nhật trạng thái thanh toán cho ${selectedItems.length} mục kho`, 'success');
                       setSelectedIds([]);
@@ -3475,12 +3485,12 @@ const isExpiringSoon = (i: InventoryItem) => {
 
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ 
-                        employee_id: null, 
-                        action: 'Cập nhật thanh toán gia hạn kho hàng loạt', 
-                        details: `count=${selectedRenewalIds.length}; status=${selectedPaymentStatus}; renewalIds=${selectedRenewalIds.join(',')}` 
+                      if (sb2) await sb2.from('activity_logs').insert({
+                        employee_id: null,
+                        action: 'Cập nhật thanh toán gia hạn kho hàng loạt',
+                        details: `count=${selectedRenewalIds.length}; status=${selectedPaymentStatus}; renewalIds=${selectedRenewalIds.join(',')}`
                       });
-                    } catch {}
+                    } catch { }
 
                     notify(`Đã cập nhật trạng thái thanh toán cho ${selectedRenewalIds.length} lần gia hạn`, 'success');
                     setPaymentStatusModal(null);

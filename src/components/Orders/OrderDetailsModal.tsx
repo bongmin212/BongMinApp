@@ -316,33 +316,44 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							<span style={{ marginLeft: 4 }} className="text-muted">Không có</span>
 						)}
 					</div>
-					{displayColumns.length > 0 && (
-						<div style={{ marginTop: 12 }}>
-							<strong>Thông tin tài khoản:</strong>
-							<div style={{ marginTop: 6 }}>
-								{displayColumns.map((col: any) => {
-									const value = accountData[col.id] || '';
-									return (
-										<div key={col.id} style={{ marginBottom: 8 }}>
-											<div><strong>{col.title}:</strong></div>
-											<pre style={{
-												whiteSpace: 'pre-wrap',
-												margin: 0,
-												padding: '8px',
-												backgroundColor: 'var(--bg-tertiary)',
-												color: 'var(--text-primary)',
-												borderRadius: '4px',
-												fontSize: '14px',
-												border: '1px solid var(--border-color)'
-											}}>
-												{value || '-'}
-											</pre>
-										</div>
-									);
-								})}
+					{/* Account Information Section - only show columns that have data */}
+					{(() => {
+						// Filter to only columns that have actual data
+						const columnsWithData = displayColumns.filter((col: any) => {
+							const value = accountData[col.id];
+							return value !== undefined && value !== null && String(value).trim() !== '';
+						});
+
+						if (columnsWithData.length === 0) return null;
+
+						return (
+							<div style={{ marginTop: 12 }}>
+								<strong>Thông tin tài khoản:</strong>
+								<div style={{ marginTop: 6 }}>
+									{columnsWithData.map((col: any) => {
+										const value = accountData[col.id] || '';
+										return (
+											<div key={col.id} style={{ marginBottom: 8 }}>
+												<div><strong>{col.title}:</strong></div>
+												<pre style={{
+													whiteSpace: 'pre-wrap',
+													margin: 0,
+													padding: '8px',
+													backgroundColor: 'var(--bg-tertiary)',
+													color: 'var(--text-primary)',
+													borderRadius: '4px',
+													fontSize: '14px',
+													border: '1px solid var(--border-color)'
+												}}>
+													{value}
+												</pre>
+											</div>
+										);
+									})}
+								</div>
 							</div>
-						</div>
-					)}
+						);
+					})()}
 					{linkedSlots.length > 0 && (
 						<div style={{ marginTop: 8 }}>
 							<strong>Slot liên kết:</strong> {linkedSlots.join(', ')}
