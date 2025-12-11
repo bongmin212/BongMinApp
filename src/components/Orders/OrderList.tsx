@@ -3738,7 +3738,7 @@ const OrderList: React.FC = () => {
                       {/* Account Information Section */}
                       {invItem.isAccountBased && invItem.accountColumns && invItem.accountColumns.length > 0 && (
                         <div style={{ marginTop: 12 }}>
-                          <strong>Thông tin tài khoản:</strong>
+                          <strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
                           <div style={{ marginTop: 6 }}>
                             {invItem.accountColumns.map((col: any) => {
                               const value = (invItem.accountData || {})[col.id] || '';
@@ -3746,16 +3746,34 @@ const OrderList: React.FC = () => {
                               return (
                                 <div key={col.id} style={{ marginBottom: 8 }}>
                                   <div><strong>{col.title}:</strong></div>
-                                  <pre style={{
-                                    whiteSpace: 'pre-wrap',
-                                    margin: 0,
-                                    padding: '8px',
-                                    backgroundColor: 'var(--bg-tertiary)',
-                                    color: 'var(--text-primary)',
-                                    borderRadius: '4px',
-                                    fontSize: '14px',
-                                    border: '1px solid var(--border-color)'
-                                  }}>
+                                  <pre
+                                    style={{
+                                      whiteSpace: 'pre-wrap',
+                                      margin: 0,
+                                      padding: '8px',
+                                      backgroundColor: 'var(--bg-tertiary)',
+                                      color: 'var(--text-primary)',
+                                      borderRadius: '4px',
+                                      fontSize: '14px',
+                                      border: '1px solid var(--border-color)',
+                                      cursor: 'pointer',
+                                      transition: 'background-color 0.2s'
+                                    }}
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(value).then(() => {
+                                        notify(`Đã copy ${col.title}`, 'success');
+                                      }).catch(() => {
+                                        notify('Không thể copy', 'error');
+                                      });
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+                                    }}
+                                    title={`Bấm để copy ${col.title}`}
+                                  >
                                     {value}
                                   </pre>
                                 </div>
@@ -3779,7 +3797,7 @@ const OrderList: React.FC = () => {
 
                         return (
                           <div style={{ marginTop: 12 }}>
-                            <strong>Trường tùy chỉnh đơn hàng:</strong>
+                            <strong>Trường tùy chỉnh đơn hàng:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
                             <div style={{ marginTop: 6 }}>
                               {packageInfo.customFields.map((cf: any) => {
                                 const value = customFieldValues[cf.id];
@@ -3787,16 +3805,34 @@ const OrderList: React.FC = () => {
                                 return (
                                   <div key={cf.id} style={{ marginBottom: 8 }}>
                                     <div><strong>{cf.title}:</strong></div>
-                                    <pre style={{
-                                      whiteSpace: 'pre-wrap',
-                                      margin: 0,
-                                      padding: '8px',
-                                      backgroundColor: 'var(--bg-tertiary)',
-                                      color: 'var(--text-primary)',
-                                      borderRadius: '4px',
-                                      fontSize: '14px',
-                                      border: '1px solid var(--border-color)'
-                                    }}>
+                                    <pre
+                                      style={{
+                                        whiteSpace: 'pre-wrap',
+                                        margin: 0,
+                                        padding: '8px',
+                                        backgroundColor: 'var(--bg-tertiary)',
+                                        color: 'var(--text-primary)',
+                                        borderRadius: '4px',
+                                        fontSize: '14px',
+                                        border: '1px solid var(--border-color)',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(String(value).trim()).then(() => {
+                                          notify(`Đã copy ${cf.title}`, 'success');
+                                        }).catch(() => {
+                                          notify('Không thể copy', 'error');
+                                        });
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+                                      }}
+                                      title={`Bấm để copy ${cf.title}`}
+                                    >
                                       {value}
                                     </pre>
                                   </div>
