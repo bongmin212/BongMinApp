@@ -355,15 +355,7 @@ const OrderList: React.FC = () => {
         createdBy: r.created_by || 'system'
       };
     }) as Order[];
-    // Merge local renewals so they persist across reloads
-    try {
-      const localOrders = Database.getOrders();
-      allOrders = allOrders.map(o => {
-        const local = localOrders.find(lo => lo.id === o.id) as any;
-        if (!local) return o;
-        return { ...o, renewals: Array.isArray(local.renewals) ? local.renewals : (o as any).renewals } as any;
-      });
-    } catch { }
+    // Renewals are now stored directly in Supabase, no need to merge from localStorage
     setOrders(allOrders);
 
     const allCustomers = (customersRes.data || []).map((r: any) => {
@@ -3359,50 +3351,143 @@ const OrderList: React.FC = () => {
                 className="btn btn-primary"
                 onClick={async () => {
                   const o = renewState.order;
-                  const updated = Database.renewOrder(o.id, renewState.packageId, {
-                    note: renewState.note,
-                    paymentStatus: renewState.paymentStatus,
-                    createdBy: state.user?.id || 'system',
-                    useCustomPrice: renewState.useCustomPrice,
-                    customPrice: renewState.customPrice,
-                    useCustomExpiry: renewState.useCustomExpiry,
-                    customExpiryDate: renewState.customExpiryDate
-                  });
-                  if (updated) {
+                  const sb = getSupabase();
+                  if (!sb) {
+                    notify('Không thể kết nối đến database', 'error');
+                    return;
+                  }
+
+                  try {
+                    // Lấy thông tin package và customer từ state đã có
+                    const pkg = getPackageInfo(renewState.packageId)?.package;
+                    const customer = customers.find(c => c.id === o.customerId);
+
+                    if (!pkg) {
+                      notify('Không tìm thấy thông tin gói sản phẩm', 'error');
+                      return;
+                    }
+
+                    // Tính toán hạn mới
+                    const base = new Date(o.expiryDate);
+                    const safeMonths = Math.max(1, Math.floor(pkg.warrantyPeriod || 1));
+                    const nextExpiry = renewState.useCustomExpiry && renewState.customExpiryDate
+                      ? new Date(renewState.customExpiryDate)
+                      : (() => {
+                        const d = new Date(base);
+                        d.setMonth(d.getMonth() + safeMonths);
+                        return d;
+                      })();
+
+                    // Tính giá
+                    const defaultPrice = customer?.type === 'CTV' ? (pkg.ctvPrice || 0) : (pkg.retailPrice || 0);
+                    const useCustomPrice = !!renewState.useCustomPrice && (renewState.customPrice || 0) > 0;
+                    const nextCustomPrice = useCustomPrice ? Math.max(0, Number(renewState.customPrice || 0)) : undefined;
+                    const renewalPrice = useCustomPrice && typeof nextCustomPrice === 'number' && nextCustomPrice > 0
+                      ? nextCustomPrice
+                      : defaultPrice;
+
+                    // Tạo renewal record mới
+                    const renewal = {
+                      id: (Date.now().toString(36) + Math.random().toString(36).substr(2)),
+                      months: safeMonths,
+                      packageId: renewState.packageId,
+                      previousPackageId: o.packageId,
+                      price: renewalPrice,
+                      useCustomPrice: useCustomPrice,
+                      previousExpiryDate: new Date(o.expiryDate).toISOString(),
+                      newExpiryDate: nextExpiry.toISOString(),
+                      note: renewState.note,
+                      paymentStatus: renewState.paymentStatus,
+                      createdAt: new Date().toISOString(),
+                      createdBy: state.user?.id || 'system'
+                    };
+
+                    // Lấy renewals hiện tại từ order
+                    const existingRenewals = ((o as any).renewals || []).map((r: any) => ({
+                      id: r.id,
+                      months: r.months,
+                      packageId: r.packageId,
+                      previousPackageId: r.previousPackageId,
+                      price: r.price,
+                      useCustomPrice: r.useCustomPrice,
+                      previousExpiryDate: r.previousExpiryDate,
+                      newExpiryDate: r.newExpiryDate,
+                      note: r.note,
+                      paymentStatus: r.paymentStatus,
+                      createdAt: r.createdAt,
+                      createdBy: r.createdBy
+                    }));
+
+                    const newRenewals = [...existingRenewals, renewal];
+
+                    // Cập nhật trực tiếp vào Supabase
+                    const { error } = await sb.from('orders').update({
+                      expiry_date: nextExpiry.toISOString(),
+                      package_id: renewState.packageId,
+                      renewals: newRenewals,
+                      use_custom_price: useCustomPrice,
+                      custom_price: nextCustomPrice || 0,
+                      // Reset renewal message flags
+                      renewal_message_sent: false,
+                      renewal_message_sent_at: null,
+                      renewal_message_sent_by: null,
+                      updated_at: new Date().toISOString()
+                    }).eq('id', o.id);
+
+                    if (error) {
+                      console.error('Renewal error:', error);
+                      notify('Không thể gia hạn đơn hàng: ' + (error.message || 'Lỗi không xác định'), 'error');
+                      return;
+                    }
+
+                    // Cập nhật expiry cho profile nếu là account-based inventory
                     try {
-                      const sb2 = getSupabase();
-                      if (sb2) {
-                        // Persist renewal changes to orders table
-                        await sb2.from('orders').update({
-                          expiry_date: (updated as any).expiryDate,
-                          // Không cập nhật payment_status của lần mua ban đầu khi gia hạn;
-                          // trạng thái thanh toán của từng lần gia hạn lưu trong renewals.
-                          package_id: (updated as any).packageId,
-                          renewals: ((updated as any).renewals || []).map((r: any) => ({
-                            id: r.id,
-                            months: r.months,
-                            packageId: r.packageId,
-                            previousPackageId: r.previousPackageId, // Lưu gói cũ
-                            price: r.price,
-                            useCustomPrice: r.useCustomPrice,
-                            previousExpiryDate: r.previousExpiryDate,
-                            newExpiryDate: r.newExpiryDate,
-                            note: r.note,
-                            paymentStatus: r.paymentStatus,
-                            createdAt: r.createdAt,
-                            createdBy: r.createdBy
-                          }))
-                        }).eq('id', o.id);
-                        await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${renewState.useCustomPrice ? renewState.customPrice : 'DEFAULT'}` });
+                      if (o.inventoryItemId) {
+                        const invRes = await sb.from('inventory').select('*').eq('id', o.inventoryItemId).maybeSingle();
+                        if (invRes.data?.is_account_based && invRes.data?.profiles) {
+                          const profiles = invRes.data.profiles.map((p: any) => {
+                            if (p.assignedOrderId === o.id) {
+                              return { ...p, expiryAt: nextExpiry.toISOString() };
+                            }
+                            return p;
+                          });
+                          await sb.from('inventory').update({ profiles }).eq('id', o.inventoryItemId);
+                        }
                       }
+                    } catch (invErr) {
+                      console.warn('Could not update inventory profile expiry:', invErr);
+                    }
+
+                    // Log activity
+                    try {
+                      await sb.from('activity_logs').insert({
+                        employee_id: state.user?.id || null,
+                        action: 'Gia hạn đơn hàng',
+                        details: `orderId=${o.id}; orderCode=${o.code}; packageId=${renewState.packageId}; paymentStatus=${renewState.paymentStatus}; price=${useCustomPrice ? renewState.customPrice : 'DEFAULT'}`
+                      });
                     } catch { }
 
+                    // Tạo updated order object cho local state
+                    const updated = {
+                      ...o,
+                      expiryDate: nextExpiry,
+                      packageId: renewState.packageId,
+                      renewals: newRenewals,
+                      useCustomPrice,
+                      customPrice: nextCustomPrice,
+                      renewalMessageSent: false,
+                      renewalMessageSentAt: undefined,
+                      renewalMessageSentBy: undefined,
+                      updatedAt: new Date()
+                    };
+
                     setRenewState(null);
-                    setViewingOrder(updated);
+                    setViewingOrder(updated as any);
                     loadData();
                     notify('Gia hạn đơn hàng thành công', 'success');
-                  } else {
-                    notify('Không thể gia hạn đơn hàng', 'error');
+                  } catch (err: any) {
+                    console.error('Renewal error:', err);
+                    notify('Không thể gia hạn đơn hàng: ' + (err?.message || 'Lỗi không xác định'), 'error');
                   }
                 }}
               >
