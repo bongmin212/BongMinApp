@@ -2028,7 +2028,7 @@ const WarehouseList: React.FC = () => {
                 </div>
                 <div className="warehouse-card-row">
                   <div className="warehouse-card-label">Giá mua</div>
-                  <div className="warehouse-card-value">{item.purchasePrice ? formatPrice(item.purchasePrice) : '-'}</div>
+                  <div className="warehouse-card-value">{typeof item.purchasePrice === 'number' ? formatPrice(item.purchasePrice) : '-'}</div>
                 </div>
                 <div className="warehouse-card-row">
                   <div className="warehouse-card-label">Thanh toán</div>
@@ -2194,7 +2194,7 @@ const WarehouseList: React.FC = () => {
                       const pkg = packages.find(p => p.id === i.packageId);
                       return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
                     })()}</td>
-                    <td className="text-truncate" title={i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{i.purchasePrice ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
+                    <td className="text-truncate" title={typeof i.purchasePrice === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{typeof i.purchasePrice === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
                     <td>
                       {(() => {
                         const paymentStatus = getInventoryDisplayPaymentStatus(i);
