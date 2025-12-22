@@ -32,6 +32,9 @@ const OrderList: React.FC = () => {
   const [filterPackage, setFilterPackage] = useState<string>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [expiryDateFrom, setExpiryDateFrom] = useState('');
+  const [expiryDateTo, setExpiryDateTo] = useState('');
+  const [filterCustomer, setFilterCustomer] = useState<string>('');
   const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
   const [slotReturnedFilter, setSlotReturnedFilter] = useState<'NOT_RETURNED' | ''>('');
   const [onlyExpiringNotSent, setOnlyExpiringNotSent] = useState(false);
@@ -131,8 +134,11 @@ const OrderList: React.FC = () => {
       const payment = (params.get('payment') || '') as PaymentStatus | '';
       const product = params.get('product') || '';
       const packageId = params.get('package') || '';
+      const customerId = params.get('customer') || '';
       const from = params.get('from') || '';
       const to = params.get('to') || '';
+      const expiryFrom = params.get('expiryFrom') || '';
+      const expiryTo = params.get('expiryTo') || '';
       const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
       const notSent = params.get('onlyExpiringNotSent') === '1';
       const p = parseInt(params.get('page') || '1', 10);
@@ -145,8 +151,11 @@ const OrderList: React.FC = () => {
       setFilterPayment(payment);
       setFilterProduct(product);
       setFilterPackage(packageId);
+      setFilterCustomer(customerId);
       setDateFrom(from);
       setDateTo(to);
+      setExpiryDateFrom(expiryFrom);
+      setExpiryDateTo(expiryTo);
       setExpiryFilter(expiry);
       setOnlyExpiringNotSent(!!notSent);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
@@ -175,6 +184,9 @@ const OrderList: React.FC = () => {
         const payment = (params.get('payment') || '') as PaymentStatus | '';
         const product = params.get('product') || '';
         const packageId = params.get('package') || '';
+        const customerId = params.get('customer') || '';
+        const expiryFrom = params.get('expiryFrom') || '';
+        const expiryTo = params.get('expiryTo') || '';
         const expiry = (params.get('expiry') || '') as 'EXPIRING' | 'EXPIRED' | 'ACTIVE' | '';
         const notSent = params.get('onlyExpiringNotSent') === '1';
         const p = parseInt(params.get('page') || '1', 10);
@@ -184,6 +196,9 @@ const OrderList: React.FC = () => {
         if (payment !== filterPayment) setFilterPayment(payment);
         if (product !== filterProduct) setFilterProduct(product);
         if (packageId !== filterPackage) setFilterPackage(packageId);
+        if (customerId !== filterCustomer) setFilterCustomer(customerId);
+        if (expiryFrom !== expiryDateFrom) setExpiryDateFrom(expiryFrom);
+        if (expiryTo !== expiryDateTo) setExpiryDateTo(expiryTo);
         if (expiry !== expiryFilter) setExpiryFilter(expiry);
         if (notSent !== onlyExpiringNotSent) setOnlyExpiringNotSent(notSent);
         if (p !== page) setPage(p);
@@ -223,7 +238,7 @@ const OrderList: React.FC = () => {
   // Reset page on filter/search changes (debounced)
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, filterCustomer, dateFrom, dateTo, expiryDateFrom, expiryDateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent]);
 
   // No localStorage persistence
 
@@ -236,8 +251,11 @@ const OrderList: React.FC = () => {
       if (filterPayment) params.set('payment', filterPayment as string); else params.delete('payment');
       if (filterProduct) params.set('product', filterProduct); else params.delete('product');
       if (filterPackage) params.set('package', filterPackage); else params.delete('package');
+      if (filterCustomer) params.set('customer', filterCustomer); else params.delete('customer');
       if (dateFrom) params.set('from', dateFrom); else params.delete('from');
       if (dateTo) params.set('to', dateTo); else params.delete('to');
+      if (expiryDateFrom) params.set('expiryFrom', expiryDateFrom); else params.delete('expiryFrom');
+      if (expiryDateTo) params.set('expiryTo', expiryDateTo); else params.delete('expiryTo');
       if (expiryFilter) params.set('expiry', expiryFilter); else params.delete('expiry');
       if (onlyExpiringNotSent) params.set('onlyExpiringNotSent', '1'); else params.delete('onlyExpiringNotSent');
       params.set('page', String(page));
@@ -246,7 +264,7 @@ const OrderList: React.FC = () => {
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
     } catch { }
-  }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
+  }, [debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, filterCustomer, dateFrom, dateTo, expiryDateFrom, expiryDateTo, expiryFilter, slotReturnedFilter, page, limit, onlyExpiringNotSent]);
 
   const loadData = async () => {
     const sb = getSupabase();
@@ -1531,6 +1549,8 @@ const OrderList: React.FC = () => {
     const nowTs = Date.now();
     const fromTs = dateFrom ? new Date(dateFrom).getTime() : 0;
     const toTs = dateTo ? new Date(dateTo).getTime() : Number.POSITIVE_INFINITY;
+    const expiryFromTs = expiryDateFrom ? new Date(expiryDateFrom).getTime() : 0;
+    const expiryToTs = expiryDateTo ? new Date(expiryDateTo).getTime() : Number.POSITIVE_INFINITY;
 
 
     const filtered = orders.filter(order => {
@@ -1658,6 +1678,15 @@ const OrderList: React.FC = () => {
         }
       }
 
+      // Customer filter
+      if (filterCustomer) {
+        if (order.customerId !== filterCustomer) return false;
+      }
+
+      // Expiry date range filter
+      const expiryTsForRange = new Date(order.expiryDate).getTime();
+      if (expiryTsForRange < expiryFromTs || expiryTsForRange > expiryToTs) return false;
+
       // Product filter
       if (filterProduct) {
         if (!product || product.id !== filterProduct) return false;
@@ -1673,7 +1702,21 @@ const OrderList: React.FC = () => {
 
 
     return filtered;
-  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, dateFrom, dateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
+  }, [orders, debouncedSearchTerm, filterStatus, filterPayment, filterProduct, filterPackage, filterCustomer, dateFrom, dateTo, expiryDateFrom, expiryDateTo, expiryFilter, slotReturnedFilter, onlyExpiringNotSent, packageMap, productMap, customerNameLower, customerCodeLower, productNameLower, packageNameLower, inventory]);
+
+  // Customers: unique customers from base filtered list
+  const availableCustomers = useMemo(() => {
+    const customerSet = new Set<string>();
+    baseFilteredOrders.forEach(order => {
+      if (order.customerId) {
+        customerSet.add(order.customerId);
+      }
+    });
+    return Array.from(customerSet)
+      .map(id => customerMap.get(id))
+      .filter(Boolean)
+      .sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'vi')) as Customer[];
+  }, [baseFilteredOrders, customerMap]);
 
   const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
@@ -2222,8 +2265,11 @@ const OrderList: React.FC = () => {
     setFilterPayment('');
     setFilterProduct('');
     setFilterPackage('');
+    setFilterCustomer('');
     setDateFrom('');
     setDateTo('');
+    setExpiryDateFrom('');
+    setExpiryDateTo('');
     setExpiryFilter('');
     setSlotReturnedFilter('');
     setOnlyExpiringNotSent(false);
@@ -2310,7 +2356,8 @@ const OrderList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        <div className="row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
+          {/* Row 1: Search, Customer, Product, Package */}
           <div>
             <input
               type="text"
@@ -2319,6 +2366,20 @@ const OrderList: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterCustomer}
+              onChange={(e) => setFilterCustomer(e.target.value)}
+            >
+              <option value="">Tất cả khách hàng</option>
+              {availableCustomers.map(customer => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}{customer.code ? ` (${customer.code})` : ''}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <select
@@ -2374,6 +2435,8 @@ const OrderList: React.FC = () => {
               ))}
             </select>
           </div>
+
+          {/* Row 2: Status, Payment, Expiry Status, Renewal/Slot */}
           <div>
             <select
               className="form-control"
@@ -2402,14 +2465,6 @@ const OrderList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div style={{ gridColumn: 'span 2' }}>
-            <DateRangeInput
-              label="Khoảng ngày mua"
-              from={dateFrom}
-              to={dateTo}
-              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
-            />
-          </div>
           <div>
             <select
               className="form-control"
@@ -2425,25 +2480,48 @@ const OrderList: React.FC = () => {
           <div>
             <select
               className="form-control"
-              value={onlyExpiringNotSent ? 'NOT_SENT' : ''}
-              onChange={(e) => setOnlyExpiringNotSent(e.target.value === 'NOT_SENT')}
+              value={onlyExpiringNotSent ? 'NOT_SENT' : (slotReturnedFilter || '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'NOT_SENT') {
+                  setOnlyExpiringNotSent(true);
+                  setSlotReturnedFilter('');
+                } else if (val === 'NOT_RETURNED') {
+                  setOnlyExpiringNotSent(false);
+                  setSlotReturnedFilter('NOT_RETURNED');
+                } else {
+                  setOnlyExpiringNotSent(false);
+                  setSlotReturnedFilter('');
+                }
+              }}
             >
-              <option value="">Tất cả gửi gia hạn</option>
+              <option value="">Tất cả gia hạn/slot</option>
               <option value="NOT_SENT">Chưa gửi gia hạn</option>
-            </select>
-          </div>
-          <div>
-            <select
-              className="form-control"
-              value={slotReturnedFilter}
-              onChange={(e) => setSlotReturnedFilter(e.target.value as 'NOT_RETURNED' | '')}
-            >
-              <option value="">Tất cả slot</option>
               <option value="NOT_RETURNED">Chưa trả slot về kho</option>
             </select>
           </div>
-          <div>
-            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
+
+          {/* Row 3: Date Ranges */}
+          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày mua"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+            />
+          </div>
+          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày hết hạn"
+              from={expiryDateFrom}
+              to={expiryDateTo}
+              onChange={(f, t) => { setExpiryDateFrom(f); setExpiryDateTo(t); }}
+            />
+          </div>
+
+          {/* Row 4: Reset */}
+          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 4', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-light" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>
