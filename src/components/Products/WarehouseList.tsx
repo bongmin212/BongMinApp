@@ -1838,12 +1838,13 @@ const WarehouseList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+        <div className="row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
+          {/* Row 1: Search, Product, Package, Source */}
           <div>
             <input
               type="text"
               className="form-control"
-              placeholder="Tìm kiếm mã, sản phẩm, ghi chú, thông tin tài khoản..."
+              placeholder="Tìm kiếm mã, sản phẩm, ghi chú..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -1917,6 +1918,8 @@ const WarehouseList: React.FC = () => {
               })}
             </select>
           </div>
+
+          {/* Row 2: Status, Payment, Expiry, Account/Slot */}
           <div>
             <select className="form-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">Trạng thái</option>
@@ -1934,14 +1937,6 @@ const WarehouseList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div style={{ gridColumn: 'span 2' }}>
-            <DateRangeInput
-              label="Khoảng ngày nhập"
-              from={dateFrom}
-              to={dateTo}
-              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
-            />
-          </div>
           <div>
             <select
               className="form-control"
@@ -1957,25 +1952,40 @@ const WarehouseList: React.FC = () => {
           <div>
             <select
               className="form-control"
-              value={onlyAccounts ? '1' : '0'}
-              onChange={(e) => setOnlyAccounts(e.target.value === '1')}
+              value={onlyAccounts ? 'ACCOUNTS' : (onlyFreeSlots ? 'FREE' : '')}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === 'ACCOUNTS') {
+                  setOnlyAccounts(true);
+                  setOnlyFreeSlots(false);
+                } else if (val === 'FREE') {
+                  setOnlyAccounts(false);
+                  setOnlyFreeSlots(true);
+                } else {
+                  setOnlyAccounts(false);
+                  setOnlyFreeSlots(false);
+                }
+              }}
             >
-              <option value="0">Tất cả tài khoản</option>
-              <option value="1">Chỉ tài khoản nhiều slot</option>
+              <option value="">Tất cả loại slot</option>
+              <option value="ACCOUNTS">Chỉ tài khoản nhiều slot</option>
+              <option value="FREE">Chỉ còn slot trống</option>
             </select>
           </div>
-          <div>
-            <select
-              className="form-control"
-              value={onlyFreeSlots ? '1' : '0'}
-              onChange={(e) => setOnlyFreeSlots(e.target.value === '1')}
-            >
-              <option value="0">Tất cả slot</option>
-              <option value="1">Chỉ còn slot trống</option>
-            </select>
+
+          {/* Row 3: Date Range */}
+          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
+            <DateRangeInput
+              label="Khoảng ngày nhập"
+              from={dateFrom}
+              to={dateTo}
+              onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
+            />
           </div>
-          <div>
-            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
+
+          {/* Row 3: Reset */}
+          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn btn-light" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>
