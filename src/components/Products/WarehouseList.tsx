@@ -256,6 +256,28 @@ const WarehouseList: React.FC = () => {
             }
           }
 
+          // 1b. Fix AVAILABLE slots that still have stale linked_order_id (blocking deletion)
+          const { data: availableWithLink, error: availableFetchError } = await sb
+            .from('inventory')
+            .select('id, code, status, linked_order_id, is_account_based')
+            .eq('status', 'AVAILABLE')
+            .not('linked_order_id', 'is', null);
+
+          if (!availableFetchError && availableWithLink && availableWithLink.length > 0) {
+            // These are AVAILABLE slots with stale linked_order_id - clear the link
+            const staleIds = availableWithLink.map(slot => slot.id);
+            const { data: staleUpdateResult, error: staleUpdateError } = await sb
+              .from('inventory')
+              .update({ linked_order_id: null })
+              .in('id', staleIds)
+              .select('id, code');
+
+            if (!staleUpdateError && staleUpdateResult && staleUpdateResult.length > 0) {
+              fixedCount += staleUpdateResult.length;
+              fixedDetails.push(`${staleUpdateResult.length} kho sẵn có bị kẹt liên kết`);
+            }
+          }
+
           // 2. Fix account-based slots: profiles with assignedOrderId pointing to non-existent orders
 
           const { data: accountBasedItems, error: accountError } = await sb
