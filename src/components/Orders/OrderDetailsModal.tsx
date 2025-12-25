@@ -580,33 +580,15 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
 						const originalPkgInfo = getPackageInfo(originalPackageId);
 						// Lấy giá ban đầu:
-						// - Nếu có originalSalePrice thì dùng luôn.
-						// - Nếu không:
-						//   + Nếu có renewal và cả giá hiện tại lẫn giá renewal đầu tiên đều > 0:
-						//       * Nếu giá hiện tại > giá renewal đầu tiên → coi giá hiện tại là giá mua ban đầu (case DH0436: 590k > 55k).
-						//       * Ngược lại → coi giá renewal đầu tiên là giá mua ban đầu (case DH0238: 310k > 160k).
-						//   + Nếu chỉ có 1 trong 2 giá > 0 thì dùng giá đó.
-						//   + Cuối cùng mới fallback sang giá hiện tại.
+						// - Ưu tiên dùng originalSalePrice (giá được snapshot lúc mua ban đầu).
+						// - Nếu không có, fallback sang giá hiện tại của đơn hàng.
 						const originalPrice = (() => {
 							const explicit = (order as any).originalSalePrice;
 							if (typeof explicit === 'number' && explicit > 0) {
 								return explicit;
 							}
-							const currentPrice = getOrderPrice();
-							if (renewals.length > 0) {
-								const first = renewals[0];
-								const firstPrice = first && typeof first.price === 'number' ? first.price : 0;
-								if (firstPrice > 0 && currentPrice > 0) {
-									if (currentPrice > firstPrice) {
-										return currentPrice;
-									}
-									return firstPrice;
-								}
-								if (firstPrice > 0) {
-									return firstPrice;
-								}
-							}
-							return currentPrice;
+							// Fallback: dùng giá hiện tại của đơn hàng
+							return getOrderPrice();
 						})();
 
 						return (
@@ -638,22 +620,8 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 									const prevPkgId = inferPreviousPackageId(index);
 									const prevPkgInfo = getPackageInfo(prevPkgId || order.packageId);
 									const newPkgInfo = getPackageInfo(r.packageId || order.packageId);
-									// Giá gia hạn:
-									// - Bình thường: dùng r.price.
-									// - Với dữ liệu cũ bị swap (chỉ có 1 lần gia hạn), ta coi:
-									//   + Giá mua ban đầu = price của renewal đầu tiên (đang hiển thị 310k).
-									//   + Giá gia hạn = giá hiện tại của đơn (getOrderPrice, 160k).
-									let renewalPrice = typeof r.price === 'number' ? r.price : 0;
-									if (renewals.length === 1 && index === 0) {
-										const currentOrderPrice = getOrderPrice();
-										if (
-											typeof currentOrderPrice === 'number' &&
-											currentOrderPrice > 0 &&
-											currentOrderPrice !== renewalPrice
-										) {
-											renewalPrice = currentOrderPrice;
-										}
-									}
+									// Giá gia hạn: luôn dùng r.price đã được lưu tại thời điểm gia hạn
+									const renewalPrice = typeof r.price === 'number' ? r.price : 0;
 									const renewalPriceFormatted = formatPrice
 										? formatPrice(renewalPrice)
 										: (renewalPrice > 0
