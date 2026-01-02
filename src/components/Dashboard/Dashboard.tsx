@@ -105,7 +105,7 @@ const Dashboard: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Load all data including expenses (prefer Supabase; fallback to local cache)
       const sb = getSupabase();
       let products: Product[] = [];
@@ -203,6 +203,8 @@ const Dashboard: React.FC = () => {
           accountData: r.account_data || {},
           totalSlots: r.total_slots || 0,
           profiles: Array.isArray(r.profiles) ? r.profiles : [],
+          refundAmount: r.refund_amount || 0,
+          refundAt: r.refund_at ? new Date(r.refund_at) : undefined,
           createdAt: r.created_at ? new Date(r.created_at) : new Date(),
           updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
         }));
@@ -245,17 +247,17 @@ const Dashboard: React.FC = () => {
       const getOrderSnapshotPrice = (order: Order): number => {
         // Exclude fully refunded orders from revenue
         if (order.paymentStatus === 'REFUNDED') return 0;
-        
+
         // Chỉ dùng sale_price từ order, không dùng fallback
         const salePrice = (order as any).salePrice;
         if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice < 0) {
           return 0;
         }
-        
+
         // Nếu có refundAmount, trừ khỏi salePrice để có doanh thu thực tế
         const refundAmount = (order as any).refundAmount || 0;
         const netRevenue = Math.max(0, salePrice - refundAmount);
-        
+
         return netRevenue;
       };
 
@@ -263,19 +265,19 @@ const Dashboard: React.FC = () => {
       const getAdjustedCOGS = (order: Order): number => {
         const cogs = ((order as any).cogs ?? order.cogs) || 0;
         if (cogs === 0) return 0;
-        
+
         const salePrice = (order as any).salePrice;
         if (typeof salePrice !== 'number' || isNaN(salePrice) || salePrice <= 0) {
           return cogs;
         }
-        
+
         const refundAmount = (order as any).refundAmount || 0;
         if (refundAmount <= 0) return cogs;
-        
+
         // Điều chỉnh COGS theo tỷ lệ refund
         const refundRatio = refundAmount / salePrice;
         const adjustedCOGS = cogs * (1 - refundRatio);
-        
+
         return Math.max(0, adjustedCOGS);
       };
 
@@ -301,8 +303,8 @@ const Dashboard: React.FC = () => {
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
           return isRevenueOrder(order) &&
-                 orderDate.getMonth() === targetMonth &&
-                 orderDate.getFullYear() === targetYear;
+            orderDate.getMonth() === targetMonth &&
+            orderDate.getFullYear() === targetYear;
         })
         .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
 
@@ -314,12 +316,12 @@ const Dashboard: React.FC = () => {
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
           return isRevenueOrder(order) &&
-                 orderDate.getMonth() === lastMonth &&
-                 orderDate.getFullYear() === lastMonthYear;
+            orderDate.getMonth() === lastMonth &&
+            orderDate.getFullYear() === lastMonthYear;
         })
         .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
 
-      const revenueGrowth = lastMonthRevenue > 0 ? 
+      const revenueGrowth = lastMonthRevenue > 0 ?
         ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
 
       // Calculate total profit using order.cogs (COGS from inventory, adjusted for refunds)
@@ -332,8 +334,8 @@ const Dashboard: React.FC = () => {
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
           return isRevenueOrder(order) &&
-                 orderDate.getMonth() === targetMonth &&
-                 orderDate.getFullYear() === targetYear;
+            orderDate.getMonth() === targetMonth &&
+            orderDate.getFullYear() === targetYear;
         })
         .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
 
@@ -342,12 +344,12 @@ const Dashboard: React.FC = () => {
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
           return isRevenueOrder(order) &&
-                 orderDate.getMonth() === lastMonth &&
-                 orderDate.getFullYear() === lastMonthYear;
+            orderDate.getMonth() === lastMonth &&
+            orderDate.getFullYear() === lastMonthYear;
         })
         .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
 
-      const profitGrowth = lastMonthProfit > 0 ? 
+      const profitGrowth = lastMonthProfit > 0 ?
         ((monthlyProfit - lastMonthProfit) / lastMonthProfit) * 100 : 0;
 
       // Calculate total expenses
@@ -357,31 +359,31 @@ const Dashboard: React.FC = () => {
       const monthlyExpenses = expenses
         .filter(expense => {
           const expenseDate = new Date(expense.date);
-          return expenseDate.getMonth() === targetMonth && 
-                 expenseDate.getFullYear() === targetYear;
+          return expenseDate.getMonth() === targetMonth &&
+            expenseDate.getFullYear() === targetYear;
         })
         .reduce((sum, expense) => sum + expense.amount, 0);
 
       // Import cost from inventory: sum of purchase prices by month + renewals in that month
       // Tránh trùng với COGS: chỉ tính chi phí nhập hàng cho items CHƯA BÁN trong tháng đó
       // (vì COGS đã trừ purchase_price của hàng đã bán rồi)
-      
+
       // Đếm số slot đã bán trong tháng cho mỗi inventory item (từ orders)
       const soldSlotsInMonth: Record<string, number> = {};
       orders
         .filter(order => {
           const orderDate = new Date(order.purchaseDate);
           return isRevenueOrder(order) &&
-                 orderDate.getMonth() === targetMonth &&
-                 orderDate.getFullYear() === targetYear &&
-                 order.inventoryItemId;
+            orderDate.getMonth() === targetMonth &&
+            orderDate.getFullYear() === targetYear &&
+            order.inventoryItemId;
         })
         .forEach(order => {
           if (order.inventoryItemId) {
             soldSlotsInMonth[order.inventoryItemId] = (soldSlotsInMonth[order.inventoryItemId] || 0) + 1;
           }
         });
-      
+
       // Chi phí nhập hàng tháng này = purchase_price của items nhập trong tháng NHƯNG CHƯA BÁN trong tháng đó
       // Với multi-slot account: tính theo số slot chưa bán
       // Chỉ tính cho items đã thanh toán (PAID) - vì chỉ khi đã thanh toán mới là chi phí thực tế
@@ -409,7 +411,7 @@ const Dashboard: React.FC = () => {
           }
           return s;
         }, 0);
-      
+
       const renewalCostByMonth = inventoryRenewals
         .filter(r => r.createdAt.getMonth() === targetMonth && r.createdAt.getFullYear() === targetYear)
         .reduce((s, r) => s + (r.amount || 0), 0);
@@ -436,7 +438,7 @@ const Dashboard: React.FC = () => {
             allSoldSlots[order.inventoryItemId] = (allSoldSlots[order.inventoryItemId] || 0) + 1;
           }
         });
-      
+
       // Tổng chi phí nhập hàng = purchase_price của items CHƯA BÁN (tính theo slot) + renewals
       // Với multi-slot account: tính theo số slot chưa bán
       // Chỉ tính cho items đã thanh toán (PAID) - vì chỉ khi đã thanh toán mới là chi phí thực tế
@@ -473,19 +475,34 @@ const Dashboard: React.FC = () => {
         .reduce((s, i) => s + (i.purchasePrice || 0), 0)
         + inventoryRenewals.reduce((s, r) => s + (r.amount || 0), 0);
 
-      // Calculate refunds - tính tất cả refundAmount từ tất cả orders
-      // Tổng tiền hoàn: tổng tất cả refundAmount
-      const totalRefunds = orders.reduce((s, o: any) => s + (o.refundAmount || 0), 0);
-      // Tiền hoàn tháng này: tính theo thời điểm hoàn (refundAt) hoặc nếu không có thì theo purchaseDate
-      const monthlyRefunds = orders
+      // Calculate refunds - tính tất cả refundAmount từ orders VÀ inventory
+      // 1. Tiền hoàn đơn hàng
+      const orderRefundsTotal = orders.reduce((s, o: any) => s + (o.refundAmount || 0), 0);
+      const orderRefundsMonthly = orders
         .filter((o: any) => {
           const refundAmount = o.refundAmount || 0;
           if (refundAmount <= 0) return false;
-          // Nếu có refundAt, dùng refundAt; nếu không có, dùng purchaseDate
           const refundDate = o.refundAt ? new Date(o.refundAt) : new Date(o.purchaseDate);
           return refundDate.getMonth() === targetMonth && refundDate.getFullYear() === targetYear;
         })
         .reduce((s, o: any) => s + (o.refundAmount || 0), 0);
+
+      // 2. Tiền hoàn kho hàng (chỉ tính items đã PAID và sau đó REFUNDED)
+      const inventoryRefundsTotal = (inventoryItems as any[])
+        .filter((i: any) => i.paymentStatus === 'REFUNDED' && (i.refundAmount || 0) > 0)
+        .reduce((s, i: any) => s + (i.refundAmount || 0), 0);
+      const inventoryRefundsMonthly = (inventoryItems as any[])
+        .filter((i: any) => {
+          const refundAmount = i.refundAmount || 0;
+          if (refundAmount <= 0 || i.paymentStatus !== 'REFUNDED') return false;
+          const refundDate = i.refundAt ? new Date(i.refundAt) : new Date(i.purchaseDate);
+          return refundDate.getMonth() === targetMonth && refundDate.getFullYear() === targetYear;
+        })
+        .reduce((s, i: any) => s + (i.refundAmount || 0), 0);
+
+      // 3. Tổng tiền hoàn = đơn hàng + kho hàng
+      const totalRefunds = orderRefundsTotal + inventoryRefundsTotal;
+      const monthlyRefunds = orderRefundsMonthly + inventoryRefundsMonthly;
 
       // Calculate net profit (gross profit - external expenses - import cost)
       // COGS = giá vốn của hàng đã bán (snapshot khi bán)
@@ -548,22 +565,22 @@ const Dashboard: React.FC = () => {
       // Top packages - đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn và doanh thu
       // Filter orders hợp lệ (không CANCELLED)
       const validOrders = orders.filter(order => order.status !== 'CANCELLED');
-      
+
       // Tạo map từ inventoryItemId -> productId để xử lý shared pool
       const inventoryItemById: Record<string, InventoryItem> = Object.fromEntries(
         inventoryItems.map(item => [item.id, item])
       );
-      
+
       const pkgAggMap: Record<string, PackageAggRow> = {};
       const productById: Record<string, Product> = Object.fromEntries(products.map(p => [p.id, p]));
       const packagesById: Record<string, ProductPackage> = Object.fromEntries(packages.map(p => [p.id, p]));
-      
+
       // Đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn
       for (const o of validOrders) {
         let pid = o.packageId;
         let pkg: ProductPackage | undefined;
         let prodId: string | undefined;
-        
+
         // Xử lý shared pool: nếu không có packageId, lấy từ inventoryItem
         if (!pid && o.inventoryItemId) {
           const invItem = inventoryItemById[o.inventoryItemId];
@@ -582,34 +599,34 @@ const Dashboard: React.FC = () => {
           pkg = packages.find(p => p.id === pid);
           prodId = pkg?.productId;
         }
-        
+
         // Skip nếu vẫn không có packageId hoặc productId
         if (!pid && !prodId) continue;
-        
+
         // Dùng packageId làm key, hoặc productId nếu không có packageId
         const key = pid || `product_${prodId}`;
-        
+
         // Đếm tất cả orders (trừ CANCELLED), không phân biệt status
         if (!pkgAggMap[key]) {
           const prodName = prodId ? (productById[prodId]?.name || '') : '';
           const pkgName = pkg?.name || (prodId && productById[prodId]?.sharedInventoryPool ? 'Kho chung' : 'Gói');
-          pkgAggMap[key] = { 
-            packageId: pid || key, 
-            name: pkgName, 
-            productName: prodName, 
-            revenue: 0, 
-            profit: 0, 
-            orders: 0 
+          pkgAggMap[key] = {
+            packageId: pid || key,
+            name: pkgName,
+            productName: prodName,
+            revenue: 0,
+            profit: 0,
+            orders: 0
           };
         }
         pkgAggMap[key].orders += 1;
       }
-      
+
       // Tính doanh thu và lãi từ TẤT CẢ orders (không filter theo thời gian)
       for (const o of validOrders) {
         let pid = o.packageId;
         let prodId: string | undefined;
-        
+
         // Xử lý shared pool: nếu không có packageId, lấy từ inventoryItem
         if (!pid && o.inventoryItemId) {
           const invItem = inventoryItemById[o.inventoryItemId];
@@ -626,13 +643,13 @@ const Dashboard: React.FC = () => {
           const pkg = packages.find(p => p.id === pid);
           prodId = pkg?.productId;
         }
-        
+
         // Skip nếu vẫn không có packageId hoặc productId
         if (!pid && !prodId) continue;
-        
+
         // Dùng packageId làm key, hoặc productId nếu không có packageId
         const key = pid || `product_${prodId}`;
-        
+
         // Chỉ tính doanh thu và lãi từ orders đã thanh toán (getOrderSnapshotPrice đã xử lý refund)
         const isPaidRevenue = isRevenueOrder(o);
         if (isPaidRevenue && pkgAggMap[key]) {
@@ -647,27 +664,27 @@ const Dashboard: React.FC = () => {
       // Top customers - đếm TẤT CẢ orders và tính doanh thu (không filter theo thời gian)
       const customerAggMap: Record<string, CustomerAggRow> = {};
       const customersById: Record<string, Customer> = Object.fromEntries(customers.map(c => [c.id, c]));
-      
+
       // Đếm TẤT CẢ orders và tính doanh thu (không filter theo thời gian)
       for (const o of validOrders) {
         const cid = o.customerId;
         if (!cid) continue; // Skip orders without customerId
-        
+
         // Đếm tất cả orders (trừ CANCELLED), không phân biệt status
         if (!customerAggMap[cid]) {
           const customer = customers.find(c => c.id === cid);
-          customerAggMap[cid] = { 
-            customerId: cid, 
-            name: customer?.name || 'Khách hàng', 
+          customerAggMap[cid] = {
+            customerId: cid,
+            name: customer?.name || 'Khách hàng',
             code: customer?.code || '',
             type: customer?.type || 'RETAIL',
-            revenue: 0, 
-            profit: 0, 
-            orders: 0 
+            revenue: 0,
+            profit: 0,
+            orders: 0
           };
         }
         customerAggMap[cid].orders += 1;
-        
+
         // Tính doanh thu và lãi từ orders đã thanh toán (getOrderSnapshotPrice đã xử lý refund)
         const isPaidRevenue = isRevenueOrder(o);
         if (isPaidRevenue) {
@@ -839,7 +856,7 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Tổng doanh thu</h3>
                 <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
-              <div className="sales-subtitle">({stats.soldOrderCount} đơn đã bán)</div>
+                <div className="sales-subtitle">({stats.soldOrderCount} đơn đã bán)</div>
               </div>
 
               <div className="sales-card">
@@ -871,7 +888,7 @@ const Dashboard: React.FC = () => {
                       <div className="order-status">
                         <span className={`status-badge ${order.status.toLowerCase()}`}>
                           {order.status === 'PROCESSING' ? 'Đang xử lý' :
-                           order.status === 'COMPLETED' ? 'Hoàn thành' : 'Đã hủy'}
+                            order.status === 'COMPLETED' ? 'Hoàn thành' : 'Đã hủy'}
                         </span>
                       </div>
                     </button>
@@ -974,32 +991,32 @@ const Dashboard: React.FC = () => {
             <div className="orders-summary">
               <h3>Backlog đơn hàng</h3>
               <div className="orders-stats">
-                <button className="order-stat" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); 
+                <button className="order-stat" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', page: 1 } })), 100);
                 }}>
                   <span className="stat-number">{stats.unpaidCount}</span><span className="stat-label">Chưa thanh toán</span>
                 </button>
-                <button className="order-stat" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); 
+                <button className="order-stat" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'PROCESSING', page: 1 } })), 100);
                 }}>
                   <span className="stat-number">{stats.processingCount}</span><span className="stat-label">Đang xử lý</span>
                 </button>
-                <button className="order-stat" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); 
+                <button className="order-stat" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'CANCELLED', page: 1 } })), 100);
                 }}>
                   <span className="stat-number">{stats.cancelledCount}</span><span className="stat-label">Đã hủy</span>
                 </button>
-                <button className="order-stat" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); 
+                <button className="order-stat" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { payment: 'UNPAID', status: '', page: 1 } })), 100);
                 }}>
                   <span className="stat-number">{formatCurrencyVND(stats.expectedRevenue)}</span><span className="stat-label">Doanh thu kỳ vọng</span>
                 </button>
-                <button className="order-stat" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' })); 
+                <button className="order-stat" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'orders' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { expiry: 'EXPIRING', page: 1 } })), 100);
                 }}>
                   <span className="stat-number">{stats.expiringOrders7Count}</span><span className="stat-label">Sắp hết hạn (≤7 ngày)</span>
@@ -1028,36 +1045,36 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="inventory-breakdown">
-                <button className="breakdown-item available" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); 
+                <button className="breakdown-item available" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'AVAILABLE', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.availableInventory}</span>
                   <span className="breakdown-label">Có sẵn</span>
                 </button>
-                <button className="breakdown-item" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); 
+                <button className="breakdown-item" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'NEEDS_UPDATE', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.needsUpdateInventory}</span>
                   <span className="breakdown-label">Cần update</span>
                 </button>
-                <button className="breakdown-item sold" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); 
+                <button className="breakdown-item sold" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'SOLD', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.soldInventory}</span>
                   <span className="breakdown-label">Đã bán</span>
                 </button>
-                <button className="breakdown-item expired" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); 
+                <button className="breakdown-item expired" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRED', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.expiredInventory}</span>
                   <span className="breakdown-label">Hết hạn</span>
                 </button>
-                <button className="breakdown-item" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' })); 
+                <button className="breakdown-item" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'warehouse' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { status: 'EXPIRING_SOON', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.expiringSoonCount}</span>
@@ -1078,15 +1095,15 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="customer-breakdown">
-                <button className="breakdown-item ctv" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' })); 
+                <button className="breakdown-item ctv" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { type: 'CTV', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.ctvCount}</span>
                   <span className="breakdown-label">Cộng tác viên</span>
                 </button>
-                <button className="breakdown-item retail" onClick={() => { 
-                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' })); 
+                <button className="breakdown-item retail" onClick={() => {
+                  window.dispatchEvent(new CustomEvent('app:navigate', { detail: 'customers' }));
                   setTimeout(() => window.dispatchEvent(new CustomEvent('app:search', { detail: { type: 'RETAIL', page: 1 } })), 100);
                 }}>
                   <span className="breakdown-number">{stats.retailCount}</span>
