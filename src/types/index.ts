@@ -55,7 +55,7 @@ export type OrderStatus = 'PROCESSING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
 
 export type PaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
-export type InventoryPaymentStatus = 'UNPAID' | 'PAID';
+export type InventoryPaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
 export interface Order {
   id: string;
@@ -84,6 +84,8 @@ export interface Order {
   renewalMessageSent?: boolean; // Đã gửi tin nhắn gia hạn cho đơn này
   renewalMessageSentBy?: string; // nhân viên đã gửi
   renewalMessageSentAt?: Date; // thời điểm đã gửi
+  // Refund fields
+  refundReason?: string; // Lý do hoàn tiền
 }
 
 export type EmployeeRole = 'MANAGER' | 'EMPLOYEE';
@@ -151,6 +153,10 @@ export interface InventoryItem {
   profiles?: InventoryProfileSlot[]; // current slot assignments
   // Warranty months for shared pool inventory (persisted)
   poolWarrantyMonths?: number;
+  // Refund fields
+  refundAmount?: number; // Số tiền đã hoàn
+  refundAt?: Date; // Thời điểm hoàn tiền
+  refundReason?: string; // Lý do hoàn tiền
   createdAt: Date;
   updatedAt: Date;
 }
@@ -376,12 +382,14 @@ export const PAYMENT_STATUSES: { value: PaymentStatus; label: string }[] = [
 
 export const INVENTORY_PAYMENT_STATUSES: { value: InventoryPaymentStatus; label: string }[] = [
   { value: 'UNPAID', label: 'Chưa TT' },
-  { value: 'PAID', label: 'Đã TT' }
+  { value: 'PAID', label: 'Đã TT' },
+  { value: 'REFUNDED', label: 'Đã hoàn tiền' }
 ];
 
 export const INVENTORY_PAYMENT_STATUSES_FULL: { value: InventoryPaymentStatus; label: string }[] = [
   { value: 'UNPAID', label: 'Chưa thanh toán' },
-  { value: 'PAID', label: 'Đã thanh toán' }
+  { value: 'PAID', label: 'Đã thanh toán' },
+  { value: 'REFUNDED', label: 'Đã hoàn tiền' }
 ];
 
 export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [

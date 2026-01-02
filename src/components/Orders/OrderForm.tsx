@@ -328,6 +328,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const expiresAt = i.expiryDate ? new Date(i.expiryDate) : undefined;
         const isExpired = (expiresAt ? expiresAt < now : false) || i.status === 'EXPIRED';
         if (isExpired) return false;
+        // Exclude refunded warehouses
+        if (i.payment_status === 'REFUNDED') return false;
         if (i.isAccountBased) {
           const profiles = Array.isArray(i.profiles) ? i.profiles : [];
           const hasAvailable = profiles.some((p: any) => !p.isAssigned && !(p as any).needsUpdate);
@@ -2323,13 +2325,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     className="form-control form-control-sm"
                     value={formData.paymentStatus}
                     onChange={handleChange}
+                    disabled={formData.paymentStatus === 'REFUNDED'}
                   >
-                    {PAYMENT_STATUSES.filter(s => s.value !== 'REFUNDED').map(s => (
+                    {PAYMENT_STATUSES.map(s => (
                       <option key={s.value} value={s.value}>
                         {s.label}
                       </option>
                     ))}
                   </select>
+                  {formData.paymentStatus === 'REFUNDED' && (
+                    <div className="small text-warning mt-1">🔒 Đơn đã hoàn tiền - không thể thay đổi</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2357,20 +2363,24 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                           </div>
                           <select
                             className="form-control form-control-sm"
-                            value={renewalPaymentStatus}
+                            value={formData.paymentStatus === 'REFUNDED' ? 'REFUNDED' : renewalPaymentStatus}
                             onChange={(e) => {
                               setRenewalPaymentStatuses(prev => ({
                                 ...prev,
                                 [r.id]: e.target.value
                               }));
                             }}
+                            disabled={formData.paymentStatus === 'REFUNDED'}
                           >
-                            {PAYMENT_STATUSES.filter(s => s.value !== 'REFUNDED').map(s => (
+                            {PAYMENT_STATUSES.map(s => (
                               <option key={s.value} value={s.value}>
                                 {s.label}
                               </option>
                             ))}
                           </select>
+                          {formData.paymentStatus === 'REFUNDED' && (
+                            <div className="small text-warning mt-1">🔒 Đơn đã hoàn tiền - không thể thay đổi</div>
+                          )}
                         </div>
                       );
                     })}

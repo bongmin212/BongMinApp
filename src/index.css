@@ -695,6 +695,12 @@ p {
   border: 1px solid var(--danger-500);
 }
 
+.status-refunded {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #d97706;
+  border: 1px solid #f59e0b;
+}
+
 .customer-type {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-2xl);

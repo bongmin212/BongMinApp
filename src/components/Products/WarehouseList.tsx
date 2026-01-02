@@ -62,6 +62,14 @@ const WarehouseList: React.FC = () => {
   const [bulkPaymentTarget, setBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
   const [selectedRenewalIds, setSelectedRenewalIds] = useState<string[]>([]);
   const [latestRenewalMap, setLatestRenewalMap] = useState<Map<string, InventoryRenewal>>(new Map());
+  const [refundState, setRefundState] = useState<null | {
+    item: InventoryItem;
+    errorDate: string;
+    amount: number;
+    useCustomAmount?: boolean;
+    customAmount?: number;
+    refundReason: string;
+  }>(null);
   const countAssignedSlots = (item?: InventoryItem | null) => {
     if (!item?.isAccountBased || !Array.isArray(item.profiles)) return 0;
     return item.profiles.filter(slot => slot && (slot.isAssigned || !!slot.assignedOrderId)).length;
@@ -720,6 +728,9 @@ const WarehouseList: React.FC = () => {
         accountData: r.account_data || {},
         totalSlots: r.total_slots || 0,
         poolWarrantyMonths: r.pool_warranty_months || undefined,
+        refundAmount: r.refund_amount || undefined,
+        refundAt: r.refund_at ? new Date(r.refund_at) : undefined,
+        refundReason: r.refund_reason || undefined,
         profiles: (() => {
           const profiles = Array.isArray(r.profiles) ? r.profiles : [];
           // Generate missing profiles for account-based inventory
@@ -983,6 +994,8 @@ const WarehouseList: React.FC = () => {
 
   const getInventoryDisplayPaymentStatus = (item: InventoryItem | null | undefined): InventoryPaymentStatus => {
     if (!item) return 'UNPAID';
+    // If refunded, always show REFUNDED
+    if (item.paymentStatus === 'REFUNDED') return 'REFUNDED';
     if ((item.paymentStatus || 'UNPAID') !== 'PAID') {
       return 'UNPAID';
     }
@@ -992,6 +1005,7 @@ const WarehouseList: React.FC = () => {
   };
 
   const getInventoryPaymentClass = (status: InventoryPaymentStatus | undefined) => {
+    if (status === 'REFUNDED') return 'status-refunded';
     return status === 'PAID' ? 'status-completed' : 'status-cancelled';
   };
 
@@ -1019,6 +1033,11 @@ const WarehouseList: React.FC = () => {
   };
 
   const deriveBaseStatus = (item: InventoryItem) => {
+    // If item is refunded, always show EXPIRED status
+    if (item.paymentStatus === 'REFUNDED') {
+      return 'EXPIRED';
+    }
+
     // For account-based items, compute status from profiles only (ignore expiry override here)
     if (item.isAccountBased || packages.find(p => p.id === item.packageId)?.isAccountBased) {
       const profiles = Array.isArray(item.profiles) ? item.profiles : [];
@@ -1061,6 +1080,27 @@ const WarehouseList: React.FC = () => {
     const now = Date.now();
     if (expiryTs <= now) return false;
     return expiryTs - now <= EXPIRY_SOON_WINDOW_MS;
+  };
+
+  // Round down to nearest 1000đ for refund amount
+  const roundDownToThousand = (value: number) => {
+    return Math.max(0, Math.floor(value / 1000) * 1000);
+  };
+
+  // Calculate refund amount for warehouse based on remaining time
+  const computeWarehouseRefundAmount = (item: InventoryItem, errorDateStr: string) => {
+    const errorDate = new Date(errorDateStr);
+    if (isNaN(errorDate.getTime())) return 0;
+    const purchaseDate = new Date(item.purchaseDate);
+    const expiryDate = new Date(item.expiryDate);
+    const purchasePrice = item.purchasePrice || 0;
+    if (!purchasePrice) return 0;
+    if (errorDate <= purchaseDate) return roundDownToThousand(purchasePrice);
+    if (errorDate >= expiryDate) return 0;
+    const totalDays = Math.max(1, Math.ceil((expiryDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const remainingDays = Math.max(0, Math.ceil((expiryDate.getTime() - errorDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const prorate = remainingDays / totalDays;
+    return roundDownToThousand(Math.round(purchasePrice * prorate));
   };
 
   // Base filtered list (without product/package filters) - used to determine available filter options
@@ -2978,12 +3018,34 @@ const WarehouseList: React.FC = () => {
                     🔧 Sửa hạn sử dụng
                   </button>
                 )}
-                <button
-                  className="btn btn-success"
-                  onClick={() => { setViewingInventory(null); renewInventory(inv.id); }}
-                >
-                  Gia hạn
-                </button>
+                {inv.paymentStatus !== 'REFUNDED' && (
+                  <button
+                    className="btn btn-success"
+                    onClick={() => { setViewingInventory(null); renewInventory(inv.id); }}
+                  >
+                    Gia hạn
+                  </button>
+                )}
+                {inv.paymentStatus === 'REFUNDED' ? (
+                  <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
+                    Đã hoàn: {formatPrice((inv as any).refundAmount || 0)}
+                  </div>
+                ) : (
+                  <button
+                    className="btn btn-warning"
+                    onClick={() => {
+                      setViewingInventory(null);
+                      setRefundState({
+                        item: inv,
+                        errorDate: new Date().toISOString().split('T')[0],
+                        amount: computeWarehouseRefundAmount(inv, new Date().toISOString().split('T')[0]),
+                        refundReason: ''
+                      });
+                    }}
+                  >
+                    Tính tiền hoàn
+                  </button>
+                )}
                 <button className="btn btn-secondary" onClick={() => setViewingInventory(null)}>Đóng</button>
               </div>
             </div>
@@ -3669,6 +3731,158 @@ const WarehouseList: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* Warehouse Refund Modal */}
+      {refundState && (
+        <div className="modal">
+          <div className="modal-content" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Tính tiền hoàn kho hàng</h3>
+              <button type="button" className="close" onClick={() => setRefundState(null)}>×</button>
+            </div>
+            <div className="mb-3">
+              {(() => {
+                const item = refundState.item;
+                const pkgInfo = getPackageInfo(item.packageId);
+                const productName = pkgInfo?.product?.name || 'Không xác định';
+                const packageName = pkgInfo?.pkg?.name || 'Không xác định';
+                const purchasePrice = item.purchasePrice || 0;
+                const purchaseDate = new Date(item.purchaseDate).toLocaleDateString('vi-VN');
+                const expiryDate = new Date(item.expiryDate).toLocaleDateString('vi-VN');
+                const errorDate = new Date(refundState.errorDate).toLocaleDateString('vi-VN');
+                const refundAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
+                return (
+                  <div className="p-2">
+                    <div><strong>Mã kho:</strong> {item.code}</div>
+                    <div><strong>Sản phẩm:</strong> {productName}</div>
+                    <div><strong>Gói:</strong> {packageName}</div>
+                    <div><strong>Giá mua:</strong> {formatPrice(purchasePrice)}</div>
+                    <div><strong>Ngày mua:</strong> {purchaseDate}</div>
+                    <div><strong>Ngày hết hạn:</strong> {expiryDate}</div>
+                    <div><strong>Ngày lỗi:</strong> {errorDate}</div>
+                    <div><strong>Số tiền hoàn:</strong> {formatPrice(refundAmount)}</div>
+                    {item.sourceNote && <div><strong>Nguồn:</strong> {item.sourceNote}</div>}
+                  </div>
+                );
+              })()}
+              <div className="row g-2 align-items-end">
+                <div className="col-7">
+                  <label className="form-label">Ngày phát sinh lỗi</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={refundState.errorDate}
+                    onChange={(e) => {
+                      const nextDate = e.target.value;
+                      const amt = computeWarehouseRefundAmount(refundState.item, nextDate);
+                      setRefundState(prev => prev ? { ...prev, errorDate: nextDate, amount: amt } : prev);
+                    }}
+                  />
+                  <small className="text-muted">Dùng để tính tiền hoàn theo thời hạn còn lại</small>
+                </div>
+                <div className="col-5">
+                  <label className="form-label">Tiền hoàn (ước tính)</label>
+                  <div className="alert alert-success mb-0">{formatPrice(refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount)}</div>
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="form-check mb-2">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="useCustomWarehouseRefund"
+                    checked={refundState.useCustomAmount || false}
+                    onChange={(e) => {
+                      setRefundState(prev => prev ? {
+                        ...prev,
+                        useCustomAmount: e.target.checked,
+                        customAmount: e.target.checked ? (prev.customAmount || prev.amount) : undefined
+                      } : prev);
+                    }}
+                  />
+                  <label className="form-check-label" htmlFor="useCustomWarehouseRefund">
+                    Nhập tiền hoàn tùy chỉnh
+                  </label>
+                </div>
+                {refundState.useCustomAmount && (
+                  <div>
+                    <label className="form-label">Số tiền hoàn tùy chỉnh</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={refundState.customAmount ?? refundState.amount}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0;
+                        setRefundState(prev => prev ? { ...prev, customAmount: value } : prev);
+                      }}
+                      min="0"
+                      step="1000"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="mt-3">
+                <label className="form-label">Lý do hoàn tiền <span className="text-danger">*</span></label>
+                <textarea
+                  className="form-control"
+                  rows={2}
+                  placeholder="Nhập lý do hoàn tiền..."
+                  value={refundState.refundReason || ''}
+                  onChange={(e) => setRefundState(prev => prev ? { ...prev, refundReason: e.target.value } : prev)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="d-flex justify-content-end gap-2">
+              <button className="btn btn-secondary" onClick={() => setRefundState(null)}>Đóng</button>
+              <button
+                className="btn btn-danger"
+                onClick={async () => {
+                  if (!refundState.refundReason || !refundState.refundReason.trim()) {
+                    notify('Vui lòng nhập lý do hoàn tiền', 'error');
+                    return;
+                  }
+                  const item = refundState.item;
+                  const nowIso = new Date().toISOString();
+                  const finalAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
+                  const refundReason = refundState.refundReason.trim();
+                  try {
+                    const sb2 = getSupabase();
+                    if (sb2) {
+                      const { error } = await sb2.from('inventory').update({
+                        payment_status: 'REFUNDED',
+                        status: 'EXPIRED',
+                        refund_amount: finalAmount,
+                        refund_at: nowIso,
+                        refund_reason: refundReason
+                      }).eq('id', item.id);
+                      if (error) {
+                        notify(`Lỗi khi cập nhật kho hàng: ${error.message}`, 'error');
+                        return;
+                      }
+                      await sb2.from('activity_logs').insert({
+                        employee_id: state.user?.id || null,
+                        action: 'Hoàn tiền kho hàng',
+                        details: `inventoryId=${item.id}; inventoryCode=${item.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}; reason=${refundReason}`
+                      });
+                      setRefundState(null);
+                      setViewingInventory(null);
+                      refresh();
+                      notify('Đã đánh dấu hoàn tiền cho kho hàng', 'success');
+                    } else {
+                      notify('Không thể kết nối database', 'error');
+                    }
+                  } catch (e: any) {
+                    notify(`Lỗi: ${e?.message || 'Không thể hoàn tiền'}`, 'error');
+                  }
+                }}
+              >
+                Xác nhận hoàn tiền
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

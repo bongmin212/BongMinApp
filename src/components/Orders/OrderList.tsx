@@ -47,6 +47,7 @@ const OrderList: React.FC = () => {
     amount: number;
     useCustomAmount?: boolean;
     customAmount?: number;
+    refundReason: string;
   }>(null);
   const [renewState, setRenewState] = useState<null | {
     order: Order;
@@ -2163,7 +2164,7 @@ const OrderList: React.FC = () => {
                 </div>
               ) : (
                 <button
-                  onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
+                  onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]), refundReason: '' })}
                   className="btn btn-warning"
                 >
                   Tính tiền hoàn
@@ -2232,7 +2233,7 @@ const OrderList: React.FC = () => {
               </div>
             ) : (
               <button
-                onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]) })}
+                onClick={() => setRefundState({ order, errorDate: new Date().toISOString().split('T')[0], amount: computeRefundAmount(order, new Date().toISOString().split('T')[0]), refundReason: '' })}
                 className="btn btn-warning"
               >
                 Tính tiền hoàn
@@ -3707,6 +3708,17 @@ const OrderList: React.FC = () => {
                   </div>
                 )}
               </div>
+              <div className="mt-3">
+                <label className="form-label">Lý do hoàn tiền <span className="text-danger">*</span></label>
+                <textarea
+                  className="form-control"
+                  rows={2}
+                  placeholder="Nhập lý do hoàn tiền..."
+                  value={refundState.refundReason || ''}
+                  onChange={(e) => setRefundState(prev => prev ? { ...prev, refundReason: e.target.value } : prev)}
+                  required
+                />
+              </div>
             </div>
             <div className="d-flex justify-content-end gap-2">
               <button className="btn btn-secondary" onClick={() => setRefundState(null)}>Đóng</button>
@@ -3784,10 +3796,15 @@ const OrderList: React.FC = () => {
               <button
                 className="btn btn-danger"
                 onClick={async () => {
+                  if (!refundState.refundReason || !refundState.refundReason.trim()) {
+                    notify('Vui lòng nhập lý do hoàn tiền', 'error');
+                    return;
+                  }
                   const o = refundState.order;
                   const nowIso = new Date().toISOString();
                   const finalAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
-                  const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED', refundAmount: finalAmount, refundAt: nowIso } as any);
+                  const refundReason = refundState.refundReason.trim();
+                  const updated = Database.updateOrder(o.id, { paymentStatus: 'REFUNDED', status: 'CANCELLED', refundAmount: finalAmount, refundAt: nowIso, refundReason } as any);
                   try {
                     const sb2 = getSupabase();
                     if (sb2) {
@@ -3795,9 +3812,10 @@ const OrderList: React.FC = () => {
                         payment_status: 'REFUNDED',
                         status: 'CANCELLED',
                         refund_amount: finalAmount,
-                        refund_at: nowIso
+                        refund_at: nowIso,
+                        refund_reason: refundReason
                       }).eq('id', o.id);
-                      await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}` });
+                      await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Hoàn tiền đơn hàng', details: `orderId=${o.id}; orderCode=${o.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}; reason=${refundReason}` });
                     }
                   } catch { }
                   setRefundState(null);

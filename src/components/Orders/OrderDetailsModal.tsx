@@ -458,7 +458,17 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Ngày mua:</strong> {formatDate(order.purchaseDate)}</div>
 					<div><strong>Ngày hết hạn:</strong> {formatDate(order.expiryDate)}</div>
 					<div><strong>Trạng thái:</strong> {getStatusLabel(order.status)}</div>
-					<div><strong>Thanh toán:</strong> {displayPaymentLabel}</div>
+					<div>
+						<strong>Thanh toán:</strong>{' '}
+						<span className={`status-badge ${displayPaymentStatus === 'PAID' ? 'status-completed' : displayPaymentStatus === 'REFUNDED' ? 'status-refunded' : 'status-cancelled'}`}>
+							{displayPaymentLabel}
+						</span>
+						{displayPaymentStatus === 'REFUNDED' && (order as any).refundAmount > 0 && (
+							<span className="ms-2 text-muted">
+								(Đã hoàn: {formatPrice ? formatPrice((order as any).refundAmount) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((order as any).refundAmount)})
+							</span>
+						)}
+					</div>
 					<div><strong>Giá đơn hàng:</strong> {formatPrice ? formatPrice(getOrderPrice()) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getOrderPrice())}</div>
 
 					<div><strong>Ghi chú:</strong> {order.notes && String(order.notes).trim() ? order.notes : 'Không có'}</div>
@@ -684,7 +694,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					</div>
 				)}
 				<div className="d-flex justify-content-end gap-2">
-					{onOpenRenew && (
+					{onOpenRenew && (order as any).paymentStatus !== 'REFUNDED' && (
 						<button className="btn btn-success" onClick={onOpenRenew}>Gia hạn</button>
 					)}
 					{onCopyInfo && (
