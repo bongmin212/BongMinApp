@@ -1088,19 +1088,41 @@ const WarehouseList: React.FC = () => {
   };
 
   // Calculate refund amount for warehouse based on remaining time
+  // For warehouses with renewals, use the most recent renewal period
   const computeWarehouseRefundAmount = (item: InventoryItem, errorDateStr: string) => {
     const errorDate = new Date(errorDateStr);
     if (isNaN(errorDate.getTime())) return 0;
-    const purchaseDate = new Date(item.purchaseDate);
-    const expiryDate = new Date(item.expiryDate);
-    const purchasePrice = item.purchasePrice || 0;
-    if (!purchasePrice) return 0;
-    if (errorDate <= purchaseDate) return roundDownToThousand(purchasePrice);
-    if (errorDate >= expiryDate) return 0;
-    const totalDays = Math.max(1, Math.ceil((expiryDate.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24)));
-    const remainingDays = Math.max(0, Math.ceil((expiryDate.getTime() - errorDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Get renewals for this item, sorted by createdAt descending (newest first)
+    const itemRenewals = inventoryRenewals
+      .filter(r => r.inventoryId === item.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    let periodStart: Date;
+    let periodEnd: Date;
+    let periodPrice: number;
+
+    if (itemRenewals.length > 0) {
+      // Use the most recent renewal period
+      const latestRenewal = itemRenewals[0];
+      periodStart = new Date(latestRenewal.previousExpiryDate);
+      periodEnd = new Date(latestRenewal.newExpiryDate);
+      periodPrice = latestRenewal.amount || 0;
+    } else {
+      // No renewals - use original purchase period
+      periodStart = new Date(item.purchaseDate);
+      periodEnd = new Date(item.expiryDate);
+      periodPrice = item.purchasePrice || 0;
+    }
+
+    if (!periodPrice) return 0;
+    if (errorDate <= periodStart) return roundDownToThousand(periodPrice);
+    if (errorDate >= periodEnd) return 0;
+
+    const totalDays = Math.max(1, Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)));
+    const remainingDays = Math.max(0, Math.ceil((periodEnd.getTime() - errorDate.getTime()) / (1000 * 60 * 60 * 24)));
     const prorate = remainingDays / totalDays;
-    return roundDownToThousand(Math.round(purchasePrice * prorate));
+    return roundDownToThousand(Math.round(periodPrice * prorate));
   };
 
   // Base filtered list (without product/package filters) - used to determine available filter options
@@ -3743,12 +3765,33 @@ const WarehouseList: React.FC = () => {
             <div className="mb-3">
               {(() => {
                 const item = refundState.item;
+                // Try package lookup first
                 const pkgInfo = getPackageInfo(item.packageId);
-                const productName = pkgInfo?.product?.name || 'Không xác định';
-                const packageName = pkgInfo?.pkg?.name || 'Không xác định';
+                // For shared pool, look up product directly by productId
+                const product = pkgInfo?.product || products.find(p => p.id === (item as any).productId);
+                const productName = product?.name || 'Không xác định';
+                const packageName = pkgInfo?.pkg?.name || (product?.sharedInventoryPool ? 'Pool chung' : 'Không xác định');
                 const purchasePrice = item.purchasePrice || 0;
-                const purchaseDate = new Date(item.purchaseDate).toLocaleDateString('vi-VN');
-                const expiryDate = new Date(item.expiryDate).toLocaleDateString('vi-VN');
+
+                // Get renewal info for display
+                const itemRenewals = inventoryRenewals
+                  .filter(r => r.inventoryId === item.id)
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                const hasRenewals = itemRenewals.length > 0;
+                const latestRenewal = hasRenewals ? itemRenewals[0] : null;
+
+                // Dates for display based on whether there are renewals
+                const periodStart = hasRenewals
+                  ? new Date(latestRenewal!.previousExpiryDate)
+                  : new Date(item.purchaseDate);
+                const periodEnd = hasRenewals
+                  ? new Date(latestRenewal!.newExpiryDate)
+                  : new Date(item.expiryDate);
+                const periodPrice = hasRenewals
+                  ? (latestRenewal!.amount || 0)
+                  : purchasePrice;
+
                 const errorDate = new Date(refundState.errorDate).toLocaleDateString('vi-VN');
                 const refundAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
                 return (
@@ -3756,9 +3799,21 @@ const WarehouseList: React.FC = () => {
                     <div><strong>Mã kho:</strong> {item.code}</div>
                     <div><strong>Sản phẩm:</strong> {productName}</div>
                     <div><strong>Gói:</strong> {packageName}</div>
-                    <div><strong>Giá mua:</strong> {formatPrice(purchasePrice)}</div>
-                    <div><strong>Ngày mua:</strong> {purchaseDate}</div>
-                    <div><strong>Ngày hết hạn:</strong> {expiryDate}</div>
+                    <div><strong>Giá mua gốc:</strong> {formatPrice(purchasePrice)}</div>
+                    {hasRenewals && (
+                      <div className="alert alert-info py-1 px-2 mt-2 mb-2" style={{ fontSize: '13px' }}>
+                        <strong>🔄 Tính theo chu kỳ gia hạn lần {itemRenewals.length}:</strong>
+                        <div>Ngày mua (chu kỳ): <strong>{periodStart.toLocaleDateString('vi-VN')}</strong></div>
+                        <div>Khoảng tính: {periodStart.toLocaleDateString('vi-VN')} - {periodEnd.toLocaleDateString('vi-VN')}</div>
+                        <div>Giá chu kỳ: {formatPrice(periodPrice)}</div>
+                      </div>
+                    )}
+                    {!hasRenewals && (
+                      <>
+                        <div><strong>Ngày mua:</strong> {new Date(item.purchaseDate).toLocaleDateString('vi-VN')}</div>
+                        <div><strong>Ngày hết hạn:</strong> {new Date(item.expiryDate).toLocaleDateString('vi-VN')}</div>
+                      </>
+                    )}
                     <div><strong>Ngày lỗi:</strong> {errorDate}</div>
                     <div><strong>Số tiền hoàn:</strong> {formatPrice(refundAmount)}</div>
                     {item.sourceNote && <div><strong>Nguồn:</strong> {item.sourceNote}</div>}
@@ -3807,17 +3862,19 @@ const WarehouseList: React.FC = () => {
                 {refundState.useCustomAmount && (
                   <div>
                     <label className="form-label">Số tiền hoàn tùy chỉnh</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={refundState.customAmount ?? refundState.amount}
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value) || 0;
-                        setRefundState(prev => prev ? { ...prev, customAmount: value } : prev);
-                      }}
-                      min="0"
-                      step="1000"
-                    />
+                    <div className="input-group">
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={new Intl.NumberFormat('vi-VN').format(refundState.customAmount ?? refundState.amount)}
+                        onChange={(e) => {
+                          const numericValue = e.target.value.replace(/[^\d]/g, '');
+                          const value = parseInt(numericValue, 10) || 0;
+                          setRefundState(prev => prev ? { ...prev, customAmount: value } : prev);
+                        }}
+                      />
+                      <span className="input-group-text">đ</span>
+                    </div>
                   </div>
                 )}
               </div>
