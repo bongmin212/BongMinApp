@@ -460,9 +460,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					<div><strong>Trạng thái:</strong> {getStatusLabel(order.status)}</div>
 					<div>
 						<strong>Thanh toán:</strong>{' '}
-						<span className={`status-badge ${displayPaymentStatus === 'PAID' ? 'status-completed' : displayPaymentStatus === 'REFUNDED' ? 'status-refunded' : 'status-cancelled'}`}>
-							{displayPaymentLabel}
-						</span>
+						{displayPaymentLabel}
 						{displayPaymentStatus === 'REFUNDED' && (order as any).refundAmount > 0 && (
 							<span className="ms-2 text-muted">
 								(Đã hoàn: {formatPrice ? formatPrice((order as any).refundAmount) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((order as any).refundAmount)})
