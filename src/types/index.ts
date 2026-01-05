@@ -157,6 +157,8 @@ export interface InventoryItem {
   refundAmount?: number; // Số tiền đã hoàn
   refundAt?: Date; // Thời điểm hoàn tiền
   refundReason?: string; // Lý do hoàn tiền
+  // Active status (active = available for selling, not active = retired)
+  isActive?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -276,6 +278,8 @@ export interface InventoryFormData {
   profiles?: InventoryProfileSlot[];
   // Persisted warranty months for shared pool inventory
   poolWarrantyMonths?: number;
+  // Active status
+  isActive?: boolean;
 }
 
 export interface EmployeeFormData {

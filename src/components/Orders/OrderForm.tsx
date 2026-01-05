@@ -308,7 +308,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           accountData: i.account_data,
           totalSlots: i.total_slots,
           profiles: i.profiles,
-          poolWarrantyMonths: i.pool_warranty_months
+          poolWarrantyMonths: i.pool_warranty_months,
+          isActive: i.is_active !== false // default to true
         } as InventoryItem;
 
         // Generate missing profiles for account-based inventory
@@ -323,11 +324,17 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         return item;
       }) as InventoryItem[];
       // Filter availability: exclude expired for all types. For account-based, must have at least one free, non-needsUpdate slot.
+      // Also filter by isActive status.
       items = items.filter((i: any) => {
+        // Must be active to be available for new orders
+        if (i.isActive === false) return false;
+
         const now = new Date();
         const expiresAt = i.expiryDate ? new Date(i.expiryDate) : undefined;
         const isExpired = (expiresAt ? expiresAt < now : false) || i.status === 'EXPIRED';
-        if (isExpired) return false;
+        // Allow expired items if they are active (user manually set to active)
+        // But for new orders, exclude expired items unless manually marked active
+        if (isExpired && i.isActive !== true) return false;
         // Exclude refunded warehouses
         if (i.payment_status === 'REFUNDED') return false;
         if (i.isAccountBased) {

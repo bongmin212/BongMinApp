@@ -57,6 +57,7 @@ const WarehouseList: React.FC = () => {
   const [onlyFreeSlots, setOnlyFreeSlots] = useState(false);
   const [hasStuckSlots, setHasStuckSlots] = useState(false);
   const [expiryFilter, setExpiryFilter] = useState<'EXPIRING' | 'EXPIRED' | 'ACTIVE' | ''>('');
+  const [filterActiveStatus, setFilterActiveStatus] = useState<'ACTIVE' | 'NOT_ACTIVE' | ''>('');
   const [paymentStatusModal, setPaymentStatusModal] = useState<null | { selectedIds: string[] }>(null);
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<InventoryPaymentStatus>('UNPAID');
   const [bulkPaymentTarget, setBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
@@ -777,6 +778,7 @@ const WarehouseList: React.FC = () => {
         })(),
         linkedOrderId: r.linked_order_id || undefined,
         previousLinkedOrderId: r.previous_linked_order_id || undefined,
+        isActive: r.is_active !== false, // default to true if not set
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
@@ -1177,12 +1179,12 @@ const WarehouseList: React.FC = () => {
         accountDataMatches ||
         linkedOrderMatches;
 
+      // Always use getActualStatus() for status filtering (except NEEDS_UPDATE)
+      // This ensures expired warehouses are not shown when filtering by SOLD, AVAILABLE, etc.
       const matchesStatus = !filterStatus || (
         filterStatus === 'NEEDS_UPDATE'
           ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
-          : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
-            ? getActualStatus(i) === filterStatus
-            : i.status === filterStatus as any
+          : getActualStatus(i) === filterStatus
       );
       const matchesPaymentStatus = !filterPaymentStatus || getInventoryDisplayPaymentStatus(i) === filterPaymentStatus as InventoryPaymentStatus;
       const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
@@ -1217,9 +1219,14 @@ const WarehouseList: React.FC = () => {
       const accountsOk = !onlyAccounts || isAcc;
       const freeOk = !onlyFreeSlots || hasFree;
 
-      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk;
+      // Active status filter
+      const matchesActiveStatus = !filterActiveStatus || (
+        filterActiveStatus === 'ACTIVE' ? (i.isActive !== false) : (i.isActive === false)
+      );
+
+      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk && matchesActiveStatus;
     });
-  }, [items, filterStatus, filterPaymentStatus, filterSource, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap]);
+  }, [items, filterStatus, filterPaymentStatus, filterSource, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, customerMap, filterActiveStatus]);
 
   // Extract available products, packages, and sources from base filtered list
   // Products: if package filter is set, only show products that have that package
@@ -1347,12 +1354,12 @@ const WarehouseList: React.FC = () => {
         accountDataMatches ||
         linkedOrderMatches;
 
+      // Always use getActualStatus() for status filtering (except NEEDS_UPDATE)
+      // This ensures expired warehouses are not shown when filtering by SOLD, AVAILABLE, etc.
       const matchesStatus = !filterStatus || (
         filterStatus === 'NEEDS_UPDATE'
           ? (i.status === 'NEEDS_UPDATE' || (Array.isArray(i.profiles) && i.profiles.some((p: any) => p.needsUpdate)))
-          : filterStatus === 'EXPIRED' || filterStatus === 'AVAILABLE'
-            ? getActualStatus(i) === filterStatus
-            : i.status === filterStatus as any
+          : getActualStatus(i) === filterStatus
       );
       const matchesPaymentStatus = !filterPaymentStatus || getInventoryDisplayPaymentStatus(i) === filterPaymentStatus as InventoryPaymentStatus;
       const normalizedSource = (i.sourceNote || '').trim().toLowerCase();
@@ -1392,13 +1399,18 @@ const WarehouseList: React.FC = () => {
       // Package filter
       if (filterPackage && i.packageId !== filterPackage) return false;
 
-      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk;
+      // Active status filter
+      const matchesActiveStatus = !filterActiveStatus || (
+        filterActiveStatus === 'ACTIVE' ? (i.isActive !== false) : (i.isActive === false)
+      );
+
+      return matchesSearch && matchesStatus && matchesPaymentStatus && matchesSource && pFromOk && pToOk && accountsOk && freeOk && matchesActiveStatus;
     });
 
     // WarehouseList: Filtered results
 
     return filtered;
-  }, [items, filterStatus, filterPaymentStatus, filterSource, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages]);
+  }, [items, filterStatus, filterPaymentStatus, filterSource, filterProduct, filterPackage, debouncedSearchTerm, dateFrom, dateTo, expiryFilter, productMap, packageMap, onlyAccounts, onlyFreeSlots, packages, filterActiveStatus]);
 
   const total = filteredItems.length;
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -1508,6 +1520,10 @@ const WarehouseList: React.FC = () => {
         updatedAt: new Date(i.updatedAt).toLocaleDateString('vi-VN'),
         createdAtRaw: i.createdAt.toISOString(),
         updatedAtRaw: i.updatedAt.toISOString(),
+
+        // Active status
+        isActive: i.isActive !== false ? 'Active' : 'Not Active',
+        isActiveValue: i.isActive !== false,
       };
     });
 
@@ -1572,6 +1588,9 @@ const WarehouseList: React.FC = () => {
       // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
       { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
+
+      // Active status
+      { header: 'Trạng thái Active', key: 'isActive', width: 14 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Kho hàng');
   };
 
@@ -1790,8 +1809,30 @@ const WarehouseList: React.FC = () => {
           ? 'status-processing'
           : 'status-cancelled';
     const content = <span className={`status-badge ${cls}`}>{statusLabel(actualStatus)}</span>;
-    if (actualStatus !== 'SOLD') return content;
-    // When SOLD, allow click to view linked orders (classic and account-based)
+
+    // Check if this item has any linked orders (for clickable behavior)
+    const isAccountBased = item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased;
+    const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+    const hasAssignedSlots = profiles.some((p: any) => p.isAssigned || p.assignedOrderId);
+    const hasLinkedOrder = item.linkedOrderId || hasAssignedSlots;
+
+    // If no linked orders/assigned slots, return non-clickable badge
+    if (!hasLinkedOrder) return content;
+
+    // For account-based inventory with assigned slots, open profiles modal
+    if (isAccountBased && hasAssignedSlots) {
+      return (
+        <button
+          className="btn btn-sm btn-light"
+          title="Xem danh sách slot"
+          onClick={() => setProfilesModal({ item })}
+        >
+          {statusLabel(actualStatus)}
+        </button>
+      );
+    }
+
+    // For classic inventory with linked orders, view linked orders
     return (
       <button
         className="btn btn-sm btn-light"
@@ -1803,7 +1844,6 @@ const WarehouseList: React.FC = () => {
           // 1) Classic link
           if (item.linkedOrderId) orderIds.push(item.linkedOrderId);
           // 2) Account-based: any profiles assigned
-          const profiles = Array.isArray(item.profiles) ? item.profiles : [];
           profiles.forEach((p: any) => { if (p.assignedOrderId) orderIds.push(p.assignedOrderId); });
           const unique = Array.from(new Set(orderIds));
           if (unique.length === 0) { notify('Kho này không có đơn liên kết', 'info'); return; }
@@ -1865,6 +1905,7 @@ const WarehouseList: React.FC = () => {
     setExpiryFilter('');
     setOnlyAccounts(false);
     setOnlyFreeSlots(false);
+    setFilterActiveStatus('');
     setPage(1);
   };
 
@@ -2003,7 +2044,7 @@ const WarehouseList: React.FC = () => {
             </select>
           </div>
 
-          {/* Row 2: Status, Payment, Expiry, Account/Slot */}
+          {/* Row 2: Status, Active Status, Payment, Expiry */}
           <div>
             <select className="form-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="">Trạng thái</option>
@@ -2011,6 +2052,17 @@ const WarehouseList: React.FC = () => {
               <option value="SOLD">Đã bán</option>
               <option value="EXPIRED">Hết hạn</option>
               <option value="NEEDS_UPDATE">Cần update</option>
+            </select>
+          </div>
+          <div>
+            <select
+              className="form-control"
+              value={filterActiveStatus}
+              onChange={(e) => setFilterActiveStatus(e.target.value as 'ACTIVE' | 'NOT_ACTIVE' | '')}
+            >
+              <option value="">Trạng thái Active</option>
+              <option value="ACTIVE">Active</option>
+              <option value="NOT_ACTIVE">Not Active</option>
             </select>
           </div>
           <div>
@@ -2033,6 +2085,8 @@ const WarehouseList: React.FC = () => {
               <option value="ACTIVE">Còn hạn (&gt; 7 ngày)</option>
             </select>
           </div>
+
+          {/* Row 3: Slot type + Date Range */}
           <div>
             <select
               className="form-control"
@@ -2056,8 +2110,6 @@ const WarehouseList: React.FC = () => {
               <option value="FREE">Chỉ còn slot trống</option>
             </select>
           </div>
-
-          {/* Row 3: Date Range */}
           <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày nhập"
@@ -2066,255 +2118,94 @@ const WarehouseList: React.FC = () => {
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
-
-          {/* Row 3: Reset */}
-          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2', display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <button className="btn btn-light" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>
 
-      {filteredItems.length === 0 ? (
-        <div className="text-center py-4">
-          <p>Không có dữ liệu</p>
-        </div>
-      ) : (
-        <>
-          {/* Mobile cards */}
-          <div className="warehouse-mobile">
-            {pageItems.map((item, index) => (
-              <div key={item.id} className="warehouse-card">
-                <div className="warehouse-card-header">
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="warehouse-card-title">{item.code || `KHO${index + 1}`}</div>
-                  </div>
-                  <div className="warehouse-card-subtitle">{formatDate(item.purchaseDate)}</div>
-                </div>
-
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Sản phẩm</div>
-                  <div className="warehouse-card-value">{productMap.get(item.productId) || item.productId}</div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Gói/Pool</div>
-                  <div className="warehouse-card-value">{(() => {
-                    const prod = products.find(p => p.id === item.productId);
-                    if (prod?.sharedInventoryPool) {
-                      return 'Pool chung';
-                    }
-                    return packageMap.get(item.packageId) || item.packageId;
-                  })()}</div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Hết hạn</div>
-                  <div className="warehouse-card-value">{formatDate(item.expiryDate)}</div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Thời hạn</div>
-                  <div className="warehouse-card-value">{(() => {
-                    const prod = products.find(p => p.id === item.productId);
-                    if (prod?.sharedInventoryPool) {
-                      return item.poolWarrantyMonths ? `${item.poolWarrantyMonths} tháng` : '-';
-                    }
-                    const pkg = packages.find(p => p.id === item.packageId);
-                    return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
-                  })()}</div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Giá mua</div>
-                  <div className="warehouse-card-value">{typeof item.purchasePrice === 'number' ? formatPrice(item.purchasePrice) : '-'}</div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Thanh toán</div>
-                  <div className="warehouse-card-value">
-                    {(() => {
-                      const paymentStatus = getInventoryDisplayPaymentStatus(item);
-                      return (
-                        <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
-                          {getInventoryPaymentLabel(paymentStatus)}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Trạng thái</div>
-                  <div className="warehouse-card-value">
-                    <div className="d-flex align-items-center gap-2">
-                      {statusBadge(item)}
-                      {item.status === 'NEEDS_UPDATE' && (
-                        <button
-                          className="btn btn-sm btn-primary"
-                          onClick={() => setConfirmState({
-                            message: `Chuyển ${item.code} từ Cần update -> Sẵn có?`,
-                            onConfirm: async () => {
-                              const sb = getSupabase();
-                              if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                              const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', item.id);
-                              if (error) return notify('Không thể cập nhật trạng thái', 'error');
-                              try {
-                                const sb2 = getSupabase();
-                                if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; inventoryCode=${item.code}` });
-                              } catch { }
-                              notify('Đã chuyển về Sẵn có', 'success');
-                              refresh();
-                            }
-                          })}
-                          title="Đặt lại trạng thái Sẵn có"
-                        >
-                          Mark Sẵn có
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="warehouse-card-row">
-                  <div className="warehouse-card-label">Slot</div>
-                  <div className="warehouse-card-value">
-                    {(item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased) ? (() => {
-                      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
-                      const total = item.totalSlots || 0;
-
-                      // Count assigned slots from profiles
-                      let used = profiles.filter(p => p.isAssigned).length;
-
-                      // Fallback: if profiles are empty but we have linked orders, count from orders
-                      if (profiles.length === 0 && total > 0) {
-                        const linkedOrders = Database.getOrders().filter((order: any) =>
-                          order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
-                          order.inventoryProfileIds.some((profileId: string) =>
-                            profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
-                          )
-                        );
-
-                        if (linkedOrders.length > 0) {
-                          // Count unique slot IDs from all linked orders
-                          const allSlotIds = new Set();
-                          linkedOrders.forEach((order: any) => {
-                            order.inventoryProfileIds.forEach((profileId: string) => {
-                              if (profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total) {
-                                allSlotIds.add(profileId);
-                              }
-                            });
-                          });
-                          used = allSlotIds.size;
-                        }
-                      }
-
-                      return (
-                        <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item })}>
-                          {used}/{total}
-                        </button>
-                      );
-                    })() : '-'}
-                  </div>
-                </div>
-
-                <div className="warehouse-card-actions">
-                  <button className="btn btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
-                  <button className="btn btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
-                </div>
-              </div>
-            ))}
+      {
+        filteredItems.length === 0 ? (
+          <div className="text-center py-4">
+            <p>Không có dữ liệu</p>
           </div>
+        ) : (
+          <>
+            {/* Mobile cards */}
+            <div className="warehouse-mobile">
+              {pageItems.map((item, index) => (
+                <div key={item.id} className="warehouse-card">
+                  <div className="warehouse-card-header">
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="warehouse-card-title">{item.code || `KHO${index + 1}`}</div>
+                    </div>
+                    <div className="warehouse-card-subtitle">{formatDate(item.purchaseDate)}</div>
+                  </div>
 
-          {/* Desktop table */}
-          <div className="table-responsive warehouse-table">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
-                    <input
-                      type="checkbox"
-                      checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
-                      disabled={pageItems.length === 0}
-                      onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
-                    />
-                  </th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
-                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
-                  <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Nguồn</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá mua</th>
-                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
-                  <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Slot</th>
-                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageItems.map((i, index) => (
-                  <tr key={i.id}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(i.id)}
-                        onChange={(e) => toggleSelect(i.id, e.target.checked)}
-                      />
-                    </td>
-                    <td className="text-truncate" title={i.code || `KHO${index + 1}`}>{i.code || `KHO${index + 1}`}</td>
-                    <td className="text-truncate" title={productMap.get(i.productId) || i.productId}>{productMap.get(i.productId) || i.productId}</td>
-                    <td className="text-truncate" title={(() => {
-                      const prod = products.find(p => p.id === i.productId);
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Sản phẩm</div>
+                    <div className="warehouse-card-value">{productMap.get(item.productId) || item.productId}</div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Gói/Pool</div>
+                    <div className="warehouse-card-value">{(() => {
+                      const prod = products.find(p => p.id === item.productId);
                       if (prod?.sharedInventoryPool) {
                         return 'Pool chung';
                       }
-                      return packageMap.get(i.packageId) || i.packageId;
-                    })()}>{(() => {
-                      const prod = products.find(p => p.id === i.productId);
+                      return packageMap.get(item.packageId) || item.packageId;
+                    })()}</div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Hết hạn</div>
+                    <div className="warehouse-card-value">{formatDate(item.expiryDate)}</div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Thời hạn</div>
+                    <div className="warehouse-card-value">{(() => {
+                      const prod = products.find(p => p.id === item.productId);
                       if (prod?.sharedInventoryPool) {
-                        return <span className="text-muted">Pool chung</span>;
+                        return item.poolWarrantyMonths ? `${item.poolWarrantyMonths} tháng` : '-';
                       }
-                      return packageMap.get(i.packageId) || i.packageId;
-                    })()}</td>
-                    <td style={{ wordWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }} title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
-                    <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
-                    <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
-                    <td className="text-truncate" title={(() => {
-                      const prod = products.find(p => p.id === i.productId);
-                      if (prod?.sharedInventoryPool) {
-                        return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
-                      }
-                      const pkg = packages.find(p => p.id === i.packageId);
+                      const pkg = packages.find(p => p.id === item.packageId);
                       return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
-                    })()}>{(() => {
-                      const prod = products.find(p => p.id === i.productId);
-                      if (prod?.sharedInventoryPool) {
-                        return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
-                      }
-                      const pkg = packages.find(p => p.id === i.packageId);
-                      return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
-                    })()}</td>
-                    <td className="text-truncate" title={typeof i.purchasePrice === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{typeof i.purchasePrice === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
-                    <td>
+                    })()}</div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Giá mua</div>
+                    <div className="warehouse-card-value">{typeof item.purchasePrice === 'number' ? formatPrice(item.purchasePrice) : '-'}</div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Thanh toán</div>
+                    <div className="warehouse-card-value">
                       {(() => {
-                        const paymentStatus = getInventoryDisplayPaymentStatus(i);
+                        const paymentStatus = getInventoryDisplayPaymentStatus(item);
                         return (
                           <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
                             {getInventoryPaymentLabel(paymentStatus)}
                           </span>
                         );
                       })()}
-                    </td>
-                    <td>
+                    </div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Trạng thái</div>
+                    <div className="warehouse-card-value">
                       <div className="d-flex align-items-center gap-2">
-                        {statusBadge(i)}
-                        {i.status === 'NEEDS_UPDATE' && (
+                        {statusBadge(item)}
+                        {item.status === 'NEEDS_UPDATE' && (
                           <button
                             className="btn btn-sm btn-primary"
                             onClick={() => setConfirmState({
-                              message: `Chuyển ${i.code} từ Cần update -> Sẵn có?`,
+                              message: `Chuyển ${item.code} từ Cần update -> Sẵn có?`,
                               onConfirm: async () => {
                                 const sb = getSupabase();
                                 if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
-                                const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', i.id);
+                                const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', item.id);
                                 if (error) return notify('Không thể cập nhật trạng thái', 'error');
                                 try {
                                   const sb2 = getSupabase();
-                                  if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; inventoryCode=${i.code}` });
+                                  if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${item.id}; inventoryCode=${item.code}` });
                                 } catch { }
                                 notify('Đã chuyển về Sẵn có', 'success');
                                 refresh();
@@ -2326,11 +2217,14 @@ const WarehouseList: React.FC = () => {
                           </button>
                         )}
                       </div>
-                    </td>
-                    <td>
-                      {(i.isAccountBased || ((packages.find(p => p.id === i.packageId) || {}) as any).isAccountBased) ? (() => {
-                        const profiles = Array.isArray(i.profiles) ? i.profiles : [];
-                        const total = i.totalSlots || 0;
+                    </div>
+                  </div>
+                  <div className="warehouse-card-row">
+                    <div className="warehouse-card-label">Slot</div>
+                    <div className="warehouse-card-value">
+                      {(item.isAccountBased || ((packages.find(p => p.id === item.packageId) || {}) as any).isAccountBased) ? (() => {
+                        const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+                        const total = item.totalSlots || 0;
 
                         // Count assigned slots from profiles
                         let used = profiles.filter(p => p.isAssigned).length;
@@ -2359,25 +2253,152 @@ const WarehouseList: React.FC = () => {
                         }
 
                         return (
-                          <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item: i })}>
+                          <button className="btn btn-sm btn-light" onClick={() => setProfilesModal({ item })}>
                             {used}/{total}
                           </button>
                         );
                       })() : '-'}
-                    </td>
-                    <td>
-                      <div className="d-flex gap-2">
-                        <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(i)}>Xem</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
-                      </div>
-                    </td>
+                    </div>
+                  </div>
+
+                  <div className="warehouse-card-actions">
+                    <button className="btn btn-light" onClick={() => setViewingInventory(item)}>Xem</button>
+                    <button className="btn btn-secondary" onClick={() => { setEditingItem(item); setShowForm(true); }}>Sửa</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="table-responsive warehouse-table">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={pageItems.length > 0 && pageItems.every(i => selectedIds.includes(i.id))}
+                        disabled={pageItems.length === 0}
+                        onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(i => i.id))}
+                      />
+                    </th>
+                    <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã kho</th>
+                    <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
+                    <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Gói / Pool</th>
+                    <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Nguồn</th>
+                    <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày nhập</th>
+                    <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Hết hạn</th>
+                    <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thời hạn</th>
+                    <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá mua</th>
+                    <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Thanh toán</th>
+                    <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Trạng thái</th>
+                    <th style={{ width: '60px', minWidth: '60px', maxWidth: '80px' }}>Active</th>
+                    <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+                </thead>
+                <tbody>
+                  {pageItems.map((i, index) => (
+                    <tr key={i.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(i.id)}
+                          onChange={(e) => toggleSelect(i.id, e.target.checked)}
+                        />
+                      </td>
+                      <td className="text-truncate" title={i.code || `KHO${index + 1}`}>{i.code || `KHO${index + 1}`}</td>
+                      <td className="text-truncate" title={productMap.get(i.productId) || i.productId}>{productMap.get(i.productId) || i.productId}</td>
+                      <td className="text-truncate" title={(() => {
+                        const prod = products.find(p => p.id === i.productId);
+                        if (prod?.sharedInventoryPool) {
+                          return 'Pool chung';
+                        }
+                        return packageMap.get(i.packageId) || i.packageId;
+                      })()}>{(() => {
+                        const prod = products.find(p => p.id === i.productId);
+                        if (prod?.sharedInventoryPool) {
+                          return <span className="text-muted">Pool chung</span>;
+                        }
+                        return packageMap.get(i.packageId) || i.packageId;
+                      })()}</td>
+                      <td style={{ wordWrap: 'break-word', wordBreak: 'break-word', whiteSpace: 'normal' }} title={i.sourceNote || '-'}>{i.sourceNote || '-'}</td>
+                      <td className="text-truncate" title={new Date(i.purchaseDate).toLocaleDateString('vi-VN')}>{new Date(i.purchaseDate).toLocaleDateString('vi-VN')}</td>
+                      <td className="text-truncate" title={new Date(i.expiryDate).toLocaleDateString('vi-VN')}>{new Date(i.expiryDate).toLocaleDateString('vi-VN')}</td>
+                      <td className="text-truncate" title={(() => {
+                        const prod = products.find(p => p.id === i.productId);
+                        if (prod?.sharedInventoryPool) {
+                          return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
+                        }
+                        const pkg = packages.find(p => p.id === i.packageId);
+                        return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                      })()}>{(() => {
+                        const prod = products.find(p => p.id === i.productId);
+                        if (prod?.sharedInventoryPool) {
+                          return i.poolWarrantyMonths ? `${i.poolWarrantyMonths} tháng` : '-';
+                        }
+                        const pkg = packages.find(p => p.id === i.packageId);
+                        return pkg ? `${pkg.warrantyPeriod} tháng` : '-';
+                      })()}</td>
+                      <td className="text-truncate" title={typeof i.purchasePrice === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}>{typeof i.purchasePrice === 'number' ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(i.purchasePrice) : '-'}</td>
+                      <td>
+                        {(() => {
+                          const paymentStatus = getInventoryDisplayPaymentStatus(i);
+                          return (
+                            <span className={`status-badge ${getInventoryPaymentClass(paymentStatus)}`}>
+                              {getInventoryPaymentLabel(paymentStatus)}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          {statusBadge(i)}
+                          {i.status === 'NEEDS_UPDATE' && (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={() => setConfirmState({
+                                message: `Chuyển ${i.code} từ Cần update -> Sẵn có?`,
+                                onConfirm: async () => {
+                                  const sb = getSupabase();
+                                  if (!sb) { notify('Không thể cập nhật trạng thái', 'error'); return; }
+                                  const { error } = await sb.from('inventory').update({ status: 'AVAILABLE', previous_linked_order_id: null }).eq('id', i.id);
+                                  if (error) return notify('Không thể cập nhật trạng thái', 'error');
+                                  try {
+                                    const sb2 = getSupabase();
+                                    if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Đánh dấu kho cần update -> sẵn có', details: `inventoryId=${i.id}; inventoryCode=${i.code}` });
+                                  } catch { }
+                                  notify('Đã chuyển về Sẵn có', 'success');
+                                  refresh();
+                                }
+                              })}
+                              title="Đặt lại trạng thái Sẵn có"
+                            >
+                              Mark Sẵn có
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        {i.isActive !== false ? (
+                          <span style={{ color: '#28a745', fontSize: '16px', fontWeight: 'bold' }}>✓</span>
+                        ) : (
+                          <span style={{ color: '#dc3545', fontSize: '16px', fontWeight: 'bold' }}>✗</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="d-flex gap-2">
+                          <button className="btn btn-light btn-sm" onClick={() => setViewingInventory(i)}>Xem</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => { setEditingItem(i); setShowForm(true); }}>Sửa</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )
+      }
 
       <div className="d-flex justify-content-between align-items-center mt-3">
         <div>
@@ -2397,1550 +2418,1574 @@ const WarehouseList: React.FC = () => {
         </div>
       </div>
 
-      {showForm && (
-        <WarehouseForm key={editingItem?.id || 'new'} item={editingItem} onClose={() => { setShowForm(false); setEditingItem(null); }} onSuccess={() => { setShowForm(false); setEditingItem(null); refresh(); }} />
-      )}
+      {
+        showForm && (
+          <WarehouseForm key={editingItem?.id || 'new'} item={editingItem} onClose={() => { setShowForm(false); setEditingItem(null); }} onSuccess={() => { setShowForm(false); setEditingItem(null); refresh(); }} />
+        )
+      }
 
-      {profilesModal && (
-        <div className="modal" role="dialog" aria-modal>
-          <div className="modal-content" style={{ maxWidth: 560 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Slots - {profilesModal.item.code}</h3>
-              <button className="close" onClick={() => setProfilesModal(null)}>×</button>
-            </div>
-            <div className="mb-3">
-              {(() => {
-                const item = items.find(x => x.id === profilesModal.item.id) || profilesModal.item;
-                let profiles = item.profiles || [];
-                const totalSlots = item.totalSlots || 0;
+      {
+        profilesModal && (
+          <div className="modal" role="dialog" aria-modal>
+            <div className="modal-content" style={{ maxWidth: 560 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Slots - {profilesModal.item.code}</h3>
+                <button className="close" onClick={() => setProfilesModal(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                {(() => {
+                  const item = items.find(x => x.id === profilesModal.item.id) || profilesModal.item;
+                  let profiles = item.profiles || [];
+                  const totalSlots = item.totalSlots || 0;
 
-                // If profiles are empty but we have totalSlots, generate fallback profiles from orders
-                if (profiles.length === 0 && totalSlots > 0) {
-                  const linkedOrders = Database.getOrders().filter((order: any) =>
-                    order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
-                    order.inventoryProfileIds.some((profileId: string) =>
-                      profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= totalSlots
-                    )
-                  );
+                  // If profiles are empty but we have totalSlots, generate fallback profiles from orders
+                  if (profiles.length === 0 && totalSlots > 0) {
+                    const linkedOrders = Database.getOrders().filter((order: any) =>
+                      order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
+                      order.inventoryProfileIds.some((profileId: string) =>
+                        profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= totalSlots
+                      )
+                    );
 
-                  if (linkedOrders.length > 0) {
-                    // Generate profiles with inferred assignments
-                    profiles = Array.from({ length: totalSlots }, (_, idx) => {
-                      const slotId = `slot-${idx + 1}`;
-                      const linkedOrder = linkedOrders.find((order: any) =>
-                        order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
-                      );
+                    if (linkedOrders.length > 0) {
+                      // Generate profiles with inferred assignments
+                      profiles = Array.from({ length: totalSlots }, (_, idx) => {
+                        const slotId = `slot-${idx + 1}`;
+                        const linkedOrder = linkedOrders.find((order: any) =>
+                          order.inventoryProfileIds && order.inventoryProfileIds.includes(slotId)
+                        );
 
-                      return {
-                        id: slotId,
+                        return {
+                          id: slotId,
+                          label: `Slot ${idx + 1}`,
+                          isAssigned: !!linkedOrder,
+                          assignedOrderId: linkedOrder?.id,
+                          assignedAt: linkedOrder?.createdAt,
+                          expiryAt: linkedOrder?.expiryDate
+                        };
+                      });
+                    } else {
+                      // Generate empty profiles
+                      profiles = Array.from({ length: totalSlots }, (_, idx) => ({
+                        id: `slot-${idx + 1}`,
                         label: `Slot ${idx + 1}`,
-                        isAssigned: !!linkedOrder,
-                        assignedOrderId: linkedOrder?.id,
-                        assignedAt: linkedOrder?.createdAt,
-                        expiryAt: linkedOrder?.expiryDate
-                      };
-                    });
-                  } else {
-                    // Generate empty profiles
-                    profiles = Array.from({ length: totalSlots }, (_, idx) => ({
-                      id: `slot-${idx + 1}`,
-                      label: `Slot ${idx + 1}`,
-                      isAssigned: false
-                    }));
-                  }
-                }
-
-                if (!profiles.length) return <div className="text-muted">Không có slot</div>;
-                return (
-                  <div className="table-responsive">
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>Slot</th>
-                          <th>Trạng thái</th>
-                          <th>Đơn hàng</th>
-                          <th>Hết hạn</th>
-                          <th>Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {profiles.map(p => {
-                          const orderId = p.assignedOrderId;
-                          const order = orderId ? Database.getOrders().find(o => o.id === orderId) : null;
-                          const prevOrderId = (p as any).previousOrderId;
-                          const prevOrder = prevOrderId ? Database.getOrders().find(o => o.id === prevOrderId) : null;
-
-                          return (
-                            <tr key={p.id}>
-                              <td>{p.label}</td>
-                              <td>{(() => {
-                                if (p.isAssigned) return 'Đang dùng';
-                                if ((p as any).needsUpdate && prevOrder) return `Trống (Cần update - trước: ${prevOrder.code})`;
-                                return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
-                              })()}</td>
-                              <td>{order ? `${order.code}` : prevOrder ? `(Trước: ${prevOrder.code})` : '-'}</td>
-                              <td>{(() => {
-                                if (!p.isAssigned && (p as any).needsUpdate) {
-                                  return (
-                                    <button className="btn btn-sm btn-primary" onClick={() => setConfirmState({
-                                      message: `Đánh dấu slot "${p.label}" đã update?`,
-                                      onConfirm: () => clearProfileNeedsUpdate(item.id, p.id)
-                                    })}>Đã update</button>
-                                  );
-                                }
-                                return order?.expiryDate
-                                  ? new Date(order.expiryDate).toISOString().split('T')[0]
-                                  : (p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-');
-                              })()}</td>
-                              <td>
-                                <div className="d-flex gap-2">
-                                  {order && (
-                                    <button className="btn btn-sm btn-light" onClick={() => { setPreviousProfilesModal(profilesModal); setProfilesModal(null); setViewingOrder(order); }}>
-                                      Xem đơn hàng
-                                    </button>
-                                  )}
-                                  {!order && prevOrder && (
-                                    <button className="btn btn-sm btn-light" onClick={() => { setPreviousProfilesModal(profilesModal); setProfilesModal(null); setViewingOrder(prevOrder); }}>
-                                      Xem đơn hàng
-                                    </button>
-                                  )}
-                                  {!order && p.isAssigned && (
-                                    <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button className="btn btn-secondary" onClick={() => setProfilesModal(null)}>Đóng</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {renewalDialog && (() => {
-        const inv = items.find(x => x.id === renewalDialog.id);
-        if (!inv) return null;
-        return (
-          <div className="modal" role="dialog" aria-modal style={{ zIndex: 10002 }}>
-            <div className="modal-content" style={{ maxWidth: 420 }}>
-              <div className="modal-header">
-                <h3 className="modal-title">Gia hạn kho {inv.code}</h3>
-                <button className="close" onClick={() => setRenewalDialog(null)}>×</button>
-              </div>
-              <div className="mb-3">
-                <div className="form-group">
-                  <label className="form-label">Số tháng</label>
-                  <input type="number" className="form-control" value={renewalDialog.months} min={1} onChange={e => setRenewalDialog({ ...renewalDialog, months: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Giá gia hạn (VND)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={
-                      renewalDialog.amount === 0
-                        ? ''
-                        : new Intl.NumberFormat('vi-VN').format(renewalDialog.amount) + ' đ'
+                        isAssigned: false
+                      }));
                     }
-                    onChange={e => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      const num = raw ? Number(raw) : 0;
-                      setRenewalDialog({ ...renewalDialog, amount: num });
-                    }}
-                    placeholder="0 đ"
-                    inputMode="numeric"
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Ghi chú</label>
-                  <input type="text" className="form-control" value={renewalDialog.note} onChange={e => setRenewalDialog({ ...renewalDialog, note: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Trạng thái thanh toán</label>
-                  <select
-                    className="form-control"
-                    value={renewalDialog.paymentStatus}
-                    onChange={e => setRenewalDialog({ ...renewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
-                  >
-                    {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
-                      <option key={status.value} value={status.value}>{status.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Hạn mới (dự kiến)</label>
-                  <div className="form-control" style={{ backgroundColor: '#f8f9fa', color: '#495057' }}>
-                    {(() => {
-                      const currentExpiry = new Date(inv.expiryDate);
-                      const newExpiry = new Date(currentExpiry);
-                      newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
-                      return newExpiry.toLocaleDateString('vi-VN');
-                    })()}
-                  </div>
-                </div>
+                  }
+
+                  if (!profiles.length) return <div className="text-muted">Không có slot</div>;
+                  return (
+                    <div className="table-responsive">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Slot</th>
+                            <th>Trạng thái</th>
+                            <th>Đơn hàng</th>
+                            <th>Hết hạn</th>
+                            <th>Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {profiles.map(p => {
+                            const orderId = p.assignedOrderId;
+                            const order = orderId ? Database.getOrders().find(o => o.id === orderId) : null;
+                            const prevOrderId = (p as any).previousOrderId;
+                            const prevOrder = prevOrderId ? Database.getOrders().find(o => o.id === prevOrderId) : null;
+
+                            return (
+                              <tr key={p.id}>
+                                <td>{p.label}</td>
+                                <td>{(() => {
+                                  if (p.isAssigned) return 'Đang dùng';
+                                  if ((p as any).needsUpdate && prevOrder) return `Trống (Cần update - trước: ${prevOrder.code})`;
+                                  return (p as any).needsUpdate ? 'Trống (Cần update)' : 'Trống';
+                                })()}</td>
+                                <td>{order ? `${order.code}` : prevOrder ? `(Trước: ${prevOrder.code})` : '-'}</td>
+                                <td>{(() => {
+                                  if (!p.isAssigned && (p as any).needsUpdate) {
+                                    return (
+                                      <button className="btn btn-sm btn-primary" onClick={() => setConfirmState({
+                                        message: `Đánh dấu slot "${p.label}" đã update?`,
+                                        onConfirm: () => clearProfileNeedsUpdate(item.id, p.id)
+                                      })}>Đã update</button>
+                                    );
+                                  }
+                                  return order?.expiryDate
+                                    ? new Date(order.expiryDate).toISOString().split('T')[0]
+                                    : (p.expiryAt ? new Date(p.expiryAt).toISOString().split('T')[0] : '-');
+                                })()}</td>
+                                <td>
+                                  <div className="d-flex gap-2">
+                                    {order && (
+                                      <button className="btn btn-sm btn-light" onClick={() => { setPreviousProfilesModal(profilesModal); setProfilesModal(null); setViewingOrder(order); }}>
+                                        Xem đơn hàng
+                                      </button>
+                                    )}
+                                    {!order && prevOrder && (
+                                      <button className="btn btn-sm btn-light" onClick={() => { setPreviousProfilesModal(profilesModal); setProfilesModal(null); setViewingOrder(prevOrder); }}>
+                                        Xem đơn hàng
+                                      </button>
+                                    )}
+                                    {!order && p.isAssigned && (
+                                      <button className="btn btn-sm btn-danger" onClick={() => releaseSingleProfile(item.id, p.id)}>Giải phóng</button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="d-flex justify-content-end gap-2">
-                <button className="btn btn-secondary" onClick={() => setRenewalDialog(null)}>Hủy</button>
-                <button className="btn btn-success" onClick={async () => {
-                  const sb = getSupabase();
-                  if (!sb) { notify('Không thể gia hạn', 'error'); return; }
-                  const currentExpiry = new Date(inv.expiryDate);
-                  const newExpiry = new Date(currentExpiry);
-                  newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
-                  const { error } = await sb.from('inventory').update({
-                    // Chỉ cập nhật hạn mới, không đụng tới trạng thái thanh toán lần nhập kho ban đầu
-                    expiry_date: newExpiry.toISOString()
-                  }).eq('id', inv.id);
-                  if (!error) {
-                    // Store renewal in Supabase
-                    const { error: renewalError } = await sb.from('inventory_renewals').insert({
-                      inventory_id: inv.id,
-                      months: renewalDialog.months,
-                      amount: renewalDialog.amount,
-                      previous_expiry_date: currentExpiry.toISOString(),
-                      new_expiry_date: newExpiry.toISOString(),
-                      note: renewalDialog.note,
-                      payment_status: renewalDialog.paymentStatus
-                    });
-
-                    if (!renewalError) {
-                      // Also store locally for backward compatibility
-                      Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, paymentStatus: renewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
-                      // Update in-memory list so history shows immediately
-                      setInventoryRenewals(prev => ([
-                        ...prev,
-                        {
-                          id: crypto?.randomUUID ? crypto.randomUUID() : `${inv.id}-${Date.now()}`,
-                          inventoryId: inv.id,
-                          months: renewalDialog.months,
-                          amount: renewalDialog.amount,
-                          previousExpiryDate: currentExpiry,
-                          newExpiryDate: newExpiry,
-                          note: renewalDialog.note,
-                          paymentStatus: renewalDialog.paymentStatus,
-                          createdAt: new Date(),
-                          createdBy: state.user?.id || 'system'
-                        }
-                      ]));
-                    }
-
-                    try {
-                      const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; inventoryCode=${inv.code || ''}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}; paymentStatus=${renewalDialog.paymentStatus}` });
-                    } catch { }
-                    notify('Gia hạn thành công', 'success');
-                    setRenewalDialog(null);
-                    refresh();
-                  } else {
-                    notify('Không thể gia hạn kho', 'error');
-                  }
-                }}>Xác nhận</button>
+                <button className="btn btn-secondary" onClick={() => setProfilesModal(null)}>Đóng</button>
               </div>
             </div>
           </div>
-        );
-      })()}
+        )
+      }
 
-      {bulkRenewalDialog && (() => {
-        const renewables = items.filter(x => bulkRenewalDialog.ids.includes(x.id));
-        const count = renewables.length;
-        return (
-          <div className="modal" role="dialog" aria-modal style={{ zIndex: 10002 }}>
-            <div className="modal-content" style={{ maxWidth: 420 }}>
-              <div className="modal-header">
-                <h3 className="modal-title">Gia hạn hàng loạt ({count})</h3>
-                <button className="close" onClick={() => setBulkRenewalDialog(null)}>×</button>
-              </div>
-              <div className="mb-3">
-                <div className="form-group">
-                  <label className="form-label">Số tháng</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={bulkRenewalDialog.months}
-                    min={1}
-                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, months: Math.max(1, parseInt(e.target.value || '1', 10)) })}
-                  />
+      {
+        renewalDialog && (() => {
+          const inv = items.find(x => x.id === renewalDialog.id);
+          if (!inv) return null;
+          return (
+            <div className="modal" role="dialog" aria-modal style={{ zIndex: 10002 }}>
+              <div className="modal-content" style={{ maxWidth: 420 }}>
+                <div className="modal-header">
+                  <h3 className="modal-title">Gia hạn kho {inv.code}</h3>
+                  <button className="close" onClick={() => setRenewalDialog(null)}>×</button>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Giá gia hạn cho mỗi kho (VND)</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={
-                      bulkRenewalDialog.amount === 0
-                        ? ''
-                        : new Intl.NumberFormat('vi-VN').format(bulkRenewalDialog.amount) + ' đ'
-                    }
-                    onChange={e => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      const num = raw ? Number(raw) : 0;
-                      setBulkRenewalDialog({ ...bulkRenewalDialog, amount: num });
-                    }}
-                    placeholder="0 đ"
-                    inputMode="numeric"
-                  />
+                <div className="mb-3">
+                  <div className="form-group">
+                    <label className="form-label">Số tháng</label>
+                    <input type="number" className="form-control" value={renewalDialog.months} min={1} onChange={e => setRenewalDialog({ ...renewalDialog, months: Math.max(1, parseInt(e.target.value || '1', 10)) })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Giá gia hạn (VND)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={
+                        renewalDialog.amount === 0
+                          ? ''
+                          : new Intl.NumberFormat('vi-VN').format(renewalDialog.amount) + ' đ'
+                      }
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        const num = raw ? Number(raw) : 0;
+                        setRenewalDialog({ ...renewalDialog, amount: num });
+                      }}
+                      placeholder="0 đ"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ghi chú</label>
+                    <input type="text" className="form-control" value={renewalDialog.note} onChange={e => setRenewalDialog({ ...renewalDialog, note: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Trạng thái thanh toán</label>
+                    <select
+                      className="form-control"
+                      value={renewalDialog.paymentStatus}
+                      onChange={e => setRenewalDialog({ ...renewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
+                    >
+                      {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                        <option key={status.value} value={status.value}>{status.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Hạn mới (dự kiến)</label>
+                    <div className="form-control" style={{ backgroundColor: '#f8f9fa', color: '#495057' }}>
+                      {(() => {
+                        const currentExpiry = new Date(inv.expiryDate);
+                        const newExpiry = new Date(currentExpiry);
+                        newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
+                        return newExpiry.toLocaleDateString('vi-VN');
+                      })()}
+                    </div>
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Ghi chú</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={bulkRenewalDialog.note}
-                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, note: e.target.value })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Trạng thái thanh toán</label>
-                  <select
-                    className="form-control"
-                    value={bulkRenewalDialog.paymentStatus}
-                    onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
-                  >
-                    {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
-                      <option key={status.value} value={status.value}>{status.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="alert alert-info" role="alert">
-                  Tất cả kho sẽ được cộng +{bulkRenewalDialog.months} tháng. Chi phí sẽ được ghi nhận theo thời điểm bấm gia hạn.
-                </div>
-              </div>
-              <div className="d-flex justify-content-end gap-2">
-                <button className="btn btn-secondary" onClick={() => setBulkRenewalDialog(null)}>Hủy</button>
-                <button className="btn btn-success" onClick={async () => {
-                  const sb = getSupabase();
-                  if (!sb) { notify('Không thể gia hạn hàng loạt', 'error'); return; }
-                  const renewablesNow = items.filter(x => bulkRenewalDialog.ids.includes(x.id));
-                  let successCount = 0;
-                  let errorCount = 0;
-                  const renewalDetails: string[] = [];
-                  for (const inv of renewablesNow) {
-                    try {
-                      const currentExpiry = new Date(inv.expiryDate);
-                      const newExpiry = new Date(currentExpiry);
-                      const monthsAdded = Math.max(1, bulkRenewalDialog.months || 1);
-                      newExpiry.setMonth(newExpiry.getMonth() + monthsAdded);
-                      const { error } = await sb.from('inventory').update({
-                        expiry_date: newExpiry.toISOString(),
-                        payment_status: bulkRenewalDialog.paymentStatus
-                      }).eq('id', inv.id);
-                      if (error) { errorCount++; continue; }
-                      // Ghi nhận chi phí gia hạn
+                <div className="d-flex justify-content-end gap-2">
+                  <button className="btn btn-secondary" onClick={() => setRenewalDialog(null)}>Hủy</button>
+                  <button className="btn btn-success" onClick={async () => {
+                    const sb = getSupabase();
+                    if (!sb) { notify('Không thể gia hạn', 'error'); return; }
+                    const currentExpiry = new Date(inv.expiryDate);
+                    const newExpiry = new Date(currentExpiry);
+                    newExpiry.setMonth(newExpiry.getMonth() + (renewalDialog.months || 1));
+                    const { error } = await sb.from('inventory').update({
+                      // Chỉ cập nhật hạn mới, không đụng tới trạng thái thanh toán lần nhập kho ban đầu
+                      expiry_date: newExpiry.toISOString()
+                    }).eq('id', inv.id);
+                    if (!error) {
+                      // Store renewal in Supabase
                       const { error: renewalError } = await sb.from('inventory_renewals').insert({
                         inventory_id: inv.id,
-                        months: monthsAdded,
-                        amount: bulkRenewalDialog.amount,
+                        months: renewalDialog.months,
+                        amount: renewalDialog.amount,
                         previous_expiry_date: currentExpiry.toISOString(),
                         new_expiry_date: newExpiry.toISOString(),
-                        note: bulkRenewalDialog.note,
-                        payment_status: bulkRenewalDialog.paymentStatus
+                        note: renewalDialog.note,
+                        payment_status: renewalDialog.paymentStatus
                       });
-                      if (renewalError) { errorCount++; continue; }
-                      // Local cache (back-compat)
-                      Database.renewInventoryItem(inv.id, monthsAdded, bulkRenewalDialog.amount, { note: bulkRenewalDialog.note, paymentStatus: bulkRenewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
-                      // Update in-memory list so history shows immediately
-                      setInventoryRenewals(prev => ([
-                        ...prev,
-                        {
-                          id: crypto?.randomUUID ? crypto.randomUUID() : `${inv.id}-${Date.now()}`,
-                          inventoryId: inv.id,
-                          months: monthsAdded,
-                          amount: bulkRenewalDialog.amount,
-                          previousExpiryDate: currentExpiry,
-                          newExpiryDate: newExpiry,
-                          note: bulkRenewalDialog.note,
-                          paymentStatus: bulkRenewalDialog.paymentStatus,
-                          createdAt: new Date(),
-                          createdBy: state.user?.id || 'system'
-                        }
-                      ]));
-                      successCount++;
-                      renewalDetails.push(`${inv.code}: ${currentExpiry.toISOString().split('T')[0]} -> ${newExpiry.toISOString().split('T')[0]}`);
-                    } catch {
-                      errorCount++;
+
+                      if (!renewalError) {
+                        // Also store locally for backward compatibility
+                        Database.renewInventoryItem(inv.id, renewalDialog.months, renewalDialog.amount, { note: renewalDialog.note, paymentStatus: renewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
+                        // Update in-memory list so history shows immediately
+                        setInventoryRenewals(prev => ([
+                          ...prev,
+                          {
+                            id: crypto?.randomUUID ? crypto.randomUUID() : `${inv.id}-${Date.now()}`,
+                            inventoryId: inv.id,
+                            months: renewalDialog.months,
+                            amount: renewalDialog.amount,
+                            previousExpiryDate: currentExpiry,
+                            newExpiryDate: newExpiry,
+                            note: renewalDialog.note,
+                            paymentStatus: renewalDialog.paymentStatus,
+                            createdAt: new Date(),
+                            createdBy: state.user?.id || 'system'
+                          }
+                        ]));
+                      }
+
+                      try {
+                        const sb2 = getSupabase();
+                        if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Gia hạn kho hàng', details: `inventoryId=${inv.id}; inventoryCode=${inv.code || ''}; oldExpiry=${currentExpiry.toISOString().split('T')[0]}; newExpiry=${newExpiry.toISOString().split('T')[0]}; months=${renewalDialog.months}; amount=${renewalDialog.amount}; paymentStatus=${renewalDialog.paymentStatus}` });
+                      } catch { }
+                      notify('Gia hạn thành công', 'success');
+                      setRenewalDialog(null);
+                      refresh();
+                    } else {
+                      notify('Không thể gia hạn kho', 'error');
                     }
-                  }
-                  if (successCount > 0) {
-                    try {
-                      const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({
-                        employee_id: state.user?.id || null,
-                        action: 'Gia hạn hàng loạt kho hàng',
-                        details: `count=${successCount}; months=${bulkRenewalDialog.months}; amount=${bulkRenewalDialog.amount}; paymentStatus=${bulkRenewalDialog.paymentStatus}; ids=${renewablesNow.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}`
-                      });
-                    } catch { }
-                  }
-                  if (errorCount === 0) {
-                    notify(`Đã gia hạn thành công ${successCount} kho hàng`, 'success');
-                  } else if (successCount > 0) {
-                    notify(`Đã gia hạn thành công ${successCount} kho hàng, ${errorCount} lỗi`, 'warning');
-                  } else {
-                    notify('Không thể gia hạn kho hàng', 'error');
-                  }
-                  setBulkRenewalDialog(null);
-                  setSelectedIds([]);
-                  refresh();
-                }}>Xác nhận</button>
+                  }}>Xác nhận</button>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })()}
+          );
+        })()
+      }
 
-      {viewingInventory && (() => {
-        const inv = items.find(x => x.id === viewingInventory.id) || viewingInventory;
-        const productId = inv.productId || (inv as any).product_id;
-        const packageId = inv.packageId || (inv as any).package_id;
-        const product = products.find(p => p.id === productId);
-        const pkg = packages.find(p => p.id === packageId);
-        const isSharedPool = product?.sharedInventoryPool;
-        const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
-        const renewals = inventoryRenewals.filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-
-        // Get the latest renewal's new expiry date if it's newer than current expiry
-        const latestRenewal = renewals.length > 0 ? renewals[0] : null;
-        const actualExpiryDate = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate)
-          ? latestRenewal.newExpiryDate
-          : inv.expiryDate;
-        const expiryDateMismatch = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate);
-
-        // Get account columns from package or inventory item
-        const accountColumns = pkg?.accountColumns || inv.accountColumns || [];
-        const accountData = inv.accountData || {};
-
-        return (
-          <div className="modal" role="dialog" aria-modal>
-            <div className="modal-content" style={{ maxWidth: 600 }}>
-              <div className="modal-header">
-                <h3 className="modal-title">Kho {inv.code}</h3>
-                <button className="close" onClick={() => setViewingInventory(null)}>×</button>
-              </div>
-              <div className="mb-3">
-                <div><strong>Sản phẩm:</strong> {product?.name || productId || 'Không xác định'}</div>
-                <div><strong>Gói/Pool:</strong> {packageName}</div>
-                <div><strong>Nhập:</strong> {formatDate(inv.purchaseDate)}</div>
-                <div>
-                  <strong>Hết hạn:</strong> {formatDate(actualExpiryDate)}
-                  {expiryDateMismatch && (
-                    <span style={{ marginLeft: 8, color: '#dc3545', fontSize: '0.9em' }}>
-                      (Cần cập nhật: {formatDate(inv.expiryDate)} → {formatDate(actualExpiryDate)})
-                    </span>
-                  )}
+      {
+        bulkRenewalDialog && (() => {
+          const renewables = items.filter(x => bulkRenewalDialog.ids.includes(x.id));
+          const count = renewables.length;
+          return (
+            <div className="modal" role="dialog" aria-modal style={{ zIndex: 10002 }}>
+              <div className="modal-content" style={{ maxWidth: 420 }}>
+                <div className="modal-header">
+                  <h3 className="modal-title">Gia hạn hàng loạt ({count})</h3>
+                  <button className="close" onClick={() => setBulkRenewalDialog(null)}>×</button>
                 </div>
-                <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
-                <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
-                <div><strong>Thanh toán:</strong> {(() => {
-                  const paymentStatus = getInventoryDisplayPaymentStatus(inv);
-                  return getInventoryPaymentLabel(paymentStatus);
-                })()}</div>
-                {inv.status === 'NEEDS_UPDATE' && inv.previousLinkedOrderId && (() => {
-                  const prevOrder = Database.getOrders().find(o => o.id === inv.previousLinkedOrderId);
-                  return prevOrder ? (
-                    <div style={{ marginTop: 6, padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
-                      <strong>Đơn hàng trước khi cần update:</strong> {prevOrder.code}
-                    </div>
-                  ) : null;
-                })()}
-                {inv.productInfo && (
-                  <div style={{ marginTop: 6 }}>
-                    <strong>Thông tin sản phẩm:</strong>
-                    <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre>
+                <div className="mb-3">
+                  <div className="form-group">
+                    <label className="form-label">Số tháng</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={bulkRenewalDialog.months}
+                      min={1}
+                      onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, months: Math.max(1, parseInt(e.target.value || '1', 10)) })}
+                    />
                   </div>
-                )}
-                <div style={{ marginTop: 6 }}>
-                  <strong>Ghi chú nội bộ:</strong>
-                  {inv.notes ? (
-                    <pre style={{
-                      whiteSpace: 'pre-wrap',
-                      margin: '4px 0 0 0',
-                      padding: '8px',
-                      backgroundColor: 'var(--bg-tertiary)',
-                      color: 'var(--text-primary)',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      border: '1px solid var(--border-color)'
-                    }}>
-                      {inv.notes}
-                    </pre>
-                  ) : (
-                    <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
-                  )}
+                  <div className="form-group">
+                    <label className="form-label">Giá gia hạn cho mỗi kho (VND)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={
+                        bulkRenewalDialog.amount === 0
+                          ? ''
+                          : new Intl.NumberFormat('vi-VN').format(bulkRenewalDialog.amount) + ' đ'
+                      }
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        const num = raw ? Number(raw) : 0;
+                        setBulkRenewalDialog({ ...bulkRenewalDialog, amount: num });
+                      }}
+                      placeholder="0 đ"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ghi chú</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={bulkRenewalDialog.note}
+                      onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, note: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Trạng thái thanh toán</label>
+                    <select
+                      className="form-control"
+                      value={bulkRenewalDialog.paymentStatus}
+                      onChange={e => setBulkRenewalDialog({ ...bulkRenewalDialog, paymentStatus: e.target.value as InventoryPaymentStatus })}
+                    >
+                      {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                        <option key={status.value} value={status.value}>{status.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="alert alert-info" role="alert">
+                    Tất cả kho sẽ được cộng +{bulkRenewalDialog.months} tháng. Chi phí sẽ được ghi nhận theo thời điểm bấm gia hạn.
+                  </div>
                 </div>
+                <div className="d-flex justify-content-end gap-2">
+                  <button className="btn btn-secondary" onClick={() => setBulkRenewalDialog(null)}>Hủy</button>
+                  <button className="btn btn-success" onClick={async () => {
+                    const sb = getSupabase();
+                    if (!sb) { notify('Không thể gia hạn hàng loạt', 'error'); return; }
+                    const renewablesNow = items.filter(x => bulkRenewalDialog.ids.includes(x.id));
+                    let successCount = 0;
+                    let errorCount = 0;
+                    const renewalDetails: string[] = [];
+                    for (const inv of renewablesNow) {
+                      try {
+                        const currentExpiry = new Date(inv.expiryDate);
+                        const newExpiry = new Date(currentExpiry);
+                        const monthsAdded = Math.max(1, bulkRenewalDialog.months || 1);
+                        newExpiry.setMonth(newExpiry.getMonth() + monthsAdded);
+                        const { error } = await sb.from('inventory').update({
+                          expiry_date: newExpiry.toISOString(),
+                          payment_status: bulkRenewalDialog.paymentStatus
+                        }).eq('id', inv.id);
+                        if (error) { errorCount++; continue; }
+                        // Ghi nhận chi phí gia hạn
+                        const { error: renewalError } = await sb.from('inventory_renewals').insert({
+                          inventory_id: inv.id,
+                          months: monthsAdded,
+                          amount: bulkRenewalDialog.amount,
+                          previous_expiry_date: currentExpiry.toISOString(),
+                          new_expiry_date: newExpiry.toISOString(),
+                          note: bulkRenewalDialog.note,
+                          payment_status: bulkRenewalDialog.paymentStatus
+                        });
+                        if (renewalError) { errorCount++; continue; }
+                        // Local cache (back-compat)
+                        Database.renewInventoryItem(inv.id, monthsAdded, bulkRenewalDialog.amount, { note: bulkRenewalDialog.note, paymentStatus: bulkRenewalDialog.paymentStatus, createdBy: state.user?.id || 'system' });
+                        // Update in-memory list so history shows immediately
+                        setInventoryRenewals(prev => ([
+                          ...prev,
+                          {
+                            id: crypto?.randomUUID ? crypto.randomUUID() : `${inv.id}-${Date.now()}`,
+                            inventoryId: inv.id,
+                            months: monthsAdded,
+                            amount: bulkRenewalDialog.amount,
+                            previousExpiryDate: currentExpiry,
+                            newExpiryDate: newExpiry,
+                            note: bulkRenewalDialog.note,
+                            paymentStatus: bulkRenewalDialog.paymentStatus,
+                            createdAt: new Date(),
+                            createdBy: state.user?.id || 'system'
+                          }
+                        ]));
+                        successCount++;
+                        renewalDetails.push(`${inv.code}: ${currentExpiry.toISOString().split('T')[0]} -> ${newExpiry.toISOString().split('T')[0]}`);
+                      } catch {
+                        errorCount++;
+                      }
+                    }
+                    if (successCount > 0) {
+                      try {
+                        const sb2 = getSupabase();
+                        if (sb2) await sb2.from('activity_logs').insert({
+                          employee_id: state.user?.id || null,
+                          action: 'Gia hạn hàng loạt kho hàng',
+                          details: `count=${successCount}; months=${bulkRenewalDialog.months}; amount=${bulkRenewalDialog.amount}; paymentStatus=${bulkRenewalDialog.paymentStatus}; ids=${renewablesNow.map(i => i.id).join(',')}; details=${renewalDetails.join('; ')}`
+                        });
+                      } catch { }
+                    }
+                    if (errorCount === 0) {
+                      notify(`Đã gia hạn thành công ${successCount} kho hàng`, 'success');
+                    } else if (successCount > 0) {
+                      notify(`Đã gia hạn thành công ${successCount} kho hàng, ${errorCount} lỗi`, 'warning');
+                    } else {
+                      notify('Không thể gia hạn kho hàng', 'error');
+                    }
+                    setBulkRenewalDialog(null);
+                    setSelectedIds([]);
+                    refresh();
+                  }}>Xác nhận</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      }
 
-                {/* Account Information Section - only show columns that have data */}
-                {(() => {
-                  // Filter to only columns that have actual data
-                  const columnsWithData = accountColumns.filter((col: any) => {
-                    const value = accountData[col.id];
-                    return value !== undefined && value !== null && String(value).trim() !== '';
-                  });
+      {
+        viewingInventory && (() => {
+          const inv = items.find(x => x.id === viewingInventory.id) || viewingInventory;
+          const productId = inv.productId || (inv as any).product_id;
+          const packageId = inv.packageId || (inv as any).package_id;
+          const product = products.find(p => p.id === productId);
+          const pkg = packages.find(p => p.id === packageId);
+          const isSharedPool = product?.sharedInventoryPool;
+          const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
+          const renewals = inventoryRenewals.filter(r => r.inventoryId === inv.id).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 
-                  if (columnsWithData.length === 0) return null;
+          // Get the latest renewal's new expiry date if it's newer than current expiry
+          const latestRenewal = renewals.length > 0 ? renewals[0] : null;
+          const actualExpiryDate = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate)
+            ? latestRenewal.newExpiryDate
+            : inv.expiryDate;
+          const expiryDateMismatch = latestRenewal && new Date(latestRenewal.newExpiryDate) > new Date(inv.expiryDate);
 
-                  return (
-                    <div style={{ marginTop: 12 }}>
-                      <strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
-                      <div style={{ marginTop: 6 }}>
-                        {columnsWithData.map((col: any) => {
-                          const value = accountData[col.id] || '';
-                          return (
-                            <div key={col.id} style={{ marginBottom: 8 }}>
-                              <div><strong>{col.title}:</strong></div>
-                              <pre
-                                style={{
-                                  whiteSpace: 'pre-wrap',
-                                  margin: 0,
-                                  padding: '8px',
-                                  backgroundColor: 'var(--bg-tertiary)',
-                                  color: 'var(--text-primary)',
-                                  borderRadius: '4px',
-                                  fontSize: '14px',
-                                  border: '1px solid var(--border-color)',
-                                  cursor: 'pointer',
-                                  transition: 'background-color 0.2s'
-                                }}
-                                onClick={() => {
-                                  navigator.clipboard.writeText(value).then(() => {
-                                    notify(`Đã copy ${col.title}`, 'success');
-                                  }).catch(() => {
-                                    notify('Không thể copy', 'error');
-                                  });
-                                }}
-                                onMouseEnter={(e) => {
-                                  (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
-                                }}
-                                title={`Bấm để copy ${col.title}`}
-                              >
-                                {value}
-                              </pre>
-                            </div>
-                          );
-                        })}
+          // Get account columns from package or inventory item
+          const accountColumns = pkg?.accountColumns || inv.accountColumns || [];
+          const accountData = inv.accountData || {};
+
+          return (
+            <div className="modal" role="dialog" aria-modal>
+              <div className="modal-content" style={{ maxWidth: 600 }}>
+                <div className="modal-header">
+                  <h3 className="modal-title">Kho {inv.code}</h3>
+                  <button className="close" onClick={() => setViewingInventory(null)}>×</button>
+                </div>
+                <div className="mb-3">
+                  <div><strong>Sản phẩm:</strong> {product?.name || productId || 'Không xác định'}</div>
+                  <div><strong>Gói/Pool:</strong> {packageName}</div>
+                  <div><strong>Nhập:</strong> {formatDate(inv.purchaseDate)}</div>
+                  <div>
+                    <strong>Hết hạn:</strong> {formatDate(actualExpiryDate)}
+                    {expiryDateMismatch && (
+                      <span style={{ marginLeft: 8, color: '#dc3545', fontSize: '0.9em' }}>
+                        (Cần cập nhật: {formatDate(inv.expiryDate)} → {formatDate(actualExpiryDate)})
+                      </span>
+                    )}
+                  </div>
+                  <div><strong>Nguồn:</strong> {inv.sourceNote || '-'}</div>
+                  <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
+                  <div><strong>Thanh toán:</strong> {(() => {
+                    const paymentStatus = getInventoryDisplayPaymentStatus(inv);
+                    return getInventoryPaymentLabel(paymentStatus);
+                  })()}</div>
+                  <div>
+                    <strong>Trạng thái:</strong> {inv.isActive !== false ? 'Active' : 'Not Active'}
+                  </div>
+                  {inv.status === 'NEEDS_UPDATE' && inv.previousLinkedOrderId && (() => {
+                    const prevOrder = Database.getOrders().find(o => o.id === inv.previousLinkedOrderId);
+                    return prevOrder ? (
+                      <div style={{ marginTop: 6, padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px' }}>
+                        <strong>Đơn hàng trước khi cần update:</strong> {prevOrder.code}
                       </div>
+                    ) : null;
+                  })()}
+                  {inv.productInfo && (
+                    <div style={{ marginTop: 6 }}>
+                      <strong>Thông tin sản phẩm:</strong>
+                      <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{inv.productInfo}</pre>
                     </div>
-                  );
-                })()}
-                <div style={{ marginTop: '16px' }}>
-                  <strong style={{ fontSize: '16px' }}>Lịch sử gia hạn:</strong>
+                  )}
+                  <div style={{ marginTop: 6 }}>
+                    <strong>Ghi chú nội bộ:</strong>
+                    {inv.notes ? (
+                      <pre style={{
+                        whiteSpace: 'pre-wrap',
+                        margin: '4px 0 0 0',
+                        padding: '8px',
+                        backgroundColor: 'var(--bg-tertiary)',
+                        color: 'var(--text-primary)',
+                        borderRadius: '4px',
+                        fontSize: '14px',
+                        border: '1px solid var(--border-color)'
+                      }}>
+                        {inv.notes}
+                      </pre>
+                    ) : (
+                      <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
+                    )}
+                  </div>
 
-                  {/* Timeline: Nhập kho ban đầu */}
+                  {/* Account Information Section - only show columns that have data */}
                   {(() => {
-                    // Tính hạn sử dụng ban đầu: nếu có renewals, dùng previousExpiryDate của renewal cũ nhất
-                    // Nếu không có, tính từ purchaseDate + warrantyPeriod
-                    const sortedRenewals = [...renewals].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
-                    const originalExpiryDate = sortedRenewals.length > 0 && sortedRenewals[0].previousExpiryDate
-                      ? new Date(sortedRenewals[0].previousExpiryDate)
-                      : (() => {
-                        if (pkg?.warrantyPeriod) {
-                          const expiry = new Date(inv.purchaseDate);
-                          expiry.setMonth(expiry.getMonth() + Math.floor(pkg.warrantyPeriod));
-                          return expiry;
-                        }
-                        return inv.expiryDate;
-                      })();
+                    // Filter to only columns that have actual data
+                    const columnsWithData = accountColumns.filter((col: any) => {
+                      const value = accountData[col.id];
+                      return value !== undefined && value !== null && String(value).trim() !== '';
+                    });
+
+                    if (columnsWithData.length === 0) return null;
 
                     return (
-                      <div className="card mt-3" style={{ borderLeft: '4px solid #28a745', backgroundColor: 'var(--bg-secondary)' }}>
-                        <div className="card-body" style={{ padding: '12px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                            <div>
-                              <strong style={{ color: '#28a745', fontSize: '14px' }}>📦 Nhập kho ban đầu</strong>
-                            </div>
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                              {formatDate(inv.purchaseDate)}
-                            </div>
-                          </div>
-                          <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                            <div><strong>Sản phẩm:</strong> {product?.name || 'Không xác định'}</div>
-                            <div><strong>Gói/Pool:</strong> {packageName}</div>
-                            <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
-                            <div><strong>Hạn sử dụng:</strong> {formatDate(originalExpiryDate)}</div>
-                            <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === inv.paymentStatus)?.label || 'Chưa thanh toán'}</div>
-                          </div>
+                      <div style={{ marginTop: 12 }}>
+                        <strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
+                        <div style={{ marginTop: 6 }}>
+                          {columnsWithData.map((col: any) => {
+                            const value = accountData[col.id] || '';
+                            return (
+                              <div key={col.id} style={{ marginBottom: 8 }}>
+                                <div><strong>{col.title}:</strong></div>
+                                <pre
+                                  style={{
+                                    whiteSpace: 'pre-wrap',
+                                    margin: 0,
+                                    padding: '8px',
+                                    backgroundColor: 'var(--bg-tertiary)',
+                                    color: 'var(--text-primary)',
+                                    borderRadius: '4px',
+                                    fontSize: '14px',
+                                    border: '1px solid var(--border-color)',
+                                    cursor: 'pointer',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(value).then(() => {
+                                      notify(`Đã copy ${col.title}`, 'success');
+                                    }).catch(() => {
+                                      notify('Không thể copy', 'error');
+                                    });
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+                                  }}
+                                  title={`Bấm để copy ${col.title}`}
+                                >
+                                  {value}
+                                </pre>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
                   })()}
+                  <div style={{ marginTop: '16px' }}>
+                    <strong style={{ fontSize: '16px' }}>Lịch sử gia hạn:</strong>
 
-                  {/* Timeline: Các lần gia hạn */}
-                  {renewals.length > 0 && (() => {
-                    // Sắp xếp theo thời gian tạo tăng dần để Gia hạn lần 1 là lần sớm nhất
-                    const sortedTimeline = [...renewals].sort(
-                      (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)
-                    );
-                    return sortedTimeline.map((r, index) => {
-                      const paymentStatusLabel = r.paymentStatus
-                        ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
-                        : 'Chưa thanh toán';
+                    {/* Timeline: Nhập kho ban đầu */}
+                    {(() => {
+                      // Tính hạn sử dụng ban đầu: nếu có renewals, dùng previousExpiryDate của renewal cũ nhất
+                      // Nếu không có, tính từ purchaseDate + warrantyPeriod
+                      const sortedRenewals = [...renewals].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+                      const originalExpiryDate = sortedRenewals.length > 0 && sortedRenewals[0].previousExpiryDate
+                        ? new Date(sortedRenewals[0].previousExpiryDate)
+                        : (() => {
+                          if (pkg?.warrantyPeriod) {
+                            const expiry = new Date(inv.purchaseDate);
+                            expiry.setMonth(expiry.getMonth() + Math.floor(pkg.warrantyPeriod));
+                            return expiry;
+                          }
+                          return inv.expiryDate;
+                        })();
 
                       return (
-                        <div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>
+                        <div className="card mt-3" style={{ borderLeft: '4px solid #28a745', backgroundColor: 'var(--bg-secondary)' }}>
                           <div className="card-body" style={{ padding: '12px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                               <div>
-                                <strong style={{ color: '#007bff', fontSize: '14px' }}>🔄 Gia hạn lần {index + 1}</strong>
+                                <strong style={{ color: '#28a745', fontSize: '14px' }}>📦 Nhập kho ban đầu</strong>
                               </div>
                               <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                                {formatDate(inv.purchaseDate)}
                               </div>
                             </div>
                             <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
-                              <div><strong>Thời gian gia hạn:</strong> +{r.months} tháng</div>
-                              <div><strong>Hạn sử dụng:</strong> {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: '500' }}>{new Date(r.newExpiryDate).toLocaleDateString('vi-VN')}</span></div>
-                              <div><strong>Giá gia hạn:</strong> {formatPrice(r.amount)}</div>
-                              <div><strong>Thanh toán:</strong> {paymentStatusLabel}</div>
-                              {r.note && (
-                                <div style={{ marginTop: '6px', padding: '6px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px' }}>
-                                  <strong>Ghi chú:</strong> {r.note}
-                                </div>
-                              )}
+                              <div><strong>Sản phẩm:</strong> {product?.name || 'Không xác định'}</div>
+                              <div><strong>Gói/Pool:</strong> {packageName}</div>
+                              <div><strong>Giá mua:</strong> {typeof inv.purchasePrice === 'number' ? formatPrice(inv.purchasePrice) : '-'}</div>
+                              <div><strong>Hạn sử dụng:</strong> {formatDate(originalExpiryDate)}</div>
+                              <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === inv.paymentStatus)?.label || 'Chưa thanh toán'}</div>
                             </div>
                           </div>
                         </div>
                       );
-                    });
-                  })()}
+                    })()}
 
-                  {renewals.length === 0 && (
-                    <div style={{ marginTop: '8px', padding: '8px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
-                      Chưa có lần gia hạn nào
-                    </div>
+                    {/* Timeline: Các lần gia hạn */}
+                    {renewals.length > 0 && (() => {
+                      // Sắp xếp theo thời gian tạo tăng dần để Gia hạn lần 1 là lần sớm nhất
+                      const sortedTimeline = [...renewals].sort(
+                        (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)
+                      );
+                      return sortedTimeline.map((r, index) => {
+                        const paymentStatusLabel = r.paymentStatus
+                          ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
+                          : 'Chưa thanh toán';
+
+                        return (
+                          <div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>
+                            <div className="card-body" style={{ padding: '12px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                                <div>
+                                  <strong style={{ color: '#007bff', fontSize: '14px' }}>🔄 Gia hạn lần {index + 1}</strong>
+                                </div>
+                                <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                  {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                                </div>
+                              </div>
+                              <div style={{ fontSize: '13px', lineHeight: '1.6' }}>
+                                <div><strong>Thời gian gia hạn:</strong> +{r.months} tháng</div>
+                                <div><strong>Hạn sử dụng:</strong> {new Date(r.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: '500' }}>{new Date(r.newExpiryDate).toLocaleDateString('vi-VN')}</span></div>
+                                <div><strong>Giá gia hạn:</strong> {formatPrice(r.amount)}</div>
+                                <div><strong>Thanh toán:</strong> {paymentStatusLabel}</div>
+                                {r.note && (
+                                  <div style={{ marginTop: '6px', padding: '6px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', fontSize: '12px' }}>
+                                    <strong>Ghi chú:</strong> {r.note}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+
+                    {renewals.length === 0 && (
+                      <div style={{ marginTop: '8px', padding: '8px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                        Chưa có lần gia hạn nào
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="d-flex justify-content-end gap-2">
+                  {expiryDateMismatch && (
+                    <button
+                      className="btn btn-warning"
+                      onClick={async () => {
+                        const sb = getSupabase();
+                        if (!sb) { notify('Không thể cập nhật hạn sử dụng', 'error'); return; }
+                        const expiryToUpdate = latestRenewal ? new Date(latestRenewal.newExpiryDate) : inv.expiryDate;
+                        const { error } = await sb.from('inventory').update({ expiry_date: expiryToUpdate.toISOString() }).eq('id', inv.id);
+                        if (!error) {
+                          notify('Đã cập nhật hạn sử dụng từ lịch sử gia hạn', 'success');
+                          refresh();
+                        } else {
+                          notify('Không thể cập nhật hạn sử dụng', 'error');
+                        }
+                      }}
+                    >
+                      🔧 Sửa hạn sử dụng
+                    </button>
                   )}
+                  {inv.paymentStatus !== 'REFUNDED' && (
+                    <button
+                      className="btn btn-success"
+                      onClick={() => { setViewingInventory(null); renewInventory(inv.id); }}
+                    >
+                      Gia hạn
+                    </button>
+                  )}
+                  {inv.paymentStatus === 'REFUNDED' ? (
+                    <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
+                      Đã hoàn: {formatPrice((inv as any).refundAmount || 0)}
+                    </div>
+                  ) : (
+                    <button
+                      className="btn btn-warning"
+                      onClick={() => {
+                        setViewingInventory(null);
+                        setRefundState({
+                          item: inv,
+                          errorDate: new Date().toISOString().split('T')[0],
+                          amount: computeWarehouseRefundAmount(inv, new Date().toISOString().split('T')[0]),
+                          refundReason: ''
+                        });
+                      }}
+                    >
+                      Tính tiền hoàn
+                    </button>
+                  )}
+                  <button className="btn btn-secondary" onClick={() => setViewingInventory(null)}>Đóng</button>
                 </div>
               </div>
+            </div>
+          );
+        })()
+      }
+
+      {
+        confirmState && (
+          <div className="modal" role="dialog" aria-modal>
+            <div className="modal-content" style={{ maxWidth: 420 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Xác nhận</h3>
+                <button className="close" onClick={() => setConfirmState(null)}>×</button>
+              </div>
+              <div className="mb-4" style={{ color: 'var(--text-primary)' }}>{confirmState.message}</div>
               <div className="d-flex justify-content-end gap-2">
-                {expiryDateMismatch && (
-                  <button
-                    className="btn btn-warning"
-                    onClick={async () => {
-                      const sb = getSupabase();
-                      if (!sb) { notify('Không thể cập nhật hạn sử dụng', 'error'); return; }
-                      const expiryToUpdate = latestRenewal ? new Date(latestRenewal.newExpiryDate) : inv.expiryDate;
-                      const { error } = await sb.from('inventory').update({ expiry_date: expiryToUpdate.toISOString() }).eq('id', inv.id);
-                      if (!error) {
-                        notify('Đã cập nhật hạn sử dụng từ lịch sử gia hạn', 'success');
-                        refresh();
-                      } else {
-                        notify('Không thể cập nhật hạn sử dụng', 'error');
-                      }
-                    }}
-                  >
-                    🔧 Sửa hạn sử dụng
-                  </button>
-                )}
-                {inv.paymentStatus !== 'REFUNDED' && (
-                  <button
-                    className="btn btn-success"
-                    onClick={() => { setViewingInventory(null); renewInventory(inv.id); }}
-                  >
-                    Gia hạn
-                  </button>
-                )}
-                {inv.paymentStatus === 'REFUNDED' ? (
-                  <div className="text-success" style={{ padding: '6px 12px', fontWeight: 'bold' }}>
-                    Đã hoàn: {formatPrice((inv as any).refundAmount || 0)}
-                  </div>
-                ) : (
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => {
-                      setViewingInventory(null);
-                      setRefundState({
-                        item: inv,
-                        errorDate: new Date().toISOString().split('T')[0],
-                        amount: computeWarehouseRefundAmount(inv, new Date().toISOString().split('T')[0]),
-                        refundReason: ''
-                      });
-                    }}
-                  >
-                    Tính tiền hoàn
-                  </button>
-                )}
-                <button className="btn btn-secondary" onClick={() => setViewingInventory(null)}>Đóng</button>
+                <button className="btn btn-secondary" onClick={() => setConfirmState(null)}>Hủy</button>
+                <button className="btn btn-danger" onClick={() => { const fn = confirmState.onConfirm; setConfirmState(null); fn(); }}>Xác nhận</button>
               </div>
             </div>
           </div>
-        );
-      })()}
+        )
+      }
 
-      {confirmState && (
-        <div className="modal" role="dialog" aria-modal>
-          <div className="modal-content" style={{ maxWidth: 420 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Xác nhận</h3>
-              <button className="close" onClick={() => setConfirmState(null)}>×</button>
-            </div>
-            <div className="mb-4" style={{ color: 'var(--text-primary)' }}>{confirmState.message}</div>
-            <div className="d-flex justify-content-end gap-2">
-              <button className="btn btn-secondary" onClick={() => setConfirmState(null)}>Hủy</button>
-              <button className="btn btn-danger" onClick={() => { const fn = confirmState.onConfirm; setConfirmState(null); fn(); }}>Xác nhận</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {viewingOrder && (
-        <OrderDetailsModal
-          order={viewingOrder}
-          onClose={() => {
-            if (previousProfilesModal) {
-              setProfilesModal(previousProfilesModal);
-              setPreviousProfilesModal(null);
-            }
-            setViewingOrder(null);
-          }}
-          inventory={items as any}
-          products={products as any}
-          packages={packages as any}
-          getCustomerName={(id: string) => customerMap.get(id) || 'Không xác định'}
-          getCustomerCode={(id: string) => (customers.find(c => c.id === id)?.code || '')}
-          getPackageInfo={(packageId: string) => {
-            const { pkg, product } = getPackageInfo(packageId);
-            return { package: pkg, product } as any;
-          }}
-          getStatusLabel={getStatusLabel as any}
-          getPaymentLabel={getPaymentLabel as any}
-          formatDate={formatDate}
-          formatPrice={formatPrice}
-          onOpenRenew={() => {
-            if (!viewingOrder) return;
-            setRenewState({
-              order: viewingOrder,
-              packageId: viewingOrder.packageId,
-              useCustomPrice: false,
-              customPrice: 0,
-              note: '',
-              // Mặc định lần gia hạn luôn là chưa thanh toán
-              paymentStatus: 'UNPAID',
-              markMessageSent: !!(viewingOrder as any).renewalMessageSent,
-              useCustomExpiry: false,
-              customExpiryDate: undefined
-            });
-          }}
-          onCopyInfo={async () => {
-            const o = viewingOrder;
-            const customerName = customerMap.get(o.customerId) || 'Không xác định';
-            const pkgInfo = getPackageInfo(o.packageId);
-            const productName = pkgInfo?.product?.name || 'Không xác định';
-            const packageName = pkgInfo?.pkg?.name || 'Không xác định';
-            const statusLabel = getStatusLabel(o.status);
-            const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
-            const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
-            const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
-            const price = (() => {
-              if (o.useCustomPrice && o.customPrice) return o.customPrice;
-              const customer = customers.find(c => c.id === o.customerId);
-              const isCTV = (customer?.type || 'RETAIL') === 'CTV';
-              return isCTV ? (pkgInfo?.pkg?.ctvPrice || 0) : (pkgInfo?.pkg?.retailPrice || 0);
-            })();
-            const out: string[] = [];
-            out.push(`${o.code || '-'} | ${customerName}`);
-            out.push('');
-            out.push(`${productName} | ${packageName}`);
-            out.push('');
-            out.push(`📅 ${purchaseDate} → ${expiryDate}`);
-            out.push('');
-            out.push(`💰 ${formatPrice(price)} | ${paymentLabel} | ${statusLabel}`);
-            const inv = (() => {
-              if (o.inventoryItemId) {
-                const found = items.find((i: any) => i.id === o.inventoryItemId);
-                if (found) return found;
+      {
+        viewingOrder && (
+          <OrderDetailsModal
+            order={viewingOrder}
+            onClose={() => {
+              if (previousProfilesModal) {
+                setProfilesModal(previousProfilesModal);
+                setPreviousProfilesModal(null);
               }
-              const byLinked = items.find((i: any) => i.linkedOrderId === o.id);
-              if (byLinked) return byLinked;
-              return items.find((i: any) => i.isAccountBased && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
-            })();
-            if (inv) {
-              const accountColumns = resolveAccountColumns({
-                orderPackageId: o.packageId,
-                inventoryItem: inv,
-                packages
+              setViewingOrder(null);
+            }}
+            inventory={items as any}
+            products={products as any}
+            packages={packages as any}
+            getCustomerName={(id: string) => customerMap.get(id) || 'Không xác định'}
+            getCustomerCode={(id: string) => (customers.find(c => c.id === id)?.code || '')}
+            getPackageInfo={(packageId: string) => {
+              const { pkg, product } = getPackageInfo(packageId);
+              return { package: pkg, product } as any;
+            }}
+            getStatusLabel={getStatusLabel as any}
+            getPaymentLabel={getPaymentLabel as any}
+            formatDate={formatDate}
+            formatPrice={formatPrice}
+            onOpenRenew={() => {
+              if (!viewingOrder) return;
+              setRenewState({
+                order: viewingOrder,
+                packageId: viewingOrder.packageId,
+                useCustomPrice: false,
+                customPrice: 0,
+                note: '',
+                // Mặc định lần gia hạn luôn là chưa thanh toán
+                paymentStatus: 'UNPAID',
+                markMessageSent: !!(viewingOrder as any).renewalMessageSent,
+                useCustomExpiry: false,
+                customExpiryDate: undefined
               });
-              const displayColumns = filterVisibleAccountColumns(accountColumns);
-              if (displayColumns.length > 0) {
+            }}
+            onCopyInfo={async () => {
+              const o = viewingOrder;
+              const customerName = customerMap.get(o.customerId) || 'Không xác định';
+              const pkgInfo = getPackageInfo(o.packageId);
+              const productName = pkgInfo?.product?.name || 'Không xác định';
+              const packageName = pkgInfo?.pkg?.name || 'Không xác định';
+              const statusLabel = getStatusLabel(o.status);
+              const paymentLabel = getPaymentLabel(o.paymentStatus || 'UNPAID') || 'Chưa thanh toán';
+              const purchaseDate = new Date(o.purchaseDate).toLocaleDateString('vi-VN');
+              const expiryDate = new Date(o.expiryDate).toLocaleDateString('vi-VN');
+              const price = (() => {
+                if (o.useCustomPrice && o.customPrice) return o.customPrice;
+                const customer = customers.find(c => c.id === o.customerId);
+                const isCTV = (customer?.type || 'RETAIL') === 'CTV';
+                return isCTV ? (pkgInfo?.pkg?.ctvPrice || 0) : (pkgInfo?.pkg?.retailPrice || 0);
+              })();
+              const out: string[] = [];
+              out.push(`${o.code || '-'} | ${customerName}`);
+              out.push('');
+              out.push(`${productName} | ${packageName}`);
+              out.push('');
+              out.push(`📅 ${purchaseDate} → ${expiryDate}`);
+              out.push('');
+              out.push(`💰 ${formatPrice(price)} | ${paymentLabel} | ${statusLabel}`);
+              const inv = (() => {
+                if (o.inventoryItemId) {
+                  const found = items.find((i: any) => i.id === o.inventoryItemId);
+                  if (found) return found;
+                }
+                const byLinked = items.find((i: any) => i.linkedOrderId === o.id);
+                if (byLinked) return byLinked;
+                return items.find((i: any) => i.isAccountBased && (i.profiles || []).some((p: any) => p.assignedOrderId === o.id));
+              })();
+              if (inv) {
+                const accountColumns = resolveAccountColumns({
+                  orderPackageId: o.packageId,
+                  inventoryItem: inv,
+                  packages
+                });
+                const displayColumns = filterVisibleAccountColumns(accountColumns);
+                if (displayColumns.length > 0) {
+                  out.push('');
+                  displayColumns.forEach((col: any) => {
+                    const value = (inv.accountData || {})[col.id] || '';
+                    if (String(value).trim()) {
+                      out.push(`${col.title}: ${value}`);
+                    }
+                  });
+                }
+              }
+              const customFieldValues = (o as any).customFieldValues || {};
+              if (pkgInfo?.pkg?.customFields && Object.keys(customFieldValues).length > 0) {
                 out.push('');
-                displayColumns.forEach((col: any) => {
-                  const value = (inv.accountData || {})[col.id] || '';
-                  if (String(value).trim()) {
-                    out.push(`${col.title}: ${value}`);
+                pkgInfo.pkg.customFields.forEach((cf: any) => {
+                  const value = customFieldValues[cf.id];
+                  if (value && String(value).trim()) {
+                    out.push(`${cf.title}: ${String(value).trim()}`);
                   }
                 });
               }
-            }
-            const customFieldValues = (o as any).customFieldValues || {};
-            if (pkgInfo?.pkg?.customFields && Object.keys(customFieldValues).length > 0) {
-              out.push('');
-              pkgInfo.pkg.customFields.forEach((cf: any) => {
-                const value = customFieldValues[cf.id];
-                if (value && String(value).trim()) {
-                  out.push(`${cf.title}: ${String(value).trim()}`);
-                }
-              });
-            }
-            const text = out.join('\n');
-            try {
-              await navigator.clipboard.writeText(text);
-              notify('Đã copy thông tin đơn hàng', 'success');
-            } catch (e) {
-              notify('Không thể copy vào clipboard', 'error');
-            }
-          }}
-          onOrderUpdated={async () => {
-            await refresh();
-          }}
-        />
-      )}
+              const text = out.join('\n');
+              try {
+                await navigator.clipboard.writeText(text);
+                notify('Đã copy thông tin đơn hàng', 'success');
+              } catch (e) {
+                notify('Không thể copy vào clipboard', 'error');
+              }
+            }}
+            onOrderUpdated={async () => {
+              await refresh();
+            }}
+          />
+        )
+      }
 
-      {renewState && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Gia hạn đơn</h3>
-              <button type="button" className="close" onClick={() => setRenewState(null)}>×</button>
-            </div>
-            <div className="mb-3">
-              {(() => {
-                const o = renewState.order;
-                const currentExpiry = new Date(o.expiryDate);
-                const base = currentExpiry;
-                const pkgInfo = getPackageInfo(renewState.packageId);
-                const pkg = pkgInfo?.pkg;
-                const product = pkgInfo?.product;
-                const months = Math.max(1, (pkg as any)?.warrantyPeriod || 1);
-                const preview = (() => {
-                  if (renewState.useCustomExpiry && renewState.customExpiryDate) {
-                    return new Date(renewState.customExpiryDate);
-                  }
-                  const d = new Date(base);
-                  d.setMonth(d.getMonth() + months);
-                  return d;
-                })();
-                const cust = customers.find(c => c.id === o.customerId);
-                const defaultPrice = (cust?.type || 'RETAIL') === 'CTV' ? ((pkg as any)?.ctvPrice || 0) : ((pkg as any)?.retailPrice || 0);
-                const price = renewState.useCustomPrice ? (renewState.customPrice || 0) : defaultPrice;
-                return (
-                  <div className="p-2">
-                    <div><strong>Mã đơn:</strong> {o.code}</div>
-                    <div><strong>Khách hàng:</strong> {customerMap.get(o.customerId) || 'Không xác định'}</div>
-                    <div><strong>Hết hạn hiện tại:</strong> {currentExpiry.toLocaleDateString('vi-VN')}</div>
-                    <div className="form-group">
-                      <label className="form-label">Gói gia hạn</label>
-                      <select
-                        className="form-control"
-                        value={renewState.packageId}
-                        onChange={(e) => setRenewState(prev => prev ? { ...prev, packageId: e.target.value } : prev)}
-                      >
-                        {packages
-                          .filter(p => p.productId === (product?.id || ''))
-                          .slice()
-                          .sort((a, b) => {
-                            const wa = Number(a.warrantyPeriod || 0);
-                            const wb = Number(b.warrantyPeriod || 0);
-                            if (wa !== wb) return wa - wb;
-                            return (a.name || '').localeCompare(b.name || '');
-                          })
-                          .map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                      </select>
-                    </div>
-                    <div className="form-group mt-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="renewUseCustomExpiry"
-                          checked={renewState.useCustomExpiry}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            if (checked) {
-                              const currentExpiry = new Date(o.expiryDate);
-                              const base = currentExpiry > new Date() ? currentExpiry : new Date();
-                              const pkgInfo = getPackageInfo(renewState.packageId);
-                              const months = Math.max(1, (pkgInfo?.pkg as any)?.warrantyPeriod || 1);
-                              const d = new Date(base);
-                              d.setMonth(d.getMonth() + months);
-                              setRenewState(prev => prev ? { ...prev, useCustomExpiry: checked, customExpiryDate: prev.customExpiryDate || d } : prev);
-                            } else {
-                              setRenewState(prev => prev ? { ...prev, useCustomExpiry: checked, customExpiryDate: undefined } : prev);
-                            }
-                          }}
-                        />
-                        <label htmlFor="renewUseCustomExpiry" className="mb-0">Hạn tùy chỉnh</label>
-                      </div>
-                      {renewState.useCustomExpiry && (
-                        <div className="mt-2">
-                          <input
-                            type="date"
-                            className="form-control"
-                            value={renewState.customExpiryDate instanceof Date && !isNaN(renewState.customExpiryDate.getTime())
-                              ? renewState.customExpiryDate.toISOString().split('T')[0]
-                              : ''}
-                            onChange={(e) => {
-                              setRenewState(prev => prev ? { ...prev, customExpiryDate: e.target.value ? new Date(e.target.value) : undefined } : prev);
-                            }}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <div className="form-group">
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <input
-                          type="checkbox"
-                          id="renewUseCustomPrice"
-                          checked={renewState.useCustomPrice}
-                          onChange={(e) => setRenewState(prev => prev ? { ...prev, useCustomPrice: e.target.checked } : prev)}
-                        />
-                        <label htmlFor="renewUseCustomPrice" className="mb-0">Giá tùy chỉnh</label>
-                      </div>
-                      {renewState.useCustomPrice ? (
-                        <>
-                          <input
-                            type="number"
-                            className="form-control"
-                            value={renewState.customPrice || 0}
-                            onChange={(e) => setRenewState(prev => prev ? { ...prev, customPrice: Math.max(0, parseFloat(e.target.value || '0')) } : prev)}
-                            min="0"
-                            step="1000"
-                            placeholder="Nhập giá tùy chỉnh"
-                          />
-                          <div className="alert alert-success mt-2"><strong>Giá:</strong> {formatPrice(price)}</div>
-                        </>
-                      ) : (
-                        <div className="alert alert-success"><strong>Giá:</strong> {formatPrice(price)}</div>
-                      )}
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Thanh toán</label>
-                      <select
-                        className="form-control"
-                        value={renewState.paymentStatus}
-                        onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as PaymentStatus } : prev)}
-                      >
-                        {PAYMENT_STATUSES
-                          .filter(p => p.value !== 'REFUNDED')
-                          .map(p => (
-                            <option key={p.value} value={p.value}>{p.label}</option>
-                          ))}
-                      </select>
-                    </div>
-                    <div className="mt-2">
-                      <label className="form-label">Ghi chú</label>
-                      <textarea
-                        className="form-control"
-                        rows={2}
-                        placeholder="Ghi chú gia hạn (không bắt buộc)"
-                        value={renewState.note}
-                        onChange={(e) => setRenewState(prev => prev ? { ...prev, note: e.target.value } : prev)}
-                      />
-                    </div>
-                    <div className="mt-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="renewMarkMessageSent"
-                          checked={renewState.markMessageSent}
-                          onChange={async (e) => {
-                            const checked = e.target.checked;
-                            setRenewState(prev => prev ? { ...prev, markMessageSent: checked } : prev);
-                            const sb = getSupabase();
-                            const nowIso = new Date().toISOString();
-                            if (sb) {
-                              if (checked) {
-                                await sb.from('orders').update({
-                                  renewal_message_sent: true,
-                                  renewal_message_sent_at: nowIso,
-                                  renewal_message_sent_by: null
-                                }).eq('id', renewState.order.id);
-                              } else {
-                                await sb.from('orders').update({
-                                  renewal_message_sent: false,
-                                  renewal_message_sent_at: null,
-                                  renewal_message_sent_by: null
-                                }).eq('id', renewState.order.id);
-                              }
-                            } else {
-                              try {
-                                if (checked) {
-                                  Database.updateOrder(renewState.order.id, { renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: 'system' } as any);
-                                } else {
-                                  Database.updateOrder(renewState.order.id, { renewalMessageSent: false, renewalMessageSentAt: undefined, renewalMessageSentBy: undefined } as any);
-                                }
-                              } catch { }
-                            }
-                            // Optional: could refresh local orders cache if needed
-                          }}
-                        />
-                        <label htmlFor="renewMarkMessageSent" className="mb-0">Đã gửi tin nhắn gia hạn</label>
-                      </div>
-                    </div>
-                    <div className="alert alert-info mt-2">
-                      <strong>Hết hạn mới (dự kiến):</strong> {preview.toLocaleDateString('vi-VN')}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button className="btn btn-secondary" onClick={() => setRenewState(null)}>Đóng</button>
-              <button
-                className="btn btn-primary"
-                onClick={async () => {
-                  if (!renewState) return;
-                  const o = renewState.order;
-                  const sb = getSupabase();
-                  if (!sb) {
-                    notify('Không thể kết nối đến database', 'error');
-                    return;
-                  }
-
-                  try {
-                    // Lấy thông tin package và customer từ state đã có
-                    const pkgInfo = getPackageInfo(renewState.packageId);
-                    const pkg = pkgInfo?.pkg;
-                    const cust = customers.find(c => c.id === o.customerId);
-
-                    if (!pkg) {
-                      notify('Không tìm thấy thông tin gói sản phẩm', 'error');
-                      return;
-                    }
-
-                    // Tính toán hạn mới
-                    const base = new Date(o.expiryDate);
-                    const safeMonths = Math.max(1, Math.floor(pkg.warrantyPeriod || 1));
-                    const nextExpiry = renewState.useCustomExpiry && renewState.customExpiryDate
-                      ? new Date(renewState.customExpiryDate)
-                      : (() => {
-                        const d = new Date(base);
-                        d.setMonth(d.getMonth() + safeMonths);
-                        return d;
-                      })();
-
-                    // Tính giá
-                    const defaultPrice = cust?.type === 'CTV' ? (pkg.ctvPrice || 0) : (pkg.retailPrice || 0);
-                    const useCustomPrice = !!renewState.useCustomPrice && (renewState.customPrice || 0) > 0;
-                    const nextCustomPrice = useCustomPrice ? Math.max(0, Number(renewState.customPrice || 0)) : undefined;
-                    const renewalPrice = useCustomPrice && typeof nextCustomPrice === 'number' && nextCustomPrice > 0
-                      ? nextCustomPrice
-                      : defaultPrice;
-
-                    // Tạo renewal record mới
-                    const renewal = {
-                      id: (Date.now().toString(36) + Math.random().toString(36).substr(2)),
-                      months: safeMonths,
-                      packageId: renewState.packageId,
-                      previousPackageId: o.packageId,
-                      price: renewalPrice,
-                      useCustomPrice: useCustomPrice,
-                      previousExpiryDate: new Date(o.expiryDate).toISOString(),
-                      newExpiryDate: nextExpiry.toISOString(),
-                      note: renewState.note,
-                      paymentStatus: renewState.paymentStatus,
-                      createdAt: new Date().toISOString(),
-                      createdBy: 'system'
-                    };
-
-                    // Lấy renewals hiện tại từ order
-                    const existingRenewals = ((o as any).renewals || []).map((r: any) => ({
-                      id: r.id,
-                      months: r.months,
-                      packageId: r.packageId,
-                      previousPackageId: r.previousPackageId,
-                      price: r.price,
-                      useCustomPrice: r.useCustomPrice,
-                      previousExpiryDate: r.previousExpiryDate,
-                      newExpiryDate: r.newExpiryDate,
-                      note: r.note,
-                      paymentStatus: r.paymentStatus,
-                      createdAt: r.createdAt,
-                      createdBy: r.createdBy
-                    }));
-
-                    const newRenewals = [...existingRenewals, renewal];
-
-                    // Cập nhật trực tiếp vào Supabase
-                    const { error } = await sb.from('orders').update({
-                      expiry_date: nextExpiry.toISOString(),
-                      package_id: renewState.packageId,
-                      renewals: newRenewals,
-                      use_custom_price: useCustomPrice,
-                      custom_price: nextCustomPrice || 0,
-                      renewal_message_sent: false,
-                      renewal_message_sent_at: null,
-                      renewal_message_sent_by: null,
-                      updated_at: new Date().toISOString()
-                    }).eq('id', o.id);
-
-                    if (error) {
-                      console.error('Renewal error:', error);
-                      notify('Không thể gia hạn đơn hàng: ' + (error.message || 'Lỗi không xác định'), 'error');
-                      return;
-                    }
-
-                    // Cập nhật expiry cho profile nếu là account-based inventory
-                    try {
-                      if (o.inventoryItemId) {
-                        const invRes = await sb.from('inventory').select('*').eq('id', o.inventoryItemId).maybeSingle();
-                        if (invRes.data?.is_account_based && invRes.data?.profiles) {
-                          const profiles = invRes.data.profiles.map((p: any) => {
-                            if (p.assignedOrderId === o.id) {
-                              return { ...p, expiryAt: nextExpiry.toISOString() };
-                            }
-                            return p;
-                          });
-                          await sb.from('inventory').update({ profiles }).eq('id', o.inventoryItemId);
-                        }
-                      }
-                    } catch (invErr) {
-                      console.warn('Could not update inventory profile expiry:', invErr);
-                    }
-
-                    // Tạo updated order object cho local state
-                    const updated = {
-                      ...o,
-                      expiryDate: nextExpiry,
-                      packageId: renewState.packageId,
-                      renewals: newRenewals,
-                      useCustomPrice,
-                      customPrice: nextCustomPrice,
-                      renewalMessageSent: false,
-                      renewalMessageSentAt: undefined,
-                      renewalMessageSentBy: undefined,
-                      updatedAt: new Date()
-                    };
-
-                    setRenewState(null);
-                    setViewingOrder(updated as any);
-                    await refresh();
-                    notify('Gia hạn đơn hàng thành công', 'success');
-                  } catch (err: any) {
-                    console.error('Renewal error:', err);
-                    notify('Không thể gia hạn đơn hàng: ' + (err?.message || 'Lỗi không xác định'), 'error');
-                  }
-                }}
-              >
-                Xác nhận gia hạn
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {paymentStatusModal && (() => {
-        const selectedItems = pageItems.filter(i => paymentStatusModal.selectedIds.includes(i.id));
-        const renewalOptions = selectedItems.flatMap(item => {
-          const renewals = (renewalsByInventory.get(item.id) || []).slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-          return renewals.map((renewal, idx) => ({
-            id: renewal.id,
-            inventoryId: item.id,
-            code: item.code || `KHO${item.id.slice(-4)}`,
-            months: renewal.months,
-            createdAt: renewal.createdAt,
-            previousExpiryDate: renewal.previousExpiryDate,
-            newExpiryDate: renewal.newExpiryDate,
-            paymentStatus: renewal.paymentStatus || 'UNPAID',
-            indexLabel: `Gia hạn #${renewals.length - idx}`
-          }));
-        });
-        const renewalDisabled = renewalOptions.length === 0;
-        const handleToggleRenewal = (id: string, checked: boolean) => {
-          setSelectedRenewalIds(prev => {
-            if (checked) {
-              if (prev.includes(id)) return prev;
-              return [...prev, id];
-            }
-            return prev.filter(rid => rid !== id);
-          });
-        };
-        const canConfirm = bulkPaymentTarget === 'INITIAL' || (bulkPaymentTarget === 'RENEWAL' && selectedRenewalIds.length > 0);
-
-        return (
-          <div className="modal" role="dialog" aria-modal>
-            <div className="modal-content" style={{ maxWidth: 520 }}>
+      {
+        renewState && (
+          <div className="modal">
+            <div className="modal-content" style={{ maxWidth: 480 }}>
               <div className="modal-header">
-                <h3 className="modal-title">Cập nhật trạng thái thanh toán</h3>
-                <button className="close" onClick={() => setPaymentStatusModal(null)}>×</button>
+                <h3 className="modal-title">Gia hạn đơn</h3>
+                <button type="button" className="close" onClick={() => setRenewState(null)}>×</button>
               </div>
               <div className="mb-3">
-                <div className="mb-3">
-                  <strong>Đã chọn {selectedItems.length} mục kho:</strong>
-                  <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
-                    {selectedItems.map(item => (
-                      <li key={item.id}>{item.code || `KHO${item.id.slice(-4)}`}</li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Trạng thái thanh toán mới</label>
-                  <select
-                    className="form-control"
-                    value={selectedPaymentStatus}
-                    onChange={(e) => setSelectedPaymentStatus(e.target.value as InventoryPaymentStatus)}
-                  >
-                    {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
-                      <option key={status.value} value={status.value}>{status.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Áp dụng cho</label>
-                  <div className="d-flex flex-column gap-2">
-                    <label className="d-flex align-items-center gap-2">
-                      <input
-                        type="radio"
-                        name="bulkPaymentTarget"
-                        value="INITIAL"
-                        checked={bulkPaymentTarget === 'INITIAL'}
-                        onChange={() => {
-                          setBulkPaymentTarget('INITIAL');
-                          setSelectedRenewalIds([]);
-                        }}
-                      />
-                      <span>Lần nhập kho ban đầu</span>
-                    </label>
-                    <label className="d-flex align-items-center gap-2">
-                      <input
-                        type="radio"
-                        name="bulkPaymentTarget"
-                        value="RENEWAL"
-                        disabled={renewalDisabled}
-                        checked={bulkPaymentTarget === 'RENEWAL'}
-                        onChange={() => {
-                          setBulkPaymentTarget('RENEWAL');
-                          setSelectedRenewalIds(renewalOptions.map(option => option.id));
-                        }}
-                      />
-                      <span>Các lần gia hạn{renewalDisabled ? ' (Không có dữ liệu)' : ''}</span>
-                    </label>
-                  </div>
-                </div>
-                {bulkPaymentTarget === 'RENEWAL' && !renewalDisabled && (
-                  <div className="form-group">
-                    <label className="form-label">Chọn lần gia hạn</label>
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <div className="text-muted small">Đã chọn {selectedRenewalIds.length}/{renewalOptions.length}</div>
-                      <div className="d-flex gap-2">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-light"
-                          onClick={() => setSelectedRenewalIds(renewalOptions.map(option => option.id))}
+                {(() => {
+                  const o = renewState.order;
+                  const currentExpiry = new Date(o.expiryDate);
+                  const base = currentExpiry;
+                  const pkgInfo = getPackageInfo(renewState.packageId);
+                  const pkg = pkgInfo?.pkg;
+                  const product = pkgInfo?.product;
+                  const months = Math.max(1, (pkg as any)?.warrantyPeriod || 1);
+                  const preview = (() => {
+                    if (renewState.useCustomExpiry && renewState.customExpiryDate) {
+                      return new Date(renewState.customExpiryDate);
+                    }
+                    const d = new Date(base);
+                    d.setMonth(d.getMonth() + months);
+                    return d;
+                  })();
+                  const cust = customers.find(c => c.id === o.customerId);
+                  const defaultPrice = (cust?.type || 'RETAIL') === 'CTV' ? ((pkg as any)?.ctvPrice || 0) : ((pkg as any)?.retailPrice || 0);
+                  const price = renewState.useCustomPrice ? (renewState.customPrice || 0) : defaultPrice;
+                  return (
+                    <div className="p-2">
+                      <div><strong>Mã đơn:</strong> {o.code}</div>
+                      <div><strong>Khách hàng:</strong> {customerMap.get(o.customerId) || 'Không xác định'}</div>
+                      <div><strong>Hết hạn hiện tại:</strong> {currentExpiry.toLocaleDateString('vi-VN')}</div>
+                      <div className="form-group">
+                        <label className="form-label">Gói gia hạn</label>
+                        <select
+                          className="form-control"
+                          value={renewState.packageId}
+                          onChange={(e) => setRenewState(prev => prev ? { ...prev, packageId: e.target.value } : prev)}
                         >
-                          Chọn tất
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-light"
-                          onClick={() => setSelectedRenewalIds([])}
-                        >
-                          Bỏ chọn
-                        </button>
+                          {packages
+                            .filter(p => p.productId === (product?.id || ''))
+                            .slice()
+                            .sort((a, b) => {
+                              const wa = Number(a.warrantyPeriod || 0);
+                              const wb = Number(b.warrantyPeriod || 0);
+                              if (wa !== wb) return wa - wb;
+                              return (a.name || '').localeCompare(b.name || '');
+                            })
+                            .map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                        </select>
                       </div>
-                    </div>
-                    <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 4, padding: '8px' }}>
-                      {renewalOptions.map(option => (
-                        <label key={option.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                      <div className="form-group mt-2">
+                        <div className="d-flex align-items-center gap-2">
                           <input
                             type="checkbox"
-                            checked={selectedRenewalIds.includes(option.id)}
-                            onChange={(e) => handleToggleRenewal(option.id, e.target.checked)}
+                            id="renewUseCustomExpiry"
+                            checked={renewState.useCustomExpiry}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              if (checked) {
+                                const currentExpiry = new Date(o.expiryDate);
+                                const base = currentExpiry > new Date() ? currentExpiry : new Date();
+                                const pkgInfo = getPackageInfo(renewState.packageId);
+                                const months = Math.max(1, (pkgInfo?.pkg as any)?.warrantyPeriod || 1);
+                                const d = new Date(base);
+                                d.setMonth(d.getMonth() + months);
+                                setRenewState(prev => prev ? { ...prev, useCustomExpiry: checked, customExpiryDate: prev.customExpiryDate || d } : prev);
+                              } else {
+                                setRenewState(prev => prev ? { ...prev, useCustomExpiry: checked, customExpiryDate: undefined } : prev);
+                              }
+                            }}
                           />
-                          <div>
-                            <div><strong>{option.code}</strong> · {option.indexLabel}</div>
-                            <div className="text-muted small">
-                              {option.createdAt ? formatDate(option.createdAt) : ''} · +{option.months} tháng
-                            </div>
-                            <div className="text-muted small">
-                              {formatDate(option.previousExpiryDate)} → <span style={{ color: '#28a745' }}>{formatDate(option.newExpiryDate)}</span>
-                            </div>
-                            <div className="text-muted small">
-                              Hiện tại: {getInventoryPaymentLabel(option.paymentStatus as InventoryPaymentStatus)}
-                            </div>
+                          <label htmlFor="renewUseCustomExpiry" className="mb-0">Hạn tùy chỉnh</label>
+                        </div>
+                        {renewState.useCustomExpiry && (
+                          <div className="mt-2">
+                            <input
+                              type="date"
+                              className="form-control"
+                              value={renewState.customExpiryDate instanceof Date && !isNaN(renewState.customExpiryDate.getTime())
+                                ? renewState.customExpiryDate.toISOString().split('T')[0]
+                                : ''}
+                              onChange={(e) => {
+                                setRenewState(prev => prev ? { ...prev, customExpiryDate: e.target.value ? new Date(e.target.value) : undefined } : prev);
+                              }}
+                            />
                           </div>
-                        </label>
-                      ))}
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <input
+                            type="checkbox"
+                            id="renewUseCustomPrice"
+                            checked={renewState.useCustomPrice}
+                            onChange={(e) => setRenewState(prev => prev ? { ...prev, useCustomPrice: e.target.checked } : prev)}
+                          />
+                          <label htmlFor="renewUseCustomPrice" className="mb-0">Giá tùy chỉnh</label>
+                        </div>
+                        {renewState.useCustomPrice ? (
+                          <>
+                            <input
+                              type="number"
+                              className="form-control"
+                              value={renewState.customPrice || 0}
+                              onChange={(e) => setRenewState(prev => prev ? { ...prev, customPrice: Math.max(0, parseFloat(e.target.value || '0')) } : prev)}
+                              min="0"
+                              step="1000"
+                              placeholder="Nhập giá tùy chỉnh"
+                            />
+                            <div className="alert alert-success mt-2"><strong>Giá:</strong> {formatPrice(price)}</div>
+                          </>
+                        ) : (
+                          <div className="alert alert-success"><strong>Giá:</strong> {formatPrice(price)}</div>
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Thanh toán</label>
+                        <select
+                          className="form-control"
+                          value={renewState.paymentStatus}
+                          onChange={(e) => setRenewState(prev => prev ? { ...prev, paymentStatus: e.target.value as PaymentStatus } : prev)}
+                        >
+                          {PAYMENT_STATUSES
+                            .filter(p => p.value !== 'REFUNDED')
+                            .map(p => (
+                              <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                        </select>
+                      </div>
+                      <div className="mt-2">
+                        <label className="form-label">Ghi chú</label>
+                        <textarea
+                          className="form-control"
+                          rows={2}
+                          placeholder="Ghi chú gia hạn (không bắt buộc)"
+                          value={renewState.note}
+                          onChange={(e) => setRenewState(prev => prev ? { ...prev, note: e.target.value } : prev)}
+                        />
+                      </div>
+                      <div className="mt-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <input
+                            type="checkbox"
+                            id="renewMarkMessageSent"
+                            checked={renewState.markMessageSent}
+                            onChange={async (e) => {
+                              const checked = e.target.checked;
+                              setRenewState(prev => prev ? { ...prev, markMessageSent: checked } : prev);
+                              const sb = getSupabase();
+                              const nowIso = new Date().toISOString();
+                              if (sb) {
+                                if (checked) {
+                                  await sb.from('orders').update({
+                                    renewal_message_sent: true,
+                                    renewal_message_sent_at: nowIso,
+                                    renewal_message_sent_by: null
+                                  }).eq('id', renewState.order.id);
+                                } else {
+                                  await sb.from('orders').update({
+                                    renewal_message_sent: false,
+                                    renewal_message_sent_at: null,
+                                    renewal_message_sent_by: null
+                                  }).eq('id', renewState.order.id);
+                                }
+                              } else {
+                                try {
+                                  if (checked) {
+                                    Database.updateOrder(renewState.order.id, { renewalMessageSent: true, renewalMessageSentAt: new Date(), renewalMessageSentBy: 'system' } as any);
+                                  } else {
+                                    Database.updateOrder(renewState.order.id, { renewalMessageSent: false, renewalMessageSentAt: undefined, renewalMessageSentBy: undefined } as any);
+                                  }
+                                } catch { }
+                              }
+                              // Optional: could refresh local orders cache if needed
+                            }}
+                          />
+                          <label htmlFor="renewMarkMessageSent" className="mb-0">Đã gửi tin nhắn gia hạn</label>
+                        </div>
+                      </div>
+                      <div className="alert alert-info mt-2">
+                        <strong>Hết hạn mới (dự kiến):</strong> {preview.toLocaleDateString('vi-VN')}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
               <div className="d-flex justify-content-end gap-2">
-                <button className="btn btn-secondary" onClick={() => setPaymentStatusModal(null)}>Hủy</button>
+                <button className="btn btn-secondary" onClick={() => setRenewState(null)}>Đóng</button>
                 <button
                   className="btn btn-primary"
-                  disabled={!canConfirm}
                   onClick={async () => {
+                    if (!renewState) return;
+                    const o = renewState.order;
                     const sb = getSupabase();
-                    if (!sb) { notify('Không thể cập nhật trạng thái thanh toán', 'error'); return; }
+                    if (!sb) {
+                      notify('Không thể kết nối đến database', 'error');
+                      return;
+                    }
 
-                    if (bulkPaymentTarget === 'INITIAL') {
-                      const { error } = await sb
-                        .from('inventory')
-                        .update({ payment_status: selectedPaymentStatus })
-                        .in('id', paymentStatusModal.selectedIds);
+                    try {
+                      // Lấy thông tin package và customer từ state đã có
+                      const pkgInfo = getPackageInfo(renewState.packageId);
+                      const pkg = pkgInfo?.pkg;
+                      const cust = customers.find(c => c.id === o.customerId);
 
-                      if (error) {
-                        notify('Không thể cập nhật trạng thái thanh toán', 'error');
+                      if (!pkg) {
+                        notify('Không tìm thấy thông tin gói sản phẩm', 'error');
                         return;
                       }
+
+                      // Tính toán hạn mới
+                      const base = new Date(o.expiryDate);
+                      const safeMonths = Math.max(1, Math.floor(pkg.warrantyPeriod || 1));
+                      const nextExpiry = renewState.useCustomExpiry && renewState.customExpiryDate
+                        ? new Date(renewState.customExpiryDate)
+                        : (() => {
+                          const d = new Date(base);
+                          d.setMonth(d.getMonth() + safeMonths);
+                          return d;
+                        })();
+
+                      // Tính giá
+                      const defaultPrice = cust?.type === 'CTV' ? (pkg.ctvPrice || 0) : (pkg.retailPrice || 0);
+                      const useCustomPrice = !!renewState.useCustomPrice && (renewState.customPrice || 0) > 0;
+                      const nextCustomPrice = useCustomPrice ? Math.max(0, Number(renewState.customPrice || 0)) : undefined;
+                      const renewalPrice = useCustomPrice && typeof nextCustomPrice === 'number' && nextCustomPrice > 0
+                        ? nextCustomPrice
+                        : defaultPrice;
+
+                      // Tạo renewal record mới
+                      const renewal = {
+                        id: (Date.now().toString(36) + Math.random().toString(36).substr(2)),
+                        months: safeMonths,
+                        packageId: renewState.packageId,
+                        previousPackageId: o.packageId,
+                        price: renewalPrice,
+                        useCustomPrice: useCustomPrice,
+                        previousExpiryDate: new Date(o.expiryDate).toISOString(),
+                        newExpiryDate: nextExpiry.toISOString(),
+                        note: renewState.note,
+                        paymentStatus: renewState.paymentStatus,
+                        createdAt: new Date().toISOString(),
+                        createdBy: 'system'
+                      };
+
+                      // Lấy renewals hiện tại từ order
+                      const existingRenewals = ((o as any).renewals || []).map((r: any) => ({
+                        id: r.id,
+                        months: r.months,
+                        packageId: r.packageId,
+                        previousPackageId: r.previousPackageId,
+                        price: r.price,
+                        useCustomPrice: r.useCustomPrice,
+                        previousExpiryDate: r.previousExpiryDate,
+                        newExpiryDate: r.newExpiryDate,
+                        note: r.note,
+                        paymentStatus: r.paymentStatus,
+                        createdAt: r.createdAt,
+                        createdBy: r.createdBy
+                      }));
+
+                      const newRenewals = [...existingRenewals, renewal];
+
+                      // Cập nhật trực tiếp vào Supabase
+                      const { error } = await sb.from('orders').update({
+                        expiry_date: nextExpiry.toISOString(),
+                        package_id: renewState.packageId,
+                        renewals: newRenewals,
+                        use_custom_price: useCustomPrice,
+                        custom_price: nextCustomPrice || 0,
+                        renewal_message_sent: false,
+                        renewal_message_sent_at: null,
+                        renewal_message_sent_by: null,
+                        updated_at: new Date().toISOString()
+                      }).eq('id', o.id);
+
+                      if (error) {
+                        console.error('Renewal error:', error);
+                        notify('Không thể gia hạn đơn hàng: ' + (error.message || 'Lỗi không xác định'), 'error');
+                        return;
+                      }
+
+                      // Cập nhật expiry cho profile nếu là account-based inventory
+                      try {
+                        if (o.inventoryItemId) {
+                          const invRes = await sb.from('inventory').select('*').eq('id', o.inventoryItemId).maybeSingle();
+                          if (invRes.data?.is_account_based && invRes.data?.profiles) {
+                            const profiles = invRes.data.profiles.map((p: any) => {
+                              if (p.assignedOrderId === o.id) {
+                                return { ...p, expiryAt: nextExpiry.toISOString() };
+                              }
+                              return p;
+                            });
+                            await sb.from('inventory').update({ profiles }).eq('id', o.inventoryItemId);
+                          }
+                        }
+                      } catch (invErr) {
+                        console.warn('Could not update inventory profile expiry:', invErr);
+                      }
+
+                      // Tạo updated order object cho local state
+                      const updated = {
+                        ...o,
+                        expiryDate: nextExpiry,
+                        packageId: renewState.packageId,
+                        renewals: newRenewals,
+                        useCustomPrice,
+                        customPrice: nextCustomPrice,
+                        renewalMessageSent: false,
+                        renewalMessageSentAt: undefined,
+                        renewalMessageSentBy: undefined,
+                        updatedAt: new Date()
+                      };
+
+                      setRenewState(null);
+                      setViewingOrder(updated as any);
+                      await refresh();
+                      notify('Gia hạn đơn hàng thành công', 'success');
+                    } catch (err: any) {
+                      console.error('Renewal error:', err);
+                      notify('Không thể gia hạn đơn hàng: ' + (err?.message || 'Lỗi không xác định'), 'error');
+                    }
+                  }}
+                >
+                  Xác nhận gia hạn
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {
+        paymentStatusModal && (() => {
+          const selectedItems = pageItems.filter(i => paymentStatusModal.selectedIds.includes(i.id));
+          const renewalOptions = selectedItems.flatMap(item => {
+            const renewals = (renewalsByInventory.get(item.id) || []).slice().sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+            return renewals.map((renewal, idx) => ({
+              id: renewal.id,
+              inventoryId: item.id,
+              code: item.code || `KHO${item.id.slice(-4)}`,
+              months: renewal.months,
+              createdAt: renewal.createdAt,
+              previousExpiryDate: renewal.previousExpiryDate,
+              newExpiryDate: renewal.newExpiryDate,
+              paymentStatus: renewal.paymentStatus || 'UNPAID',
+              indexLabel: `Gia hạn #${renewals.length - idx}`
+            }));
+          });
+          const renewalDisabled = renewalOptions.length === 0;
+          const handleToggleRenewal = (id: string, checked: boolean) => {
+            setSelectedRenewalIds(prev => {
+              if (checked) {
+                if (prev.includes(id)) return prev;
+                return [...prev, id];
+              }
+              return prev.filter(rid => rid !== id);
+            });
+          };
+          const canConfirm = bulkPaymentTarget === 'INITIAL' || (bulkPaymentTarget === 'RENEWAL' && selectedRenewalIds.length > 0);
+
+          return (
+            <div className="modal" role="dialog" aria-modal>
+              <div className="modal-content" style={{ maxWidth: 520 }}>
+                <div className="modal-header">
+                  <h3 className="modal-title">Cập nhật trạng thái thanh toán</h3>
+                  <button className="close" onClick={() => setPaymentStatusModal(null)}>×</button>
+                </div>
+                <div className="mb-3">
+                  <div className="mb-3">
+                    <strong>Đã chọn {selectedItems.length} mục kho:</strong>
+                    <ul style={{ paddingLeft: '18px', marginTop: '6px' }}>
+                      {selectedItems.map(item => (
+                        <li key={item.id}>{item.code || `KHO${item.id.slice(-4)}`}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Trạng thái thanh toán mới</label>
+                    <select
+                      className="form-control"
+                      value={selectedPaymentStatus}
+                      onChange={(e) => setSelectedPaymentStatus(e.target.value as InventoryPaymentStatus)}
+                    >
+                      {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                        <option key={status.value} value={status.value}>{status.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Áp dụng cho</label>
+                    <div className="d-flex flex-column gap-2">
+                      <label className="d-flex align-items-center gap-2">
+                        <input
+                          type="radio"
+                          name="bulkPaymentTarget"
+                          value="INITIAL"
+                          checked={bulkPaymentTarget === 'INITIAL'}
+                          onChange={() => {
+                            setBulkPaymentTarget('INITIAL');
+                            setSelectedRenewalIds([]);
+                          }}
+                        />
+                        <span>Lần nhập kho ban đầu</span>
+                      </label>
+                      <label className="d-flex align-items-center gap-2">
+                        <input
+                          type="radio"
+                          name="bulkPaymentTarget"
+                          value="RENEWAL"
+                          disabled={renewalDisabled}
+                          checked={bulkPaymentTarget === 'RENEWAL'}
+                          onChange={() => {
+                            setBulkPaymentTarget('RENEWAL');
+                            setSelectedRenewalIds(renewalOptions.map(option => option.id));
+                          }}
+                        />
+                        <span>Các lần gia hạn{renewalDisabled ? ' (Không có dữ liệu)' : ''}</span>
+                      </label>
+                    </div>
+                  </div>
+                  {bulkPaymentTarget === 'RENEWAL' && !renewalDisabled && (
+                    <div className="form-group">
+                      <label className="form-label">Chọn lần gia hạn</label>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="text-muted small">Đã chọn {selectedRenewalIds.length}/{renewalOptions.length}</div>
+                        <div className="d-flex gap-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light"
+                            onClick={() => setSelectedRenewalIds(renewalOptions.map(option => option.id))}
+                          >
+                            Chọn tất
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-light"
+                            onClick={() => setSelectedRenewalIds([])}
+                          >
+                            Bỏ chọn
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 4, padding: '8px' }}>
+                        {renewalOptions.map(option => (
+                          <label key={option.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 8 }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedRenewalIds.includes(option.id)}
+                              onChange={(e) => handleToggleRenewal(option.id, e.target.checked)}
+                            />
+                            <div>
+                              <div><strong>{option.code}</strong> · {option.indexLabel}</div>
+                              <div className="text-muted small">
+                                {option.createdAt ? formatDate(option.createdAt) : ''} · +{option.months} tháng
+                              </div>
+                              <div className="text-muted small">
+                                {formatDate(option.previousExpiryDate)} → <span style={{ color: '#28a745' }}>{formatDate(option.newExpiryDate)}</span>
+                              </div>
+                              <div className="text-muted small">
+                                Hiện tại: {getInventoryPaymentLabel(option.paymentStatus as InventoryPaymentStatus)}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="d-flex justify-content-end gap-2">
+                  <button className="btn btn-secondary" onClick={() => setPaymentStatusModal(null)}>Hủy</button>
+                  <button
+                    className="btn btn-primary"
+                    disabled={!canConfirm}
+                    onClick={async () => {
+                      const sb = getSupabase();
+                      if (!sb) { notify('Không thể cập nhật trạng thái thanh toán', 'error'); return; }
+
+                      if (bulkPaymentTarget === 'INITIAL') {
+                        const { error } = await sb
+                          .from('inventory')
+                          .update({ payment_status: selectedPaymentStatus })
+                          .in('id', paymentStatusModal.selectedIds);
+
+                        if (error) {
+                          notify('Không thể cập nhật trạng thái thanh toán', 'error');
+                          return;
+                        }
+
+                        try {
+                          const sb2 = getSupabase();
+                          if (sb2) await sb2.from('activity_logs').insert({
+                            employee_id: null,
+                            action: 'Cập nhật thanh toán kho hàng loạt',
+                            details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}`
+                          });
+                        } catch { }
+
+                        notify(`Đã cập nhật trạng thái thanh toán cho ${selectedItems.length} mục kho`, 'success');
+                        setSelectedIds([]);
+                        setPaymentStatusModal(null);
+                        refresh();
+                        return;
+                      }
+
+                      if (selectedRenewalIds.length === 0) {
+                        notify('Vui lòng chọn ít nhất 1 lần gia hạn', 'warning');
+                        return;
+                      }
+
+                      const { error } = await sb
+                        .from('inventory_renewals')
+                        .update({ payment_status: selectedPaymentStatus })
+                        .in('id', selectedRenewalIds);
+
+                      if (error) {
+                        notify('Không thể cập nhật trạng thái thanh toán gia hạn', 'error');
+                        return;
+                      }
+
+                      setInventoryRenewals(prev => prev.map(r => (
+                        selectedRenewalIds.includes(r.id)
+                          ? { ...r, paymentStatus: selectedPaymentStatus }
+                          : r
+                      )));
 
                       try {
                         const sb2 = getSupabase();
                         if (sb2) await sb2.from('activity_logs').insert({
                           employee_id: null,
-                          action: 'Cập nhật thanh toán kho hàng loạt',
-                          details: `count=${selectedItems.length}; status=${selectedPaymentStatus}; ids=${paymentStatusModal.selectedIds.join(',')}`
+                          action: 'Cập nhật thanh toán gia hạn kho hàng loạt',
+                          details: `count=${selectedRenewalIds.length}; status=${selectedPaymentStatus}; renewalIds=${selectedRenewalIds.join(',')}`
                         });
                       } catch { }
 
-                      notify(`Đã cập nhật trạng thái thanh toán cho ${selectedItems.length} mục kho`, 'success');
-                      setSelectedIds([]);
+                      notify(`Đã cập nhật trạng thái thanh toán cho ${selectedRenewalIds.length} lần gia hạn`, 'success');
                       setPaymentStatusModal(null);
+                      setSelectedRenewalIds([]);
+                      setBulkPaymentTarget('INITIAL');
                       refresh();
+                    }}
+                  >
+                    Xác nhận
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()
+      }
+
+      {/* Warehouse Refund Modal */}
+      {
+        refundState && (
+          <div className="modal">
+            <div className="modal-content" style={{ maxWidth: 480 }}>
+              <div className="modal-header">
+                <h3 className="modal-title">Tính tiền hoàn kho hàng</h3>
+                <button type="button" className="close" onClick={() => setRefundState(null)}>×</button>
+              </div>
+              <div className="mb-3">
+                {(() => {
+                  const item = refundState.item;
+                  // Try package lookup first
+                  const pkgInfo = getPackageInfo(item.packageId);
+                  // For shared pool, look up product directly by productId
+                  const product = pkgInfo?.product || products.find(p => p.id === (item as any).productId);
+                  const productName = product?.name || 'Không xác định';
+                  const packageName = pkgInfo?.pkg?.name || (product?.sharedInventoryPool ? 'Pool chung' : 'Không xác định');
+                  const purchasePrice = item.purchasePrice || 0;
+
+                  // Get renewal info for display
+                  const itemRenewals = inventoryRenewals
+                    .filter(r => r.inventoryId === item.id)
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+                  const hasRenewals = itemRenewals.length > 0;
+                  const latestRenewal = hasRenewals ? itemRenewals[0] : null;
+
+                  // Dates for display based on whether there are renewals
+                  const periodStart = hasRenewals
+                    ? new Date(latestRenewal!.previousExpiryDate)
+                    : new Date(item.purchaseDate);
+                  const periodEnd = hasRenewals
+                    ? new Date(latestRenewal!.newExpiryDate)
+                    : new Date(item.expiryDate);
+                  const periodPrice = hasRenewals
+                    ? (latestRenewal!.amount || 0)
+                    : purchasePrice;
+
+                  const errorDate = new Date(refundState.errorDate).toLocaleDateString('vi-VN');
+                  const refundAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
+                  return (
+                    <div className="p-2">
+                      <div><strong>Mã kho:</strong> {item.code}</div>
+                      <div><strong>Sản phẩm:</strong> {productName}</div>
+                      <div><strong>Gói:</strong> {packageName}</div>
+                      <div><strong>Giá mua gốc:</strong> {formatPrice(purchasePrice)}</div>
+                      {hasRenewals && (
+                        <div className="alert alert-info py-1 px-2 mt-2 mb-2" style={{ fontSize: '13px' }}>
+                          <strong>🔄 Tính theo chu kỳ gia hạn lần {itemRenewals.length}:</strong>
+                          <div>Ngày mua (chu kỳ): <strong>{periodStart.toLocaleDateString('vi-VN')}</strong></div>
+                          <div>Khoảng tính: {periodStart.toLocaleDateString('vi-VN')} - {periodEnd.toLocaleDateString('vi-VN')}</div>
+                          <div>Giá chu kỳ: {formatPrice(periodPrice)}</div>
+                        </div>
+                      )}
+                      {!hasRenewals && (
+                        <>
+                          <div><strong>Ngày mua:</strong> {new Date(item.purchaseDate).toLocaleDateString('vi-VN')}</div>
+                          <div><strong>Ngày hết hạn:</strong> {new Date(item.expiryDate).toLocaleDateString('vi-VN')}</div>
+                        </>
+                      )}
+                      <div><strong>Ngày lỗi:</strong> {errorDate}</div>
+                      <div><strong>Số tiền hoàn:</strong> {formatPrice(refundAmount)}</div>
+                      {item.sourceNote && <div><strong>Nguồn:</strong> {item.sourceNote}</div>}
+                    </div>
+                  );
+                })()}
+                <div className="row g-2 align-items-end">
+                  <div className="col-7">
+                    <label className="form-label">Ngày phát sinh lỗi</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={refundState.errorDate}
+                      onChange={(e) => {
+                        const nextDate = e.target.value;
+                        const amt = computeWarehouseRefundAmount(refundState.item, nextDate);
+                        setRefundState(prev => prev ? { ...prev, errorDate: nextDate, amount: amt } : prev);
+                      }}
+                    />
+                    <small className="text-muted">Dùng để tính tiền hoàn theo thời hạn còn lại</small>
+                  </div>
+                  <div className="col-5">
+                    <label className="form-label">Tiền hoàn (ước tính)</label>
+                    <div className="alert alert-success mb-0">{formatPrice(refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount)}</div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="form-check mb-2">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="useCustomWarehouseRefund"
+                      checked={refundState.useCustomAmount || false}
+                      onChange={(e) => {
+                        setRefundState(prev => prev ? {
+                          ...prev,
+                          useCustomAmount: e.target.checked,
+                          customAmount: e.target.checked ? (prev.customAmount || prev.amount) : undefined
+                        } : prev);
+                      }}
+                    />
+                    <label className="form-check-label" htmlFor="useCustomWarehouseRefund">
+                      Nhập tiền hoàn tùy chỉnh
+                    </label>
+                  </div>
+                  {refundState.useCustomAmount && (
+                    <div>
+                      <label className="form-label">Số tiền hoàn tùy chỉnh</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="text"
+                          className="form-control"
+                          style={{ flex: 1 }}
+                          value={new Intl.NumberFormat('vi-VN').format(refundState.customAmount ?? refundState.amount)}
+                          onChange={(e) => {
+                            const numericValue = e.target.value.replace(/[^\d]/g, '');
+                            const value = parseInt(numericValue, 10) || 0;
+                            setRefundState(prev => prev ? { ...prev, customAmount: value } : prev);
+                          }}
+                        />
+                        <span style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>đ</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <label className="form-label">Lý do hoàn tiền <span className="text-danger">*</span></label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    placeholder="Nhập lý do hoàn tiền..."
+                    value={refundState.refundReason || ''}
+                    onChange={(e) => setRefundState(prev => prev ? { ...prev, refundReason: e.target.value } : prev)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="d-flex justify-content-end gap-2">
+                <button className="btn btn-secondary" onClick={() => setRefundState(null)}>Đóng</button>
+                <button
+                  className="btn btn-danger"
+                  onClick={async () => {
+                    if (!refundState.refundReason || !refundState.refundReason.trim()) {
+                      notify('Vui lòng nhập lý do hoàn tiền', 'error');
                       return;
                     }
-
-                    if (selectedRenewalIds.length === 0) {
-                      notify('Vui lòng chọn ít nhất 1 lần gia hạn', 'warning');
-                      return;
-                    }
-
-                    const { error } = await sb
-                      .from('inventory_renewals')
-                      .update({ payment_status: selectedPaymentStatus })
-                      .in('id', selectedRenewalIds);
-
-                    if (error) {
-                      notify('Không thể cập nhật trạng thái thanh toán gia hạn', 'error');
-                      return;
-                    }
-
-                    setInventoryRenewals(prev => prev.map(r => (
-                      selectedRenewalIds.includes(r.id)
-                        ? { ...r, paymentStatus: selectedPaymentStatus }
-                        : r
-                    )));
-
+                    const item = refundState.item;
+                    const nowIso = new Date().toISOString();
+                    const finalAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
+                    const refundReason = refundState.refundReason.trim();
                     try {
                       const sb2 = getSupabase();
-                      if (sb2) await sb2.from('activity_logs').insert({
-                        employee_id: null,
-                        action: 'Cập nhật thanh toán gia hạn kho hàng loạt',
-                        details: `count=${selectedRenewalIds.length}; status=${selectedPaymentStatus}; renewalIds=${selectedRenewalIds.join(',')}`
-                      });
-                    } catch { }
-
-                    notify(`Đã cập nhật trạng thái thanh toán cho ${selectedRenewalIds.length} lần gia hạn`, 'success');
-                    setPaymentStatusModal(null);
-                    setSelectedRenewalIds([]);
-                    setBulkPaymentTarget('INITIAL');
-                    refresh();
+                      if (sb2) {
+                        const { error } = await sb2.from('inventory').update({
+                          payment_status: 'REFUNDED',
+                          status: 'EXPIRED',
+                          refund_amount: finalAmount,
+                          refund_at: nowIso,
+                          refund_reason: refundReason
+                        }).eq('id', item.id);
+                        if (error) {
+                          notify(`Lỗi khi cập nhật kho hàng: ${error.message}`, 'error');
+                          return;
+                        }
+                        await sb2.from('activity_logs').insert({
+                          employee_id: state.user?.id || null,
+                          action: 'Hoàn tiền kho hàng',
+                          details: `inventoryId=${item.id}; inventoryCode=${item.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}; reason=${refundReason}`
+                        });
+                        setRefundState(null);
+                        setViewingInventory(null);
+                        refresh();
+                        notify('Đã đánh dấu hoàn tiền cho kho hàng', 'success');
+                      } else {
+                        notify('Không thể kết nối database', 'error');
+                      }
+                    } catch (e: any) {
+                      notify(`Lỗi: ${e?.message || 'Không thể hoàn tiền'}`, 'error');
+                    }
                   }}
                 >
-                  Xác nhận
+                  Xác nhận hoàn tiền
                 </button>
               </div>
             </div>
           </div>
-        );
-      })()}
-
-      {/* Warehouse Refund Modal */}
-      {refundState && (
-        <div className="modal">
-          <div className="modal-content" style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Tính tiền hoàn kho hàng</h3>
-              <button type="button" className="close" onClick={() => setRefundState(null)}>×</button>
-            </div>
-            <div className="mb-3">
-              {(() => {
-                const item = refundState.item;
-                // Try package lookup first
-                const pkgInfo = getPackageInfo(item.packageId);
-                // For shared pool, look up product directly by productId
-                const product = pkgInfo?.product || products.find(p => p.id === (item as any).productId);
-                const productName = product?.name || 'Không xác định';
-                const packageName = pkgInfo?.pkg?.name || (product?.sharedInventoryPool ? 'Pool chung' : 'Không xác định');
-                const purchasePrice = item.purchasePrice || 0;
-
-                // Get renewal info for display
-                const itemRenewals = inventoryRenewals
-                  .filter(r => r.inventoryId === item.id)
-                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-                const hasRenewals = itemRenewals.length > 0;
-                const latestRenewal = hasRenewals ? itemRenewals[0] : null;
-
-                // Dates for display based on whether there are renewals
-                const periodStart = hasRenewals
-                  ? new Date(latestRenewal!.previousExpiryDate)
-                  : new Date(item.purchaseDate);
-                const periodEnd = hasRenewals
-                  ? new Date(latestRenewal!.newExpiryDate)
-                  : new Date(item.expiryDate);
-                const periodPrice = hasRenewals
-                  ? (latestRenewal!.amount || 0)
-                  : purchasePrice;
-
-                const errorDate = new Date(refundState.errorDate).toLocaleDateString('vi-VN');
-                const refundAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
-                return (
-                  <div className="p-2">
-                    <div><strong>Mã kho:</strong> {item.code}</div>
-                    <div><strong>Sản phẩm:</strong> {productName}</div>
-                    <div><strong>Gói:</strong> {packageName}</div>
-                    <div><strong>Giá mua gốc:</strong> {formatPrice(purchasePrice)}</div>
-                    {hasRenewals && (
-                      <div className="alert alert-info py-1 px-2 mt-2 mb-2" style={{ fontSize: '13px' }}>
-                        <strong>🔄 Tính theo chu kỳ gia hạn lần {itemRenewals.length}:</strong>
-                        <div>Ngày mua (chu kỳ): <strong>{periodStart.toLocaleDateString('vi-VN')}</strong></div>
-                        <div>Khoảng tính: {periodStart.toLocaleDateString('vi-VN')} - {periodEnd.toLocaleDateString('vi-VN')}</div>
-                        <div>Giá chu kỳ: {formatPrice(periodPrice)}</div>
-                      </div>
-                    )}
-                    {!hasRenewals && (
-                      <>
-                        <div><strong>Ngày mua:</strong> {new Date(item.purchaseDate).toLocaleDateString('vi-VN')}</div>
-                        <div><strong>Ngày hết hạn:</strong> {new Date(item.expiryDate).toLocaleDateString('vi-VN')}</div>
-                      </>
-                    )}
-                    <div><strong>Ngày lỗi:</strong> {errorDate}</div>
-                    <div><strong>Số tiền hoàn:</strong> {formatPrice(refundAmount)}</div>
-                    {item.sourceNote && <div><strong>Nguồn:</strong> {item.sourceNote}</div>}
-                  </div>
-                );
-              })()}
-              <div className="row g-2 align-items-end">
-                <div className="col-7">
-                  <label className="form-label">Ngày phát sinh lỗi</label>
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={refundState.errorDate}
-                    onChange={(e) => {
-                      const nextDate = e.target.value;
-                      const amt = computeWarehouseRefundAmount(refundState.item, nextDate);
-                      setRefundState(prev => prev ? { ...prev, errorDate: nextDate, amount: amt } : prev);
-                    }}
-                  />
-                  <small className="text-muted">Dùng để tính tiền hoàn theo thời hạn còn lại</small>
-                </div>
-                <div className="col-5">
-                  <label className="form-label">Tiền hoàn (ước tính)</label>
-                  <div className="alert alert-success mb-0">{formatPrice(refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount)}</div>
-                </div>
-              </div>
-              <div className="mt-3">
-                <div className="form-check mb-2">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="useCustomWarehouseRefund"
-                    checked={refundState.useCustomAmount || false}
-                    onChange={(e) => {
-                      setRefundState(prev => prev ? {
-                        ...prev,
-                        useCustomAmount: e.target.checked,
-                        customAmount: e.target.checked ? (prev.customAmount || prev.amount) : undefined
-                      } : prev);
-                    }}
-                  />
-                  <label className="form-check-label" htmlFor="useCustomWarehouseRefund">
-                    Nhập tiền hoàn tùy chỉnh
-                  </label>
-                </div>
-                {refundState.useCustomAmount && (
-                  <div>
-                    <label className="form-label">Số tiền hoàn tùy chỉnh</label>
-                    <div className="input-group">
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={new Intl.NumberFormat('vi-VN').format(refundState.customAmount ?? refundState.amount)}
-                        onChange={(e) => {
-                          const numericValue = e.target.value.replace(/[^\d]/g, '');
-                          const value = parseInt(numericValue, 10) || 0;
-                          setRefundState(prev => prev ? { ...prev, customAmount: value } : prev);
-                        }}
-                      />
-                      <span className="input-group-text">đ</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="mt-3">
-                <label className="form-label">Lý do hoàn tiền <span className="text-danger">*</span></label>
-                <textarea
-                  className="form-control"
-                  rows={2}
-                  placeholder="Nhập lý do hoàn tiền..."
-                  value={refundState.refundReason || ''}
-                  onChange={(e) => setRefundState(prev => prev ? { ...prev, refundReason: e.target.value } : prev)}
-                  required
-                />
-              </div>
-            </div>
-            <div className="d-flex justify-content-end gap-2">
-              <button className="btn btn-secondary" onClick={() => setRefundState(null)}>Đóng</button>
-              <button
-                className="btn btn-danger"
-                onClick={async () => {
-                  if (!refundState.refundReason || !refundState.refundReason.trim()) {
-                    notify('Vui lòng nhập lý do hoàn tiền', 'error');
-                    return;
-                  }
-                  const item = refundState.item;
-                  const nowIso = new Date().toISOString();
-                  const finalAmount = refundState.useCustomAmount && refundState.customAmount !== undefined ? refundState.customAmount : refundState.amount;
-                  const refundReason = refundState.refundReason.trim();
-                  try {
-                    const sb2 = getSupabase();
-                    if (sb2) {
-                      const { error } = await sb2.from('inventory').update({
-                        payment_status: 'REFUNDED',
-                        status: 'EXPIRED',
-                        refund_amount: finalAmount,
-                        refund_at: nowIso,
-                        refund_reason: refundReason
-                      }).eq('id', item.id);
-                      if (error) {
-                        notify(`Lỗi khi cập nhật kho hàng: ${error.message}`, 'error');
-                        return;
-                      }
-                      await sb2.from('activity_logs').insert({
-                        employee_id: state.user?.id || null,
-                        action: 'Hoàn tiền kho hàng',
-                        details: `inventoryId=${item.id}; inventoryCode=${item.code}; errorDate=${refundState.errorDate}; refundAmount=${finalAmount}; reason=${refundReason}`
-                      });
-                      setRefundState(null);
-                      setViewingInventory(null);
-                      refresh();
-                      notify('Đã đánh dấu hoàn tiền cho kho hàng', 'success');
-                    } else {
-                      notify('Không thể kết nối database', 'error');
-                    }
-                  } catch (e: any) {
-                    notify(`Lỗi: ${e?.message || 'Không thể hoàn tiền'}`, 'error');
-                  }
-                }}
-              >
-                Xác nhận hoàn tiền
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

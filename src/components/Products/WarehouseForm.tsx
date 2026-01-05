@@ -32,7 +32,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
     isAccountBased: false,
     accountColumns: [],
     accountData: {},
-    totalSlots: undefined
+    totalSlots: undefined,
+    isActive: true
   });
   const [renewals, setRenewals] = useState<InventoryRenewal[]>([]);
   const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, InventoryPaymentStatus>>({});
@@ -128,7 +129,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
       isAccountBased: !!item.isAccountBased,
       accountColumns: item.accountColumns || [],
       accountData: item.accountData || {},
-      totalSlots: item.totalSlots
+      totalSlots: item.totalSlots,
+      isActive: item.isActive !== false // default to true if undefined
     });
   }, [item]);
 
@@ -236,7 +238,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             isAccountBased: false,
             accountColumns: [],
             accountData: {},
-            totalSlots: 5
+            totalSlots: 5,
+            isActive: true
           });
         } catch {
           // Fallback to local storage method
@@ -254,7 +257,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             isAccountBased: false,
             accountColumns: [],
             accountData: {},
-            totalSlots: 5
+            totalSlots: 5,
+            isActive: true
           });
         }
       })();
@@ -469,7 +473,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             notes: formData.notes,
             payment_status: formData.paymentStatus || 'UNPAID',
             account_data: formData.accountData,
-            pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null
+            pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null,
+            is_active: formData.isActive !== false
           })
           .eq('id', item.id);
 
@@ -628,8 +633,8 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             account_data: formData.accountData,
             is_account_based: !!selectedPkg?.isAccountBased,
             total_slots: selectedPkg?.isAccountBased ? Math.max(1, Number(selectedPkg?.defaultSlots || 5)) : null,
-            pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null
-
+            pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null,
+            is_active: formData.isActive !== false
           });
 
         if (insertError) {
@@ -878,6 +883,32 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                   {formData.paymentStatus === 'REFUNDED' && (
                     <div className="small text-warning mt-1">🔒 Kho đã hoàn tiền - không thể thay đổi</div>
                   )}
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Trạng thái hoạt động</label>
+              <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
+                <div className="card-body" style={{ padding: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', margin: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={formData.isActive !== false}
+                        onChange={(e) => setFormData(prev => ({ ...prev, isActive: e.target.checked }))}
+                        style={{ marginRight: '8px', width: '18px', height: '18px' }}
+                      />
+                      <span style={{ fontWeight: 500 }}>
+                        {formData.isActive !== false ? '✅ Active' : '⏸️ Not Active'}
+                      </span>
+                    </label>
+                  </div>
+                  <div className="small text-muted mt-1">
+                    {formData.isActive !== false
+                      ? 'Kho này đang hoạt động và có thể bán cho đơn hàng mới'
+                      : 'Kho này đã ngừng hoạt động và không hiển thị khi tạo đơn hàng'}
+                  </div>
                 </div>
               </div>
             </div>
