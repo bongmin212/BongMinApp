@@ -1432,6 +1432,17 @@ const WarehouseList: React.FC = () => {
   const pageItems = sortedItems.slice(start, start + limit);
   const deletablePageIds = pageItems.filter(i => canDeleteInventoryItem(i)).map(i => i.id);
 
+  // Calculate total purchasePrice for selected items (similar to OrderList)
+  const getSelectedTotal = useMemo(() => {
+    let sum = 0;
+    for (const id of selectedIds) {
+      const item = items.find(i => i.id === id);
+      if (!item) continue;
+      sum += item.purchasePrice || 0;
+    }
+    return sum;
+  }, [selectedIds, items]);
+
   const exportInventoryXlsx = (items: InventoryItem[], filename: string) => {
     const rows = items.map((i, idx) => {
       const product = products.find(p => p.id === i.productId);
@@ -1944,6 +1955,7 @@ const WarehouseList: React.FC = () => {
             {selectedIds.length > 0 && !isMobile && (
               <>
                 <span className="badge bg-primary">Đã chọn: {selectedIds.length}</span>
+                <span className="badge bg-info">Tổng tiền: {formatPrice(getSelectedTotal)}</span>
                 <button className="btn btn-success" onClick={bulkRenewal}>Gia hạn đã chọn</button>
                 {!selectedIds.some(id => !canDeleteInventoryItem(items.find(i => i.id === id))) && (
                   <button className="btn btn-danger" onClick={bulkDelete}>Xóa đã chọn</button>
