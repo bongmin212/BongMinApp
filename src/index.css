@@ -2047,6 +2047,11 @@ body:has(.modal) .main-content * {
     padding: var(--space-4);
   }
 
+  /* Force filter grid to single column on mobile for better UX */
+  .mb-3>.row[style*="grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
   /* Header mobile optimizations */
   .navbar .container {
     padding: var(--space-2) var(--space-3);
@@ -2143,6 +2148,84 @@ body:has(.modal) .main-content * {
 
   .customer-mobile {
     display: block;
+  }
+
+  /* Customer mobile card styles */
+  .customer-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .customer-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+  }
+
+  .customer-card-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+  }
+
+  .customer-card-subtitle {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .customer-card-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 4px 0;
+    gap: 8px;
+  }
+
+  .customer-card-label {
+    color: var(--text-muted);
+    min-width: 70px;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+  }
+
+  .customer-card-value {
+    color: var(--text-primary);
+    flex: 1;
+    text-align: right;
+    font-size: 0.85rem;
+    word-break: break-word;
+    max-width: 60%;
+  }
+
+  /* Truncate long URLs (Facebook links, etc.) */
+  .customer-card-value small.text-muted {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+    margin-left: auto;
+  }
+
+  .customer-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .customer-card-actions .btn {
+    font-size: 0.8rem;
+    padding: 6px 12px;
   }
 
   /* Switch to card layout for Product on mobile */

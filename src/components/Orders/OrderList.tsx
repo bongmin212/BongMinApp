@@ -1728,14 +1728,14 @@ const OrderList: React.FC = () => {
       .slice()
       .sort((a, b) => {
         const getCodeNumber = (code: string | undefined | null) => {
-          if (!code) return Number.POSITIVE_INFINITY;
+          if (!code) return Number.NEGATIVE_INFINITY;
           const m = String(code).match(/\d+/);
-          return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+          return m ? parseInt(m[0], 10) : Number.NEGATIVE_INFINITY;
         };
         const na = getCodeNumber(a.code as any);
         const nb = getCodeNumber(b.code as any);
-        if (na !== nb) return na - nb;
-        return (a.code || '').localeCompare(b.code || '');
+        if (na !== nb) return nb - na; // Descending order - newest first
+        return (b.code || '').localeCompare(a.code || '');
       });
     const paginatedLocal = sortedLocal.slice(startLocal, startLocal + limit);
     return {
@@ -2357,7 +2357,7 @@ const OrderList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: 12 }}>
+        <div className="row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: 12 }}>
           {/* Row 1: Search, Customer, Product, Package */}
           <div>
             <input

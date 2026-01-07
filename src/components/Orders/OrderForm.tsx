@@ -1539,7 +1539,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     type="text"
                     inputMode="search"
                     className="form-control mb-2"
-                    placeholder="Tìm kiếm theo tên, SĐT, email, mã, ghi chú, nguồn..."
+                    placeholder="Tìm kiếm khách hàng..."
                     value={customerSearch}
                     onChange={(e) => setCustomerSearch(e.target.value)}
                   />

@@ -38,11 +38,11 @@ const CustomerList: React.FC = () => {
       const p = parseInt(params.get('page') || '1', 10);
       const lsLimit = params.get('limit');
       const savedLimit = parseInt((lsLimit || '10'), 10);
-      
+
       if (!Number.isNaN(savedLimit) && savedLimit > 0) {
         setLimit(savedLimit);
       }
-      
+
       // Update all states in a batch to avoid timing issues
       setSearchTerm(q);
       setDebouncedSearchTerm(q);
@@ -62,12 +62,12 @@ const CustomerList: React.FC = () => {
         const t = (params.get('type') || '') as CustomerType | '';
         const s = (params.get('source') || '') as CustomerSource | '';
         const p = parseInt(params.get('page') || '1', 10);
-        
+
         // Only update if values are different to avoid infinite loops
         if (t !== filterType) setFilterType(t);
         if (s !== filterSource) setFilterSource(s);
         if (p !== page) setPage(p);
-      } catch {}
+      } catch { }
     }, 100);
 
     return () => clearTimeout(timer);
@@ -98,7 +98,7 @@ const CustomerList: React.FC = () => {
       const newSearch = params.toString();
       const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
       window.history.replaceState(null, '', newUrl);
-    } catch {}
+    } catch { }
   }, [debouncedSearchTerm, filterType, filterSource, page, limit]);
 
   const loadCustomers = async () => {
@@ -117,7 +117,7 @@ const CustomerList: React.FC = () => {
   // Load customers on mount and subscribe to realtime updates
   useEffect(() => {
     loadCustomers();
-    
+
     const sb = getSupabase();
     if (!sb) return;
     const channel = sb
@@ -126,7 +126,7 @@ const CustomerList: React.FC = () => {
         loadCustomers();
       })
       .subscribe();
-    return () => { try { channel.unsubscribe(); } catch {} };
+    return () => { try { channel.unsubscribe(); } catch { } };
   }, []);
 
   const handleCreate = () => {
@@ -163,7 +163,7 @@ const CustomerList: React.FC = () => {
             // Update local storage immediately
             const currentCustomers = Database.getCustomers();
             Database.setCustomers(currentCustomers.filter(c => c.id !== id));
-            
+
             // Force refresh form if it's open
             if (showForm && !editingCustomer) {
               setShowForm(false);
@@ -172,11 +172,11 @@ const CustomerList: React.FC = () => {
                 setShowForm(true);
               }, 50); // Reduced delay for better UX
             }
-            
+
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa khách hàng', details: `customerId=${id}; name=${snapshot?.name || ''}; phone=${snapshot?.phone || ''}; email=${snapshot?.email || ''}` });
-            } catch {}
+            } catch { }
             loadCustomers();
             notify('Xóa khách hàng thành công', 'success');
           } else {
@@ -213,7 +213,7 @@ const CustomerList: React.FC = () => {
             // Update local storage immediately
             const currentCustomers = Database.getCustomers();
             Database.setCustomers(currentCustomers.filter(c => !selectedIds.includes(c.id)));
-            
+
             // Force refresh form if it's open
             if (showForm && !editingCustomer) {
               setShowForm(false);
@@ -222,13 +222,13 @@ const CustomerList: React.FC = () => {
                 setShowForm(true);
               }, 50); // Reduced delay for better UX
             }
-            
+
             try {
               const sb2 = getSupabase();
               const codes = selectedIds.map(id => customers.find(c => c.id === id)?.code).filter(Boolean);
               const names = selectedIds.map(id => customers.find(c => c.id === id)?.name).filter(Boolean);
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt khách hàng', details: `codes=${codes.join(',')}; names=${names.join(',')}` });
-            } catch {}
+            } catch { }
             setSelectedIds([]);
             loadCustomers();
             notify('Đã xóa khách hàng đã chọn', 'success');
@@ -257,17 +257,17 @@ const CustomerList: React.FC = () => {
   const filteredCustomers = customers.filter(customer => {
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
     const matchesSearch = customer.name.toLowerCase().includes(normalizedSearch) ||
-                         customer.phone?.includes(normalizedSearch) ||
-                         customer.email?.toLowerCase().includes(normalizedSearch) ||
-                         (customer.code || '').toLowerCase().includes(normalizedSearch) ||
-                         (customer.notes || '').toLowerCase().includes(normalizedSearch) ||
-                         (customer.sourceDetail || '').toLowerCase().includes(normalizedSearch) ||
-                         customer.type.toLowerCase().includes(normalizedSearch) ||
-                         (customer.source || '').toLowerCase().includes(normalizedSearch);
+      customer.phone?.includes(normalizedSearch) ||
+      customer.email?.toLowerCase().includes(normalizedSearch) ||
+      (customer.code || '').toLowerCase().includes(normalizedSearch) ||
+      (customer.notes || '').toLowerCase().includes(normalizedSearch) ||
+      (customer.sourceDetail || '').toLowerCase().includes(normalizedSearch) ||
+      customer.type.toLowerCase().includes(normalizedSearch) ||
+      (customer.source || '').toLowerCase().includes(normalizedSearch);
     const matchesType = !filterType || customer.type === filterType;
     const matchesSource = !filterSource || customer.source === filterSource;
-    
-    
+
+
     return matchesSearch && matchesType && matchesSource;
   });
 
@@ -297,47 +297,47 @@ const CustomerList: React.FC = () => {
       name: c.name || '',
       type: getCustomerTypeLabel(c.type as CustomerType),
       typeValue: c.type || '',
-      
+
       // Contact info
       phone: c.phone || '',
       email: c.email || '',
-      
+
       // Source info
       source: c.source ? getCustomerSourceLabel(c.source as CustomerSource) : '',
       sourceValue: c.source || '',
       sourceDetail: c.sourceDetail || '',
-      
+
       // Additional info
       notes: c.notes || '',
-      
+
       // System info
       createdAt: new Date(c.createdAt).toLocaleDateString('vi-VN'),
       updatedAt: new Date(c.updatedAt).toLocaleDateString('vi-VN'),
-      
+
       // Raw dates for sorting
       createdAtRaw: c.createdAt.toISOString(),
       updatedAtRaw: c.updatedAt.toISOString(),
     }));
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Mã KH', key: 'code', width: 14 },
       { header: 'Tên khách hàng', key: 'name', width: 24 },
       { header: 'Loại khách', key: 'type', width: 12 },
       { header: 'Loại (giá trị)', key: 'typeValue', width: 10 },
-      
+
       // Contact info
       { header: 'SĐT', key: 'phone', width: 16 },
       { header: 'Email', key: 'email', width: 26 },
-      
+
       // Source info
       { header: 'Nguồn', key: 'source', width: 16 },
       { header: 'Nguồn (giá trị)', key: 'sourceValue', width: 12 },
       { header: 'Chi tiết nguồn', key: 'sourceDetail', width: 30 },
-      
+
       // Additional info
       { header: 'Ghi chú', key: 'notes', width: 30 },
-      
+
       // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
       { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
@@ -393,7 +393,7 @@ const CustomerList: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Tìm kiếm theo tên, SĐT, email, mã, ghi chú, nguồn..."
+              placeholder="Tìm kiếm khách hàng..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -438,117 +438,36 @@ const CustomerList: React.FC = () => {
         </div>
       ) : (
         <>
-        {/* Mobile cards */}
-        <div className="customer-mobile">
-          {paginatedCustomers.map((customer, index) => (
-            <div key={customer.id} className="customer-card">
-              <div className="customer-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="customer-card-title">{customer.name}</div>
+          {/* Mobile cards */}
+          <div className="customer-mobile">
+            {paginatedCustomers.map((customer, index) => (
+              <div key={customer.id} className="customer-card">
+                <div className="customer-card-header">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="customer-card-title">{customer.name}</div>
+                  </div>
+                  <div className="customer-card-subtitle">{customer.code || `KH${index + 1}`}</div>
                 </div>
-                <div className="customer-card-subtitle">{customer.code || `KH${index + 1}`}</div>
-              </div>
 
-              <div className="customer-card-row">
-                <div className="customer-card-label">Loại</div>
-                <div className="customer-card-value">
-                  <span className={`customer-type ${customer.type === 'CTV' ? 'customer-ctv' : 'customer-retail'}`}>
-                    {getCustomerTypeLabel(customer.type)}
-                  </span>
-                </div>
-              </div>
-              <div className="customer-card-row">
-                <div className="customer-card-label">SĐT</div>
-                <div className="customer-card-value">{customer.phone || '-'}</div>
-              </div>
-              <div className="customer-card-row">
-                <div className="customer-card-label">Email</div>
-                <div className="customer-card-value">{customer.email || '-'}</div>
-              </div>
-              <div className="customer-card-row">
-                <div className="customer-card-label">Nguồn</div>
-                <div className="customer-card-value">
-                  {customer.source ? (
-                    <div>
-                      <div>{getCustomerSourceLabel(customer.source)}</div>
-                      {customer.sourceDetail && (
-                        <small className="text-muted">{customer.sourceDetail}</small>
-                      )}
-                    </div>
-                  ) : '-'}
-                </div>
-              </div>
-              <div className="customer-card-row">
-                <div className="customer-card-label">Ngày tạo</div>
-                <div className="customer-card-value">{new Date(customer.createdAt).toLocaleDateString('vi-VN')}</div>
-              </div>
-
-              <div className="customer-card-actions">
-                <button
-                  onClick={() => handleViewOrders(customer)}
-                  className="btn btn-info"
-                >
-                  Lịch sử
-                </button>
-                <button
-                  onClick={() => handleEdit(customer)}
-                  className="btn btn-secondary"
-                >
-                  Sửa
-                </button>
-                <button
-                  onClick={() => handleDelete(customer.id)}
-                  className="btn btn-danger"
-                >
-                  Xóa
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Desktop table */}
-        <div className="table-responsive customer-table">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
-                  <input
-                    type="checkbox"
-                    checked={paginatedCustomers.length > 0 && paginatedCustomers.every(c => selectedIds.includes(c.id))}
-                    onChange={(e) => handleToggleSelectAll(e.target.checked, paginatedCustomers.map(c => c.id))}
-                  />
-                </th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã KH</th>
-                <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Tên khách hàng</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Loại</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>SĐT</th>
-                <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Email</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedCustomers.map((customer, index) => (
-                <tr key={customer.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(customer.id)}
-                      onChange={(e) => handleToggleSelect(customer.id, e.target.checked)}
-                    />
-                  </td>
-                  <td>{customer.code || `KH${index + 1}`}</td>
-                  <td>{customer.name}</td>
-                  <td>
+                <div className="customer-card-row">
+                  <div className="customer-card-label">Loại</div>
+                  <div className="customer-card-value">
                     <span className={`customer-type ${customer.type === 'CTV' ? 'customer-ctv' : 'customer-retail'}`}>
                       {getCustomerTypeLabel(customer.type)}
                     </span>
-                  </td>
-                  <td>{customer.phone || '-'}</td>
-                  <td>{customer.email || '-'}</td>
-                  <td>
+                  </div>
+                </div>
+                <div className="customer-card-row">
+                  <div className="customer-card-label">SĐT</div>
+                  <div className="customer-card-value">{customer.phone || '-'}</div>
+                </div>
+                <div className="customer-card-row">
+                  <div className="customer-card-label">Email</div>
+                  <div className="customer-card-value">{customer.email || '-'}</div>
+                </div>
+                <div className="customer-card-row">
+                  <div className="customer-card-label">Nguồn</div>
+                  <div className="customer-card-value">
                     {customer.source ? (
                       <div>
                         <div>{getCustomerSourceLabel(customer.source)}</div>
@@ -557,35 +476,116 @@ const CustomerList: React.FC = () => {
                         )}
                       </div>
                     ) : '-'}
-                  </td>
-                  <td>{new Date(customer.createdAt).toLocaleDateString('vi-VN')}</td>
-                  <td>
-                    <div className="d-flex gap-2">
-                      <button
-                        onClick={() => handleViewOrders(customer)}
-                        className="btn btn-info btn-sm"
-                      >
-                        Lịch sử
-                      </button>
-                      <button
-                        onClick={() => handleEdit(customer)}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => handleDelete(customer.id)}
-                        className="btn btn-danger btn-sm"
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
+                  </div>
+                </div>
+                <div className="customer-card-row">
+                  <div className="customer-card-label">Ngày tạo</div>
+                  <div className="customer-card-value">{new Date(customer.createdAt).toLocaleDateString('vi-VN')}</div>
+                </div>
+
+                <div className="customer-card-actions">
+                  <button
+                    onClick={() => handleViewOrders(customer)}
+                    className="btn btn-info"
+                  >
+                    Lịch sử
+                  </button>
+                  <button
+                    onClick={() => handleEdit(customer)}
+                    className="btn btn-secondary"
+                  >
+                    Sửa
+                  </button>
+                  <button
+                    onClick={() => handleDelete(customer.id)}
+                    className="btn btn-danger"
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="table-responsive customer-table">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={paginatedCustomers.length > 0 && paginatedCustomers.every(c => selectedIds.includes(c.id))}
+                      onChange={(e) => handleToggleSelectAll(e.target.checked, paginatedCustomers.map(c => c.id))}
+                    />
+                  </th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã KH</th>
+                  <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Tên khách hàng</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Loại</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>SĐT</th>
+                  <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Email</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Nguồn</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {paginatedCustomers.map((customer, index) => (
+                  <tr key={customer.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(customer.id)}
+                        onChange={(e) => handleToggleSelect(customer.id, e.target.checked)}
+                      />
+                    </td>
+                    <td>{customer.code || `KH${index + 1}`}</td>
+                    <td>{customer.name}</td>
+                    <td>
+                      <span className={`customer-type ${customer.type === 'CTV' ? 'customer-ctv' : 'customer-retail'}`}>
+                        {getCustomerTypeLabel(customer.type)}
+                      </span>
+                    </td>
+                    <td>{customer.phone || '-'}</td>
+                    <td>{customer.email || '-'}</td>
+                    <td>
+                      {customer.source ? (
+                        <div>
+                          <div>{getCustomerSourceLabel(customer.source)}</div>
+                          {customer.sourceDetail && (
+                            <small className="text-muted">{customer.sourceDetail}</small>
+                          )}
+                        </div>
+                      ) : '-'}
+                    </td>
+                    <td>{new Date(customer.createdAt).toLocaleDateString('vi-VN')}</td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <button
+                          onClick={() => handleViewOrders(customer)}
+                          className="btn btn-info btn-sm"
+                        >
+                          Lịch sử
+                        </button>
+                        <button
+                          onClick={() => handleEdit(customer)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onClick={() => handleDelete(customer.id)}
+                          className="btn btn-danger btn-sm"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
