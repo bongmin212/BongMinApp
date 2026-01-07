@@ -1719,7 +1719,7 @@ const OrderList: React.FC = () => {
       .sort((a, b) => (a?.name || '').localeCompare(b?.name || '', 'vi')) as Customer[];
   }, [baseFilteredOrders, customerMap]);
 
-  const { total, totalPages, currentPage, start, paginatedOrders } = useMemo(() => {
+  const { total, totalPages, currentPage, start, paginatedOrders, sortedFilteredOrders } = useMemo(() => {
     const totalLocal = filteredOrders.length;
     const totalPagesLocal = Math.max(1, Math.ceil(totalLocal / limit));
     const currentPageLocal = Math.min(page, totalPagesLocal);
@@ -1743,7 +1743,8 @@ const OrderList: React.FC = () => {
       totalPages: totalPagesLocal,
       currentPage: currentPageLocal,
       start: startLocal,
-      paginatedOrders: paginatedLocal
+      paginatedOrders: paginatedLocal,
+      sortedFilteredOrders: sortedLocal
     };
   }, [filteredOrders, page, limit]);
 
@@ -2250,14 +2251,14 @@ const OrderList: React.FC = () => {
   }, [customerMap, packageMap, productMap]);
 
   const renderMobileItem = React.useCallback(({ index, style }: ListChildComponentProps) => {
-    const order = filteredOrders[index];
+    const order = sortedFilteredOrders[index];
     if (!order) return null;
     return (
       <div style={{ ...style, padding: '0 4px 12px' }}>
         <OrderMobileCard order={order} />
       </div>
     );
-  }, [filteredOrders, OrderMobileCard]);
+  }, [sortedFilteredOrders, OrderMobileCard]);
 
   const resetFilters = () => {
     setSearchTerm('');
@@ -2536,7 +2537,7 @@ const OrderList: React.FC = () => {
           <FixedSizeList
             className="orders-mobile-list"
             height={mobileListHeight}
-            itemCount={filteredOrders.length}
+            itemCount={sortedFilteredOrders.length}
             itemSize={MOBILE_CARD_HEIGHT}
             width="100%"
           >
