@@ -26,7 +26,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
-  
+
   // Check if this is view-only mode (warranty exists and is not PENDING)
   const isViewOnly = warranty && warranty.status !== 'PENDING';
 
@@ -159,10 +159,10 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             createdAt: r.created_at ? new Date(r.created_at) : new Date(),
             updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
           })) as any);
-        } catch {}
+        } catch { }
       })
       .subscribe();
-    return () => { try { ch.unsubscribe(); } catch {} };
+    return () => { try { ch.unsubscribe(); } catch { } };
   }, []);
 
   // Auto-generate code for new warranty from Supabase, fallback to local
@@ -195,10 +195,10 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 
   useEffect(() => {
     if (warranty) {
-      setForm({ 
-        code: warranty.code, 
-        orderId: warranty.orderId, 
-        reason: warranty.reason, 
+      setForm({
+        code: warranty.code,
+        orderId: warranty.orderId,
+        reason: warranty.reason,
         status: isViewOnly ? warranty.status : '' as any, // Empty for editing, actual status for viewing
         replacementInventoryId: warranty.replacementInventoryId
       });
@@ -282,6 +282,20 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
       } else {
         if (it.packageId !== (pkg?.id || '')) return false;
       }
+
+      // Must be active to be available for warranty replacement (same as OrderForm)
+      if ((it as any).isActive === false) return false;
+
+      // Check expired status (same as OrderForm)
+      const now = new Date();
+      const expiresAt = it.expiryDate ? new Date(it.expiryDate) : undefined;
+      const isExpired = (expiresAt ? expiresAt < now : false) || it.status === 'EXPIRED';
+      // Allow expired items only if they are manually marked active
+      if (isExpired && (it as any).isActive !== true) return false;
+
+      // Exclude refunded warehouses (same as OrderForm)
+      if ((it as any).paymentStatus === 'REFUNDED' || (it as any).payment_status === 'REFUNDED') return false;
+
       // Status: allow ONLY AVAILABLE for classic items; for account-based, allow items with at least one free slot
       if (it.isAccountBased) {
         const profiles = Array.isArray(it.profiles) ? it.profiles : [];
@@ -308,75 +322,75 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 
   const looksLikeUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(val || ''));
 
-	const filteredOrders = React.useMemo(() => {
-		const q = debouncedOrderSearch.trim().toLowerCase();
-		// Only show completed orders for warranty creation
-		const completedOrders = orders.filter(o => o.status === 'COMPLETED');
-		if (!q) return completedOrders;
-		return completedOrders.filter(o => {
-			const code = String(o.code || '').toLowerCase();
-			const customer = customers.find(c => c.id === o.customerId);
-			const customerName = (customer?.name || '').toLowerCase();
-			const customerCode = (customer?.code || '').toLowerCase();
-			const pkg = packages.find(p => p.id === o.packageId);
-			const product = products.find(p => p?.id === pkg?.productId);
-			const productName = (product?.name || '').toLowerCase();
-			const pkgName = String(pkg?.name || '').toLowerCase();
-			const notes = String((o as any).notes || '').toLowerCase();
-			// Include custom field values in search (same behavior as Orders list)
-			const customFieldValues = ((o as any).customFieldValues || {}) as Record<string, string>;
-			let customFieldsText = '';
-			if (pkg && Array.isArray((pkg as any).customFields) && (pkg as any).customFields.length > 0) {
-				customFieldsText = (pkg as any).customFields
-					.map((cf: any) => {
-						const val = customFieldValues[cf.id];
-						return val && String(val).trim() ? String(val).toLowerCase() : '';
-					})
-					.filter(Boolean)
-					.join(' ');
-			}
+  const filteredOrders = React.useMemo(() => {
+    const q = debouncedOrderSearch.trim().toLowerCase();
+    // Only show completed orders for warranty creation
+    const completedOrders = orders.filter(o => o.status === 'COMPLETED');
+    if (!q) return completedOrders;
+    return completedOrders.filter(o => {
+      const code = String(o.code || '').toLowerCase();
+      const customer = customers.find(c => c.id === o.customerId);
+      const customerName = (customer?.name || '').toLowerCase();
+      const customerCode = (customer?.code || '').toLowerCase();
+      const pkg = packages.find(p => p.id === o.packageId);
+      const product = products.find(p => p?.id === pkg?.productId);
+      const productName = (product?.name || '').toLowerCase();
+      const pkgName = String(pkg?.name || '').toLowerCase();
+      const notes = String((o as any).notes || '').toLowerCase();
+      // Include custom field values in search (same behavior as Orders list)
+      const customFieldValues = ((o as any).customFieldValues || {}) as Record<string, string>;
+      let customFieldsText = '';
+      if (pkg && Array.isArray((pkg as any).customFields) && (pkg as any).customFields.length > 0) {
+        customFieldsText = (pkg as any).customFields
+          .map((cf: any) => {
+            const val = customFieldValues[cf.id];
+            return val && String(val).trim() ? String(val).toLowerCase() : '';
+          })
+          .filter(Boolean)
+          .join(' ');
+      }
 
-			// Find linked inventory similar to Orders list logic
-			const linkedInv = (() => {
-				if ((o as any).inventoryItemId) {
-					const found = inventoryItems.find(i => i.id === (o as any).inventoryItemId);
-					if (found) return found as any;
-				}
-				const byLinked = inventoryItems.find(i => (i as any).linked_order_id === o.id || (i as any).linkedOrderId === o.id);
-				if (byLinked) return byLinked as any;
-				return inventoryItems.find(i => (i as any).is_account_based || (i as any).isAccountBased
-					? ((i as any).profiles || []).some((p: any) => p.assignedOrderId === o.id)
-					: false) as any;
-			})();
+      // Find linked inventory similar to Orders list logic
+      const linkedInv = (() => {
+        if ((o as any).inventoryItemId) {
+          const found = inventoryItems.find(i => i.id === (o as any).inventoryItemId);
+          if (found) return found as any;
+        }
+        const byLinked = inventoryItems.find(i => (i as any).linked_order_id === o.id || (i as any).linkedOrderId === o.id);
+        if (byLinked) return byLinked as any;
+        return inventoryItems.find(i => (i as any).is_account_based || (i as any).isAccountBased
+          ? ((i as any).profiles || []).some((p: any) => p.assignedOrderId === o.id)
+          : false) as any;
+      })();
 
-			let inventorySearchText = '';
-			if (linkedInv) {
-				inventorySearchText = [
-					linkedInv.code || '',
-					(linkedInv as any).productInfo || '',
-					(linkedInv as any).sourceNote || '',
-					(linkedInv as any).notes || '',
-					(linkedInv as any).supplierName || '',
-					(linkedInv as any).supplierId || ''
-				].join(' ').toLowerCase();
-				const accountData = (linkedInv as any).accountData || {};
-				Object.values(accountData).forEach((v: any) => {
-					if (typeof v === 'string') inventorySearchText += ' ' + v.toLowerCase();
-				});
-			}
+      let inventorySearchText = '';
+      if (linkedInv) {
+        inventorySearchText = [
+          linkedInv.code || '',
+          (linkedInv as any).productInfo || '',
+          (linkedInv as any).sourceNote || '',
+          (linkedInv as any).notes || '',
+          (linkedInv as any).supplierName || '',
+          (linkedInv as any).supplierId || ''
+        ].join(' ').toLowerCase();
+        const accountData = (linkedInv as any).accountData || {};
+        Object.values(accountData).forEach((v: any) => {
+          if (typeof v === 'string') inventorySearchText += ' ' + v.toLowerCase();
+        });
+      }
 
-			return (
-				code.includes(q) ||
-				customerName.includes(q) ||
-				customerCode.includes(q) ||
-				productName.includes(q) ||
-				pkgName.includes(q) ||
-				notes.includes(q) ||
-				customFieldsText.includes(q) ||
-				inventorySearchText.includes(q)
-			);
-		});
-	}, [debouncedOrderSearch, orders, customers, packages, products, inventoryItems]);
+      return (
+        code.includes(q) ||
+        customerName.includes(q) ||
+        customerCode.includes(q) ||
+        productName.includes(q) ||
+        pkgName.includes(q) ||
+        notes.includes(q) ||
+        customFieldsText.includes(q) ||
+        inventorySearchText.includes(q)
+      );
+    });
+  }, [debouncedOrderSearch, orders, customers, packages, products, inventoryItems]);
 
   useEffect(() => {
     if (warranty) return;
@@ -401,9 +415,9 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
     });
   }, [debouncedInventorySearch, availableInventoryItems, products, packages]);
 
-	const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!form.code.trim() || !form.orderId || !form.reason.trim()) {
       notify('Vui lòng nhập mã bảo hành, chọn đơn hàng và nhập lý do.', 'warning');
@@ -428,7 +442,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 
   const handleConfirmSubmit = async () => {
     setShowConfirmDialog(false);
-    
+
     try {
       const sb = getSupabase();
       if (!sb) throw new Error('Supabase not configured');
@@ -455,7 +469,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             replacement_inventory_id: form.replacementInventoryId || null
           })
           .eq('id', warranty.id);
-        
+
         if (error) throw new Error(error.message || 'Không thể cập nhật bảo hành');
 
         if (form.status === 'FIXED') {
@@ -468,18 +482,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
               .eq('status', 'NEEDS_UPDATE')
               .eq('previous_linked_order_id', resolvedOrderId)
               .is('linked_order_id', null);
-            
+
             if (classicItems && classicItems.length > 0) {
               const { error: classicRelinkError } = await sb
                 .from('inventory')
-                .update({ 
-                  status: 'SOLD', 
-                  linked_order_id: resolvedOrderId, 
+                .update({
+                  status: 'SOLD',
+                  linked_order_id: resolvedOrderId,
                   previous_linked_order_id: null,
                   updated_at: new Date().toISOString()
                 })
                 .in('id', classicItems.map(item => item.id));
-              
+
               if (classicRelinkError) {
                 // Error re-linking classic inventory - ignore
               }
@@ -490,32 +504,32 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
               .from('inventory')
               .select('*')
               .eq('is_account_based', true);
-            
+
             for (const item of (accountItems || [])) {
               const profiles = Array.isArray(item.profiles) ? item.profiles : [];
               const needsUpdateProfiles = profiles.filter((p: any) => p.needsUpdate && p.previousOrderId === resolvedOrderId);
-              
+
               if (needsUpdateProfiles.length > 0) {
-                const updatedProfiles = profiles.map((p: any) => 
+                const updatedProfiles = profiles.map((p: any) =>
                   p.needsUpdate && p.previousOrderId === resolvedOrderId
                     ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString(), needsUpdate: false, previousOrderId: null }
                     : p
                 );
-                
+
                 // Check if there are any free slots remaining
-                const hasFreeSlots = updatedProfiles.some((p: any) => 
+                const hasFreeSlots = updatedProfiles.some((p: any) =>
                   !p.isAssigned && !(p as any).needsUpdate
                 );
-                
+
                 const { error: accountRelinkError } = await sb
                   .from('inventory')
-                  .update({ 
+                  .update({
                     profiles: updatedProfiles,
                     status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
                     updated_at: new Date().toISOString()
                   })
                   .eq('id', item.id);
-                
+
                 if (accountRelinkError) {
                   // Error re-linking account-based inventory - ignore
                 }
@@ -550,58 +564,58 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             .maybeSingle();
 
           if (replacementItem) {
-          if (replacementItem.is_account_based) {
-            if (!replacementProfileIds || replacementProfileIds.length === 0) throw new Error('Phải chọn ít nhất một slot cho sản phẩm account-based');
-            
-            const profiles = Array.isArray(replacementItem.profiles) ? replacementItem.profiles : [];
-            const chosenProfiles = profiles.filter((p: any) => replacementProfileIds.includes(p.id));
-            if (chosenProfiles.length !== replacementProfileIds.length) {
-              throw new Error('Một số slot không tồn tại');
-            }
-            
-            const invalidProfiles = chosenProfiles.filter((p: any) => p.isAssigned);
-            if (invalidProfiles.length > 0) {
-              throw new Error('Một số slot đã được sử dụng, vui lòng chọn slot trống');
-            }
+            if (replacementItem.is_account_based) {
+              if (!replacementProfileIds || replacementProfileIds.length === 0) throw new Error('Phải chọn ít nhất một slot cho sản phẩm account-based');
 
-            const updatedProfiles = profiles.map((p: any) => 
-              replacementProfileIds.includes(p.id)
-                ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() }
-                : p
-            );
+              const profiles = Array.isArray(replacementItem.profiles) ? replacementItem.profiles : [];
+              const chosenProfiles = profiles.filter((p: any) => replacementProfileIds.includes(p.id));
+              if (chosenProfiles.length !== replacementProfileIds.length) {
+                throw new Error('Một số slot không tồn tại');
+              }
 
-            // Check if there are any free slots remaining
-            const hasFreeSlots = updatedProfiles.some((p: any) => 
-              !p.isAssigned && !(p as any).needsUpdate
-            );
+              const invalidProfiles = chosenProfiles.filter((p: any) => p.isAssigned);
+              if (invalidProfiles.length > 0) {
+                throw new Error('Một số slot đã được sử dụng, vui lòng chọn slot trống');
+              }
 
-            const { error: replacementUpdateError } = await sb
-              .from('inventory')
-              .update({ 
-                profiles: updatedProfiles, 
-                status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', resolvedReplacementId);
-            
-            if (replacementUpdateError) {
-              throw new Error('Lỗi khi cập nhật slot kho hàng thay thế');
-            }
-          } else {
+              const updatedProfiles = profiles.map((p: any) =>
+                replacementProfileIds.includes(p.id)
+                  ? { ...p, isAssigned: true, assignedOrderId: resolvedOrderId, assignedAt: new Date().toISOString() }
+                  : p
+              );
+
+              // Check if there are any free slots remaining
+              const hasFreeSlots = updatedProfiles.some((p: any) =>
+                !p.isAssigned && !(p as any).needsUpdate
+              );
+
+              const { error: replacementUpdateError } = await sb
+                .from('inventory')
+                .update({
+                  profiles: updatedProfiles,
+                  status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', resolvedReplacementId);
+
+              if (replacementUpdateError) {
+                throw new Error('Lỗi khi cập nhật slot kho hàng thay thế');
+              }
+            } else {
               // Classic inventory - direct Supabase update
               if (replacementItem.linked_order_id && replacementItem.linked_order_id !== resolvedOrderId) {
                 throw new Error('Kho này đang liên kết đơn khác');
               }
-              
+
               const { error: classicReplacementError } = await sb
                 .from('inventory')
-                .update({ 
-                  status: 'SOLD', 
+                .update({
+                  status: 'SOLD',
                   linked_order_id: resolvedOrderId,
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', resolvedReplacementId);
-              
+
               if (classicReplacementError) {
                 throw new Error('Lỗi khi cập nhật kho hàng thay thế');
               }
@@ -620,12 +634,12 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 
         // Log activity
         try {
-          await sb.from('activity_logs').insert({ 
-            employee_id: null, 
-            action: 'Cập nhật đơn bảo hành', 
-            details: `warrantyId=${warranty.id}; warrantyCode=${warranty.code}; newStatus=${form.status}` 
+          await sb.from('activity_logs').insert({
+            employee_id: null,
+            action: 'Cập nhật đơn bảo hành',
+            details: `warrantyId=${warranty.id}; warrantyCode=${warranty.code}; newStatus=${form.status}`
           });
-        } catch {}
+        } catch { }
 
         notify('Cập nhật đơn bảo hành thành công', 'success');
         onSuccess(resolvedOrderId);
@@ -639,7 +653,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             reason: form.reason.trim(),
             status: 'PENDING'
           });
-        
+
         if (insertError) throw new Error(insertError.message || 'Không thể tạo đơn bảo hành');
 
         // Unlink original inventory from order using direct Supabase approach
@@ -649,18 +663,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             .from('inventory')
             .select('id, linked_order_id')
             .eq('linked_order_id', resolvedOrderId);
-          
+
           if (classicLinked && classicLinked.length > 0) {
             const { error: classicUpdateError } = await sb
               .from('inventory')
-              .update({ 
-                status: 'NEEDS_UPDATE', 
+              .update({
+                status: 'NEEDS_UPDATE',
                 previous_linked_order_id: resolvedOrderId,
                 linked_order_id: null,
                 updated_at: new Date().toISOString()
               })
               .in('id', classicLinked.map(item => item.id));
-            
+
             if (classicUpdateError) {
               // Error updating classic inventory - ignore
             }
@@ -671,40 +685,40 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             .from('inventory')
             .select('*')
             .eq('is_account_based', true);
-          
+
           for (const item of (accountItems || [])) {
             const profiles = Array.isArray(item.profiles) ? item.profiles : [];
             const assignedProfiles = profiles.filter((p: any) => p.assignedOrderId === resolvedOrderId);
-            
+
             if (assignedProfiles.length > 0) {
-              const updatedProfiles = profiles.map((p: any) => 
+              const updatedProfiles = profiles.map((p: any) =>
                 p.assignedOrderId === resolvedOrderId
-                  ? { 
-                      ...p, 
-                      isAssigned: false, 
-                      assignedOrderId: null, 
-                      assignedAt: null, 
-                      expiryAt: null, 
-                      needsUpdate: true,
-                      previousOrderId: resolvedOrderId
-                    }
+                  ? {
+                    ...p,
+                    isAssigned: false,
+                    assignedOrderId: null,
+                    assignedAt: null,
+                    expiryAt: null,
+                    needsUpdate: true,
+                    previousOrderId: resolvedOrderId
+                  }
                   : p
               );
-              
+
               // Check if there are any free slots remaining
-              const hasFreeSlots = updatedProfiles.some((p: any) => 
+              const hasFreeSlots = updatedProfiles.some((p: any) =>
                 !p.isAssigned && !(p as any).needsUpdate
               );
-              
+
               const { error: accountUpdateError } = await sb
                 .from('inventory')
-                .update({ 
+                .update({
                   profiles: updatedProfiles,
                   status: hasFreeSlots ? 'AVAILABLE' : 'NEEDS_UPDATE',
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', item.id);
-              
+
               if (accountUpdateError) {
                 // Error updating account-based inventory - ignore
               }
@@ -716,12 +730,12 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
 
         // Log activity
         try {
-          await sb.from('activity_logs').insert({ 
-            employee_id: null, 
-            action: 'Tạo đơn bảo hành', 
-            details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}` 
+          await sb.from('activity_logs').insert({
+            employee_id: null,
+            action: 'Tạo đơn bảo hành',
+            details: `warrantyCode=${form.code}; orderId=${resolvedOrderId}`
           });
-        } catch {}
+        } catch { }
 
         notify('Tạo đơn bảo hành thành công', 'success');
         onSuccess(resolvedOrderId);
@@ -731,7 +745,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
       notify(errorMessage, 'error');
       return;
     }
-    
+
     onClose();
   };
 
@@ -748,20 +762,20 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
           <form onSubmit={handleSubmit}>
             <div className="mb-3">
               <label className="form-label">Mã bảo hành *</label>
-              <input 
-                className="form-control" 
-                value={form.code} 
-                readOnly 
-                disabled 
-                style={{ opacity: 0.6, cursor: 'not-allowed' }} 
+              <input
+                className="form-control"
+                value={form.code}
+                readOnly
+                disabled
+                style={{ opacity: 0.6, cursor: 'not-allowed' }}
               />
             </div>
             <div className="mb-3">
               <label className="form-label">Ngày tạo</label>
-              <input 
-                className="form-control" 
-                value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')} 
-                disabled 
+              <input
+                className="form-control"
+                value={(warranty ? new Date(warranty.createdAt) : new Date()).toLocaleDateString('vi-VN')}
+                disabled
                 style={{ opacity: 0.6, cursor: 'not-allowed' }}
               />
             </div>
@@ -792,10 +806,10 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                 </>
               ) : (
                 <>
-                  <input 
-                    className="form-control" 
-                    value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)} 
-                    disabled 
+                  <input
+                    className="form-control"
+                    value={getOrderLabel(orders.find(o => o.id === form.orderId) || {} as Order)}
+                    disabled
                     style={{ opacity: 0.6, cursor: 'not-allowed' }}
                   />
                   {!!form.orderId && (
@@ -813,10 +827,10 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
               {!warranty ? (
                 <textarea className="form-control" value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} required />
               ) : (
-                <textarea 
-                  className="form-control" 
-                  value={form.reason} 
-                  disabled 
+                <textarea
+                  className="form-control"
+                  value={form.reason}
+                  disabled
                   style={{ opacity: 0.6, cursor: 'not-allowed' }}
                 />
               )}
@@ -824,18 +838,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
             <div className="mb-3">
               <label className="form-label">Trạng thái</label>
               {!warranty ? (
-                <input 
-                  className="form-control" 
-                  value="Chưa xong" 
-                  disabled 
+                <input
+                  className="form-control"
+                  value="Chưa xong"
+                  disabled
                   style={{ opacity: 0.6, cursor: 'not-allowed' }}
                 />
               ) : (
                 isViewOnly ? (
-                  <input 
-                    className="form-control" 
-                    value={WARRANTY_STATUSES.find(s => s.value === form.status)?.label || form.status} 
-                    disabled 
+                  <input
+                    className="form-control"
+                    value={WARRANTY_STATUSES.find(s => s.value === form.status)?.label || form.status}
+                    disabled
                     style={{ opacity: 0.6, cursor: 'not-allowed' }}
                   />
                 ) : (
@@ -847,16 +861,16 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                 )
               )}
             </div>
-            
+
             {/* Only show replacement inventory selection when editing and status is REPLACED */}
             {warranty && form.status === 'REPLACED' && (
               <div className="mb-3">
                 <label className="form-label">Sản phẩm thay thế *</label>
                 {isViewOnly ? (
-                  <input 
-                    className="form-control" 
-                    value={form.replacementInventoryId ? `#${inventoryItems.find(i => i.id === form.replacementInventoryId)?.code || ''} | ${inventoryItems.find(i => i.id === form.replacementInventoryId) ? getInventoryLabel(inventoryItems.find(i => i.id === form.replacementInventoryId)!) : ''}` : '-'} 
-                    disabled 
+                  <input
+                    className="form-control"
+                    value={form.replacementInventoryId ? `#${inventoryItems.find(i => i.id === form.replacementInventoryId)?.code || ''} | ${inventoryItems.find(i => i.id === form.replacementInventoryId) ? getInventoryLabel(inventoryItems.find(i => i.id === form.replacementInventoryId)!) : ''}` : '-'}
+                    disabled
                     style={{ opacity: 0.6, cursor: 'not-allowed' }}
                   />
                 ) : (
@@ -886,7 +900,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                       const packageName = pkg?.name || (isSharedPool ? 'Kho chung' : 'Không có gói');
                       const purchaseDate = item.purchaseDate || (item as any).purchase_date;
                       const expiryDate = item.expiryDate || (item as any).expiry_date;
-                      
+
                       return (
                         <>
                           {/* Thông tin kho hàng chi tiết */}
@@ -919,11 +933,11 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                               <div style={{ marginTop: 6 }}>
                                 <strong>Ghi chú nội bộ:</strong>
                                 {item.notes ? (
-                                  <pre style={{ 
-                                    whiteSpace: 'pre-wrap', 
-                                    margin: '4px 0 0 0', 
-                                    padding: '8px', 
-                                    backgroundColor: 'var(--bg-tertiary)', 
+                                  <pre style={{
+                                    whiteSpace: 'pre-wrap',
+                                    margin: '4px 0 0 0',
+                                    padding: '8px',
+                                    backgroundColor: 'var(--bg-tertiary)',
                                     color: 'var(--text-primary)',
                                     borderRadius: '4px',
                                     fontSize: '14px',
@@ -935,7 +949,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                                   <span className="text-muted" style={{ marginLeft: 4 }}>Không có</span>
                                 )}
                               </div>
-                              
+
                               {/* Account Information Section */}
                               {item.isAccountBased && item.accountColumns && item.accountColumns.length > 0 && (
                                 <div style={{ marginTop: 12 }}>
@@ -947,11 +961,11 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                                       return (
                                         <div key={col.id} style={{ marginBottom: 8 }}>
                                           <div><strong>{col.title}:</strong></div>
-                                          <pre style={{ 
-                                            whiteSpace: 'pre-wrap', 
-                                            margin: 0, 
-                                            padding: '8px', 
-                                            backgroundColor: 'var(--bg-tertiary)', 
+                                          <pre style={{
+                                            whiteSpace: 'pre-wrap',
+                                            margin: 0,
+                                            padding: '8px',
+                                            backgroundColor: 'var(--bg-tertiary)',
                                             color: 'var(--text-primary)',
                                             borderRadius: '4px',
                                             fontSize: '14px',
@@ -965,18 +979,18 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                                   </div>
                                 </div>
                               )}
-                              
+
                               {/* Slot totals removed as requested */}
                             </div>
                           </div>
-                          
+
                           {/* Slot selector for account-based */}
                           {item.isAccountBased && (() => {
                             const profiles = Array.isArray(item.profiles) ? item.profiles : [];
                             const availableSlots = profiles.filter((p: any) => !p.isAssigned && !(p as any).needsUpdate);
                             const visibleSlots = availableSlots.slice(0, 5);
                             const totalSlots = availableSlots.length;
-                            
+
                             return (
                               <div className="mt-3">
                                 <label className="form-label">
@@ -1027,7 +1041,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                 )}
               </div>
             )}
-            
+
             <div className="d-flex justify-content-end gap-2">
               <button type="button" className="btn btn-secondary" onClick={onClose}>Hủy</button>
               {!isViewOnly && <button type="submit" className="btn btn-primary">Lưu</button>}
@@ -1035,7 +1049,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
           </form>
         </div>
       </div>
-      
+
       {/* Confirmation Dialog - moved outside and with higher z-index */}
       {showConfirmDialog && (
         <div className="modal" role="dialog" aria-modal style={{ zIndex: 10000, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
@@ -1087,7 +1101,7 @@ const WarrantyList: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [showForm, setShowForm] = useState(false);
-	const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null);
+  const [editingWarranty, setEditingWarranty] = useState<Warranty | null>(null);
   const [viewingOrder, setViewingOrder] = useState<Order | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -1237,9 +1251,9 @@ const WarrantyList: React.FC = () => {
         load();
       })
       .subscribe();
-    return () => { 
-      try { 
-        ch.unsubscribe(); 
+    return () => {
+      try {
+        ch.unsubscribe();
       } catch (error) {
         // Error unsubscribing from warranties realtime channel - ignore
       }
@@ -1263,7 +1277,7 @@ const WarrantyList: React.FC = () => {
       setDateTo(to);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
-    } catch {}
+    } catch { }
   }, []);
 
   // Debounce unified search input
@@ -1279,7 +1293,7 @@ const WarrantyList: React.FC = () => {
 
   // Persist limit
   useEffect(() => {
-    try { localStorage.setItem('warrantyList.limit', String(limit)); } catch {}
+    try { localStorage.setItem('warrantyList.limit', String(limit)); } catch { }
   }, [limit]);
 
   // Sync URL
@@ -1295,7 +1309,7 @@ const WarrantyList: React.FC = () => {
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
-    } catch {}
+    } catch { }
   }, [debouncedSearchTerm, searchStatus, page, limit, dateFrom, dateTo]);
 
   const getCustomerName = (customerId: string) => {
@@ -1392,64 +1406,64 @@ const WarrantyList: React.FC = () => {
       const linkedPackage = linkedOrder ? packages.find(p => p.id === linkedOrder.packageId) : null;
       const linkedProduct = linkedPackage ? products.find(p => p.id === linkedPackage.productId) : null;
       const replacementInventory = w.replacementInventoryId ? inventoryItems.find(i => i.id === w.replacementInventoryId) : null;
-      
+
       return {
         // Basic info
         code: w.code || `BH${idx + 1}`,
         createdAt: new Date(w.createdAt).toLocaleDateString('vi-VN'),
         updatedAt: new Date(w.updatedAt).toLocaleDateString('vi-VN'),
-        
+
         // Order info
         orderCode: linkedOrder?.code || '',
         customerName: linkedCustomer?.name || 'Không xác định',
         customerCode: linkedCustomer?.code || '',
         customerPhone: linkedCustomer?.phone || '',
         customerEmail: linkedCustomer?.email || '',
-        
+
         // Product info
         productName: linkedProduct?.name || 'Không xác định',
         productCode: linkedProduct?.code || '',
         packageName: linkedPackage?.name || 'Không xác định',
         packageCode: linkedPackage?.code || '',
-        
+
         // Warranty details
         reason: w.reason || '',
         status: WARRANTY_STATUSES.find(s => s.value === w.status)?.label || w.status,
         statusValue: w.status,
-        
-        
+
+
         // System info
         createdBy: w.createdBy || '',
         createdAtRaw: w.createdAt.toISOString(),
         updatedAtRaw: w.updatedAt.toISOString(),
       };
     });
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Mã bảo hành', key: 'code', width: 14 },
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
       { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
-      
+
       // Order info
       { header: 'Mã đơn hàng', key: 'orderCode', width: 16 },
       { header: 'Tên khách hàng', key: 'customerName', width: 24 },
       { header: 'Mã khách hàng', key: 'customerCode', width: 16 },
       { header: 'SĐT khách', key: 'customerPhone', width: 16 },
       { header: 'Email khách', key: 'customerEmail', width: 20 },
-      
+
       // Product info
       { header: 'Tên sản phẩm', key: 'productName', width: 24 },
       { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
       { header: 'Tên gói', key: 'packageName', width: 20 },
       { header: 'Mã gói', key: 'packageCode', width: 16 },
-      
+
       // Warranty details
       { header: 'Lý do bảo hành', key: 'reason', width: 50 },
       { header: 'Trạng thái', key: 'status', width: 16 },
       { header: 'Trạng thái (giá trị)', key: 'statusValue', width: 14 },
-      
-      
+
+
       // System info
       { header: 'Người tạo', key: 'createdBy', width: 16 },
     ], filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`, 'Bảo hành');
@@ -1478,17 +1492,17 @@ const WarrantyList: React.FC = () => {
               return;
             }
           }
-          
+
           // Update local storage
           selectedIds.forEach(id => Database.deleteWarranty(id));
-          
+
           // Log activity
           try {
             const sb2 = getSupabase();
             const codes = selectedIds.map(id => warranties.find(w => w.id === id)?.code).filter(Boolean);
             if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt bảo hành', details: `codes=${codes.join(',')}` });
-          } catch {}
-          
+          } catch { }
+
           setSelectedIds([]);
           load();
           notify('Đã xóa đơn bảo hành đã chọn', 'success');
@@ -1506,45 +1520,45 @@ const WarrantyList: React.FC = () => {
     setPage(1);
   };
 
-const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
+  const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
 
-const handleDelete = (id: string) => {
-		setConfirmState({
-			message: 'Xóa đơn bảo hành này?',
-            onConfirm: () => {
-				(async () => {
-                    const sb = getSupabase();
-                    if (!sb) return notify('Không thể xóa bảo hành', 'error');
-					const w = warranties.find(x => x.id === id);
-					const { error } = await sb.from('warranties').delete().eq('id', id);
-					if (!error) {
-						// Update local storage immediately
-						const currentWarranties = Database.getWarranties();
-						Database.setWarranties(currentWarranties.filter(w => w.id !== id));
-						
-						// Force refresh form if it's open
-						if (showForm && !editingWarranty) {
-							setShowForm(false);
-							setTimeout(() => {
-								setShowForm(true);
-							}, 100); // Add small delay to ensure local storage is updated
-						}
-						
-                        try {
-                            const sb2 = getSupabase();
-                            if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa đơn bảo hành', details: `warrantyCode=${w?.code || ''}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
-                        } catch {}
-						notify('Đã xóa đơn bảo hành', 'success');
-						load();
-					} else {
-						notify('Không thể xóa bảo hành', 'error');
-					}
-				})();
-			}
-		});
-	};
+  const handleDelete = (id: string) => {
+    setConfirmState({
+      message: 'Xóa đơn bảo hành này?',
+      onConfirm: () => {
+        (async () => {
+          const sb = getSupabase();
+          if (!sb) return notify('Không thể xóa bảo hành', 'error');
+          const w = warranties.find(x => x.id === id);
+          const { error } = await sb.from('warranties').delete().eq('id', id);
+          if (!error) {
+            // Update local storage immediately
+            const currentWarranties = Database.getWarranties();
+            Database.setWarranties(currentWarranties.filter(w => w.id !== id));
 
-	return (
+            // Force refresh form if it's open
+            if (showForm && !editingWarranty) {
+              setShowForm(false);
+              setTimeout(() => {
+                setShowForm(true);
+              }, 100); // Add small delay to ensure local storage is updated
+            }
+
+            try {
+              const sb2 = getSupabase();
+              if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa đơn bảo hành', details: `warrantyCode=${w?.code || ''}; orderId=${w?.orderId || ''}; status=${w?.status || ''}` });
+            } catch { }
+            notify('Đã xóa đơn bảo hành', 'success');
+            load();
+          } else {
+            notify('Không thể xóa bảo hành', 'error');
+          }
+        })();
+      }
+    });
+  };
+
+  return (
     <div className="card">
       <div className="card-header">
         <div className="d-flex justify-content-between align-items-center">
@@ -1574,7 +1588,7 @@ const handleDelete = (id: string) => {
           </div>
         </div>
       </div>
-      
+
       <div className="mb-3">
         <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
           <div>
@@ -1620,51 +1634,51 @@ const handleDelete = (id: string) => {
         ) : (
           pageItems
             .map((w, index) => (
-            <div key={w.id} className="warranty-card">
-              <div className="warranty-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="warranty-card-title">{w.code || `BH${index + 1}`}</div>
+              <div key={w.id} className="warranty-card">
+                <div className="warranty-card-header">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="warranty-card-title">{w.code || `BH${index + 1}`}</div>
+                  </div>
+                  <div className="warranty-card-subtitle">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</div>
                 </div>
-                <div className="warranty-card-subtitle">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</div>
-              </div>
 
-              <div className="warranty-card-row">
-                <div className="warranty-card-label">Khách hàng</div>
-                <div className="warranty-card-value">
-                  {(() => {
-                    const order = orders.find(o => o.id === w.orderId);
-                    return order ? getCustomerName(order.customerId) : 'Không xác định';
-                  })()}
+                <div className="warranty-card-row">
+                  <div className="warranty-card-label">Khách hàng</div>
+                  <div className="warranty-card-value">
+                    {(() => {
+                      const order = orders.find(o => o.id === w.orderId);
+                      return order ? getCustomerName(order.customerId) : 'Không xác định';
+                    })()}
+                  </div>
                 </div>
-              </div>
-              <div className="warranty-card-row">
-                <div className="warranty-card-label">Sản phẩm</div>
-                <div className="warranty-card-value">{getProductText(w.orderId)}</div>
-              </div>
-              <div className="warranty-card-row">
-                <div className="warranty-card-label">Trạng thái</div>
-                <div className="warranty-card-value">
-                  <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
-                    {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
-                  </span>
+                <div className="warranty-card-row">
+                  <div className="warranty-card-label">Sản phẩm</div>
+                  <div className="warranty-card-value">{getProductText(w.orderId)}</div>
                 </div>
-              </div>
-              
-              {w.reason && (
-                <div className="warranty-card-description">
-                  <strong>Lý do:</strong> {w.reason}
+                <div className="warranty-card-row">
+                  <div className="warranty-card-label">Trạng thái</div>
+                  <div className="warranty-card-value">
+                    <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
+                      {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
+                    </span>
+                  </div>
                 </div>
-              )}
-              
 
-              <div className="warranty-card-actions">
-                <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
-                  {w.status === 'PENDING' ? 'Sửa' : 'Xem'}
-                </button>
-                <button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
+                {w.reason && (
+                  <div className="warranty-card-description">
+                    <strong>Lý do:</strong> {w.reason}
+                  </div>
+                )}
+
+
+                <div className="warranty-card-actions">
+                  <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
+                    {w.status === 'PENDING' ? 'Sửa' : 'Xem'}
+                  </button>
+                  <button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
+                </div>
               </div>
-            </div>
-          ))
+            ))
         )}
       </div>
 
@@ -1692,49 +1706,49 @@ const handleDelete = (id: string) => {
           </thead>
           <tbody>
             {pageItems.length === 0 ? (
-							<tr><td colSpan={9} className="text-center">
+              <tr><td colSpan={9} className="text-center">
                 {warranties.length === 0 ? 'Chưa có đơn bảo hành' : 'Không tìm thấy đơn bảo hành phù hợp'}
               </td></tr>
             ) : (
               pageItems
                 .map((w, index) => (
-                <tr key={w.id}>
-                  <td>
-                    <input type="checkbox" checked={selectedIds.includes(w.id)} onChange={(e) => toggleSelect(w.id, e.target.checked)} />
-                  </td>
-                  <td>{w.code || `BH${index + 1}`}</td>
-                  <td>{new Date(w.createdAt).toLocaleDateString('vi-VN')}</td>
-                  <td>
-                    {(() => {
-                      const order = orders.find(o => o.id === w.orderId);
-                      return order?.code || '-';
-                    })()}
-                  </td>
-                  <td>
-                    {(() => {
-                      const order = orders.find(o => o.id === w.orderId);
-                      return order ? getCustomerName(order.customerId) : 'Không xác định';
-                    })()}
-                  </td>
-                  <td>{getProductText(w.orderId)}</td>
-                  <td>
-                    <div className="line-clamp-3" title={w.reason} style={{ maxWidth: 420 }}>{w.reason}</div>
-                  </td>
-                  <td>
-                    <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
-                      {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
-                    </span>
-                  </td>
-									<td>
-										<div className="d-flex gap-2">
-											<button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
-												{w.status === 'PENDING' ? 'Sửa' : 'Xem'}
-											</button>
-											<button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
-										</div>
-									</td>
-                </tr>
-              ))
+                  <tr key={w.id}>
+                    <td>
+                      <input type="checkbox" checked={selectedIds.includes(w.id)} onChange={(e) => toggleSelect(w.id, e.target.checked)} />
+                    </td>
+                    <td>{w.code || `BH${index + 1}`}</td>
+                    <td>{new Date(w.createdAt).toLocaleDateString('vi-VN')}</td>
+                    <td>
+                      {(() => {
+                        const order = orders.find(o => o.id === w.orderId);
+                        return order?.code || '-';
+                      })()}
+                    </td>
+                    <td>
+                      {(() => {
+                        const order = orders.find(o => o.id === w.orderId);
+                        return order ? getCustomerName(order.customerId) : 'Không xác định';
+                      })()}
+                    </td>
+                    <td>{getProductText(w.orderId)}</td>
+                    <td>
+                      <div className="line-clamp-3" title={w.reason} style={{ maxWidth: 420 }}>{w.reason}</div>
+                    </td>
+                    <td>
+                      <span className={`status-badge ${w.status === 'FIXED' || w.status === 'REPLACED' ? 'status-completed' : 'status-processing'}`}>
+                        {WARRANTY_STATUSES.find(s => s.value === w.status)?.label}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <button className="btn btn-secondary" onClick={() => setEditingWarranty(w)}>
+                          {w.status === 'PENDING' ? 'Sửa' : 'Xem'}
+                        </button>
+                        <button className="btn btn-danger" onClick={() => handleDelete(w.id)}>Xóa</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
             )}
           </tbody>
         </table>
@@ -1758,54 +1772,54 @@ const handleDelete = (id: string) => {
         </div>
       </div>
 
-		{showForm && (
-			<WarrantyForm onClose={() => setShowForm(false)} onSuccess={async (orderId) => { 
-				// After creating a warranty, only reload list; do NOT auto-open order details
-				await load();
-			}} />
-		)}
-		{editingWarranty && (
-			<WarrantyForm
-				warranty={editingWarranty}
-				onClose={() => setEditingWarranty(null)}
-				onSuccess={async (orderId) => { 
-					setEditingWarranty(null); 
-					await load(); 
-					if (orderId) { 
-						const sb = getSupabase();
-						if (sb) {
-							const { data } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
-							if (data) {
-								const order = {
-									id: data.id,
-									code: data.code,
-									customerId: data.customer_id,
-									packageId: data.package_id,
-									status: data.status,
-									paymentStatus: data.payment_status,
-									notes: data.notes,
-									inventoryItemId: data.inventory_item_id,
-									inventoryProfileIds: data.inventory_profile_ids || undefined,
-									useCustomPrice: data.use_custom_price || false,
-									customPrice: data.custom_price,
-									customFieldValues: data.custom_field_values,
-									purchaseDate: data.purchase_date ? new Date(data.purchase_date) : new Date(),
-									expiryDate: data.expiry_date ? new Date(data.expiry_date) : new Date(),
-									createdBy: 'system',
-									createdAt: data.created_at ? new Date(data.created_at) : new Date(),
-									updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
-								} as Order;
-								setViewingOrder(order);
-							}
-						} else {
-							// Fallback: find from current orders
-							const order = orders.find(o => o.id === orderId);
-							if (order) setViewingOrder(order);
-						}
-					} 
-				}}
-			/>
-		)}
+      {showForm && (
+        <WarrantyForm onClose={() => setShowForm(false)} onSuccess={async (orderId) => {
+          // After creating a warranty, only reload list; do NOT auto-open order details
+          await load();
+        }} />
+      )}
+      {editingWarranty && (
+        <WarrantyForm
+          warranty={editingWarranty}
+          onClose={() => setEditingWarranty(null)}
+          onSuccess={async (orderId) => {
+            setEditingWarranty(null);
+            await load();
+            if (orderId) {
+              const sb = getSupabase();
+              if (sb) {
+                const { data } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
+                if (data) {
+                  const order = {
+                    id: data.id,
+                    code: data.code,
+                    customerId: data.customer_id,
+                    packageId: data.package_id,
+                    status: data.status,
+                    paymentStatus: data.payment_status,
+                    notes: data.notes,
+                    inventoryItemId: data.inventory_item_id,
+                    inventoryProfileIds: data.inventory_profile_ids || undefined,
+                    useCustomPrice: data.use_custom_price || false,
+                    customPrice: data.custom_price,
+                    customFieldValues: data.custom_field_values,
+                    purchaseDate: data.purchase_date ? new Date(data.purchase_date) : new Date(),
+                    expiryDate: data.expiry_date ? new Date(data.expiry_date) : new Date(),
+                    createdBy: 'system',
+                    createdAt: data.created_at ? new Date(data.created_at) : new Date(),
+                    updatedAt: data.updated_at ? new Date(data.updated_at) : new Date()
+                  } as Order;
+                  setViewingOrder(order);
+                }
+              } else {
+                // Fallback: find from current orders
+                const order = orders.find(o => o.id === orderId);
+                if (order) setViewingOrder(order);
+              }
+            }
+          }}
+        />
+      )}
 
       {confirmState && (
         <div className="modal" role="dialog" aria-modal>
