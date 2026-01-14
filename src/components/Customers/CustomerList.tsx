@@ -153,7 +153,7 @@ const CustomerList: React.FC = () => {
   const handleDelete = (id: string) => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa khách hàng này?',
-      onConfirm: () => {
+      onConfirm: async () => {
         try {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa khách hàng', 'error');
@@ -208,7 +208,7 @@ const CustomerList: React.FC = () => {
     const count = selectedIds.length;
     setConfirmState({
       message: `Xóa ${count} khách hàng đã chọn?`,
-      onConfirm: () => {
+      onConfirm: async () => {
         try {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa khách hàng', 'error');
