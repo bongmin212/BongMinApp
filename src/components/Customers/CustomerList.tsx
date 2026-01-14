@@ -154,16 +154,18 @@ const CustomerList: React.FC = () => {
     setConfirmState({
       message: 'Bạn có chắc chắn muốn xóa khách hàng này?',
       onConfirm: () => {
-        (async () => {
+        try {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa khách hàng', 'error');
           const snapshot = customers.find(c => c.id === id) || null;
+
+          // Check for orders first using the logic now embedded in Database.deleteCustomer
+          // but we call it here to ensure we handle the error properly before calling Supabase
+          // if we want to be safe and consistent with local state.
+          Database.deleteCustomer(id);
+
           const { error } = await sb.from('customers').delete().eq('id', id);
           if (!error) {
-            // Update local storage immediately
-            const currentCustomers = Database.getCustomers();
-            Database.setCustomers(currentCustomers.filter(c => c.id !== id));
-
             // Force refresh form if it's open
             if (showForm && !editingCustomer) {
               setShowForm(false);
@@ -182,7 +184,9 @@ const CustomerList: React.FC = () => {
           } else {
             notify('Không thể xóa khách hàng', 'error');
           }
-        })();
+        } catch (err: any) {
+          notify(err.message || 'Không thể xóa khách hàng', 'error');
+        }
       }
     });
   };
@@ -205,9 +209,19 @@ const CustomerList: React.FC = () => {
     setConfirmState({
       message: `Xóa ${count} khách hàng đã chọn?`,
       onConfirm: () => {
-        (async () => {
+        try {
           const sb = getSupabase();
           if (!sb) return notify('Không thể xóa khách hàng', 'error');
+
+          // Check each customer for linked orders before batch deleting
+          for (const id of selectedIds) {
+            const orders = Database.getOrdersByCustomer(id);
+            if (orders.length > 0) {
+              const customer = customers.find(c => c.id === id);
+              throw new Error(`Khách hàng "${customer?.name || id}" có đơn hàng liên kết. Không thể xóa hàng loạt.`);
+            }
+          }
+
           const { error } = await sb.from('customers').delete().in('id', selectedIds);
           if (!error) {
             // Update local storage immediately
@@ -235,7 +249,9 @@ const CustomerList: React.FC = () => {
           } else {
             notify('Không thể xóa khách hàng', 'error');
           }
-        })();
+        } catch (err: any) {
+          notify(err.message || 'Không thể xóa khách hàng', 'error');
+        }
       }
     });
   };

@@ -1,10 +1,10 @@
 // Local storage database simulation
-import { 
-  Product, 
-  ProductPackage, 
-  Customer, 
-  Order, 
-  Employee, 
+import {
+  Product,
+  ProductPackage,
+  Customer,
+  Order,
+  Employee,
   ActivityLog,
   CustomerType,
   EmployeeRole,
@@ -49,7 +49,7 @@ const STORAGE_KEYS = {
 
 // Helper functions
 const generateId = (): string => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -79,10 +79,10 @@ export class Database {
     if (orders.length === 0) {
       return `${prefix}${String(1).padStart(padLength, '0')}`;
     }
-    
+
     const existingNumbers = new Set<number>();
     let detectedPad = padLength;
-    
+
     orders.forEach(o => {
       const m = String(o.code || '').match(/^([A-Za-z]+)(\d+)$/);
       if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
@@ -94,14 +94,14 @@ export class Database {
         }
       }
     });
-    
+
     // Find the first available number starting from 1
     // This will reuse deleted codes immediately
     let nextNum = 1;
     while (existingNumbers.has(nextNum)) {
       nextNum++;
     }
-    
+
     const width = Math.max(padLength, detectedPad);
     return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
@@ -109,7 +109,7 @@ export class Database {
   static generateNextCodeFromList(codes: string[], prefix: string, padLength: number = 3): string {
     const existingNumbers = new Set<number>();
     let detectedPad = padLength;
-    
+
     codes.forEach(code => {
       const m = String(code || '').match(/^([A-Za-z]+)(\d+)$/);
       if (m && m[1].toUpperCase() === prefix.toUpperCase()) {
@@ -121,14 +121,14 @@ export class Database {
         }
       }
     });
-    
+
     // Find the first available number starting from 1
     // This will reuse deleted codes immediately
     let nextNum = 1;
     while (existingNumbers.has(nextNum)) {
       nextNum++;
     }
-    
+
     const width = Math.max(padLength, detectedPad);
     return `${prefix}${String(nextNum).padStart(width, '0')}`;
   }
@@ -201,12 +201,12 @@ export class Database {
 
   static saveWarranty(data: Omit<Warranty, 'id' | 'createdAt' | 'updatedAt'>): Warranty {
     const warranties = this.getWarranties();
-    
+
     const autoCode = String(data.code || '').trim() || this.generateNextWarrantyCode();
     if (warranties.some(w => w.code === autoCode)) {
       throw new Error(`Mã bảo hành "${autoCode}" đã tồn tại`);
     }
-    
+
     const newWarranty: Warranty = {
       ...data,
       code: autoCode,
@@ -229,12 +229,12 @@ export class Database {
     const warranties = this.getWarranties();
     const index = warranties.findIndex(w => w.id === id);
     if (index === -1) return null;
-    
+
     // Check if code already exists (excluding current warranty)
     if (updates.code && warranties.some(w => w.code === updates.code && w.id !== id)) {
       throw new Error(`Mã bảo hành "${updates.code}" đã tồn tại`);
     }
-    
+
     warranties[index] = { ...warranties[index], ...updates, updatedAt: new Date() };
     saveToStorage(STORAGE_KEYS.WARRANTIES, warranties);
     mirrorUpdate('warranties', id, warranties[index]);
@@ -263,12 +263,12 @@ export class Database {
       notes: i.notes,
       profiles: Array.isArray(i.profiles)
         ? i.profiles.map((p: any) => ({
-            ...p,
-            // normalize label from "Profile X" to "Slot X" for legacy data
-            label: typeof p.label === 'string' ? p.label.replace(/^Profile\s+/i, 'Slot ') : p.label,
-            assignedAt: p.assignedAt ? new Date(p.assignedAt) : undefined,
-            expiryAt: p.expiryAt ? new Date(p.expiryAt) : undefined
-          }))
+          ...p,
+          // normalize label from "Profile X" to "Slot X" for legacy data
+          label: typeof p.label === 'string' ? p.label.replace(/^Profile\s+/i, 'Slot ') : p.label,
+          assignedAt: p.assignedAt ? new Date(p.assignedAt) : undefined,
+          expiryAt: p.expiryAt ? new Date(p.expiryAt) : undefined
+        }))
         : undefined
     }));
   }
@@ -336,13 +336,13 @@ export class Database {
 
   static saveInventoryItem(data: InventoryFormData): InventoryItem {
     const items = this.getInventory();
-    
+
     // Auto-assign code if missing/blank
     const autoCode = String(data.code || '').trim() || this.generateNextInventoryCode();
     if (items.some(i => i.code === autoCode)) {
       throw new Error(`Mã kho hàng "${autoCode}" đã tồn tại`);
     }
-    
+
     // compute expiry from package warranty
     const pkg = this.getPackages().find(p => p.id === data.packageId);
     const purchaseDate = new Date(data.purchaseDate);
@@ -406,12 +406,12 @@ export class Database {
     const items = this.getInventory();
     const index = items.findIndex(i => i.id === id);
     if (index === -1) return null;
-    
+
     // Check if code already exists (excluding current item)
     if (updates.code && items.some(i => i.code === updates.code && i.id !== id)) {
       throw new Error(`Mã kho hàng "${updates.code}" đã tồn tại`);
     }
-    
+
     items[index] = { ...items[index], ...updates, updatedAt: new Date() };
     saveToStorage(STORAGE_KEYS.INVENTORY, items);
     mirrorUpdate('inventory', id, items[index]);
@@ -552,7 +552,7 @@ export class Database {
 
   static releaseInventoryItem(id: string): InventoryItem | null {
     const item = this.updateInventoryItem(id, { status: 'AVAILABLE', linkedOrderId: undefined });
-    
+
     // Also update the order to remove the inventory link
     if (item && item.linkedOrderId) {
       const orders = this.getOrders();
@@ -566,7 +566,7 @@ export class Database {
         saveToStorage(STORAGE_KEYS.ORDERS, orders);
       }
     }
-    
+
     return item;
   }
 
@@ -585,12 +585,12 @@ export class Database {
 
   static saveProduct(product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Product {
     const products = this.getProducts();
-    
+
     const autoCode = String(product.code || '').trim() || this.generateNextProductCode();
     if (products.some(p => p.code === autoCode)) {
       throw new Error(`Mã sản phẩm "${autoCode}" đã tồn tại`);
     }
-    
+
     const newProduct: Product = {
       ...product,
       code: autoCode,
@@ -608,12 +608,12 @@ export class Database {
     const products = this.getProducts();
     const index = products.findIndex(p => p.id === id);
     if (index === -1) return null;
-    
+
     // Check if code already exists (excluding current product)
     if (updates.code && products.some(p => p.code === updates.code && p.id !== id)) {
       throw new Error(`Mã sản phẩm "${updates.code}" đã tồn tại`);
     }
-    
+
     products[index] = {
       ...products[index],
       ...updates,
@@ -628,7 +628,7 @@ export class Database {
     const products = this.getProducts();
     const filtered = products.filter(p => p.id !== id);
     if (filtered.length === products.length) return false;
-    
+
     saveToStorage(STORAGE_KEYS.PRODUCTS, filtered);
     mirrorDelete('products', id);
     return true;
@@ -648,12 +648,12 @@ export class Database {
 
   static savePackage(pkg: Omit<ProductPackage, 'id' | 'createdAt' | 'updatedAt'>): ProductPackage {
     const packages = this.getPackages();
-    
+
     const autoCode = String(pkg.code || '').trim() || this.generateNextPackageCode();
     if (packages.some(p => p.code === autoCode)) {
       throw new Error(`Mã gói sản phẩm "${autoCode}" đã tồn tại`);
     }
-    
+
     const newPackage: ProductPackage = {
       ...pkg,
       code: autoCode,
@@ -671,12 +671,12 @@ export class Database {
     const packages = this.getPackages();
     const index = packages.findIndex(p => p.id === id);
     if (index === -1) return null;
-    
+
     // Check if code already exists (excluding current package)
     if (updates.code && packages.some(p => p.code === updates.code && p.id !== id)) {
       throw new Error(`Mã gói sản phẩm "${updates.code}" đã tồn tại`);
     }
-    
+
     const prev = packages[index];
     const next: ProductPackage = {
       ...prev,
@@ -720,7 +720,7 @@ export class Database {
     const packages = this.getPackages();
     const filtered = packages.filter(p => p.id !== id);
     if (filtered.length === packages.length) return false;
-    
+
     saveToStorage(STORAGE_KEYS.PACKAGES, filtered);
     mirrorDelete('packages', id);
     return true;
@@ -736,12 +736,12 @@ export class Database {
 
   static saveCustomer(customer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'>): Customer {
     const customers = this.getCustomers();
-    
+
     const autoCode = String(customer.code || '').trim() || this.generateNextCustomerCode();
     if (customers.some(c => c.code === autoCode)) {
       throw new Error(`Mã khách hàng "${autoCode}" đã tồn tại`);
     }
-    
+
     const newCustomer: Customer = {
       ...customer,
       code: autoCode,
@@ -759,12 +759,12 @@ export class Database {
     const customers = this.getCustomers();
     const index = customers.findIndex(c => c.id === id);
     if (index === -1) return null;
-    
+
     // Check if code already exists (excluding current customer)
     if (updates.code && customers.some(c => c.code === updates.code && c.id !== id)) {
       throw new Error(`Mã khách hàng "${updates.code}" đã tồn tại`);
     }
-    
+
     customers[index] = {
       ...customers[index],
       ...updates,
@@ -776,10 +776,15 @@ export class Database {
   }
 
   static deleteCustomer(id: string): boolean {
+    const orders = this.getOrdersByCustomer(id);
+    if (orders.length > 0) {
+      throw new Error('Không thể xóa khách hàng có đơn hàng liên kết. Vui lòng kiểm tra lại lịch sử đơn hàng của khách hàng này.');
+    }
+
     const customers = this.getCustomers();
     const filtered = customers.filter(c => c.id !== id);
     if (filtered.length === customers.length) return false;
-    
+
     saveToStorage(STORAGE_KEYS.CUSTOMERS, filtered);
     mirrorDelete('customers', id);
     return true;
@@ -799,7 +804,7 @@ export class Database {
 
   static saveOrder(order: Omit<Order, 'id' | 'createdAt' | 'updatedAt'>): Order {
     const orders = this.getOrders();
-    
+
     // Auto-assign code if missing/blank
     const code = String(order.code || '').trim() || this.generateNextOrderCode('DH', 4);
 
@@ -807,7 +812,7 @@ export class Database {
     if (orders.some(o => o.code === code)) {
       throw new Error(`Mã đơn hàng "${code}" đã tồn tại`);
     }
-    
+
     const newOrder: Order = {
       ...order,
       code,
@@ -827,18 +832,18 @@ export class Database {
     const orders = this.getOrders();
     const index = orders.findIndex(o => o.id === id);
     if (index === -1) return null;
-    
+
     // Check if code already exists (excluding current order)
     if (updates.code && orders.some(o => o.code === updates.code && o.id !== id)) {
       throw new Error(`Mã đơn hàng "${updates.code}" đã tồn tại`);
     }
-    
+
     // Nếu salePrice được cập nhật và originalSalePrice chưa có, lưu nó
     const finalUpdates: Partial<Order> = { ...updates };
     if ((updates as any).salePrice && !(orders[index] as any).originalSalePrice) {
       (finalUpdates as any).originalSalePrice = (updates as any).salePrice;
     }
-    
+
     orders[index] = {
       ...orders[index],
       ...finalUpdates,
@@ -871,7 +876,7 @@ export class Database {
     const pkg = this.getPackages().find(p => p.id === packageId);
     const base = new Date(current.expiryDate);
     const safeMonths = Math.max(1, Math.floor(pkg?.warrantyPeriod || 1));
-    
+
     // Use custom expiry if provided, otherwise calculate from warranty period
     const nextExpiry = opts?.useCustomExpiry && opts?.customExpiryDate
       ? new Date(opts.customExpiryDate)
@@ -1037,7 +1042,7 @@ export class Database {
   static migrateCustomers(): void {
     const customers = this.getCustomers();
     let needsUpdate = false;
-    
+
     const migratedCustomers = customers.map((customer, index) => {
       if (!customer.code) {
         needsUpdate = true;
@@ -1048,7 +1053,7 @@ export class Database {
       }
       return customer;
     });
-    
+
     if (needsUpdate) {
       saveToStorage(STORAGE_KEYS.CUSTOMERS, migratedCustomers);
     }
@@ -1057,7 +1062,7 @@ export class Database {
   static migrateOrders(): void {
     const orders = this.getOrders();
     let needsUpdate = false;
-    
+
     const migratedOrders = orders.map((order, index) => {
       if (!order.code) {
         needsUpdate = true;
@@ -1068,7 +1073,7 @@ export class Database {
       }
       return order;
     });
-    
+
     if (needsUpdate) {
       saveToStorage(STORAGE_KEYS.ORDERS, migratedOrders);
     }
@@ -1078,7 +1083,7 @@ export class Database {
   static migrateProducts(): void {
     const products = this.getProducts();
     let needsUpdate = false;
-    
+
     const migratedProducts = products.map((product, index) => {
       if (!product.code) {
         needsUpdate = true;
@@ -1089,7 +1094,7 @@ export class Database {
       }
       return product;
     });
-    
+
     if (needsUpdate) {
       saveToStorage(STORAGE_KEYS.PRODUCTS, migratedProducts);
     }
@@ -1098,26 +1103,26 @@ export class Database {
   static migratePackages(): void {
     const packages = this.getPackages();
     let needsUpdate = false;
-    
+
     const migratedPackages = packages.map((pkg, index) => {
       const updates: any = {};
-      
+
       if (!pkg.code) {
         updates.code = `PK${String(index + 1).padStart(3, '0')}`;
         needsUpdate = true;
       }
-      
+
       if (pkg.costPrice === undefined) {
         updates.costPrice = 0; // Default cost price
         needsUpdate = true;
       }
-      
+
       if (Object.keys(updates).length > 0) {
         return { ...pkg, ...updates };
       }
       return pkg;
     });
-    
+
     if (needsUpdate) {
       saveToStorage(STORAGE_KEYS.PACKAGES, migratedPackages);
     }
@@ -1126,7 +1131,7 @@ export class Database {
   static migrateInventory(): void {
     const inventory = this.getInventory();
     let needsUpdate = false;
-    
+
     const migratedInventory = inventory.map((item, index) => {
       if (!item.code) {
         needsUpdate = true;
@@ -1137,7 +1142,7 @@ export class Database {
       }
       return item;
     });
-    
+
     if (needsUpdate) {
       saveToStorage(STORAGE_KEYS.INVENTORY, migratedInventory);
     }
@@ -1146,7 +1151,7 @@ export class Database {
   static migrateWarranties(): void {
     const warranties = this.getWarranties();
     let needsUpdate = false;
-    
+
     const migratedWarranties = warranties.map((warranty, index) => {
       if (!warranty.code) {
         needsUpdate = true;
@@ -1157,7 +1162,7 @@ export class Database {
       }
       return warranty;
     });
-    
+
     if (needsUpdate) {
       saveToStorage(STORAGE_KEYS.WARRANTIES, migratedWarranties);
     }
@@ -1189,12 +1194,12 @@ export class Database {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    
+
     // Creating expense
     expenses.push(newExpense);
     saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
     // Saved to storage
-    
+
     try {
       await mirrorInsert('expenses', newExpense);
       // Synced to Supabase successfully
@@ -1202,26 +1207,26 @@ export class Database {
       // Failed to sync to Supabase - ignore
       // Don't throw - data is saved locally and will sync later
     }
-    
+
     return newExpense;
   }
 
   static async updateExpense(id: string, expenseData: Partial<ExpenseFormData>): Promise<Expense> {
     const expenses = await this.getExpenses();
     const index = expenses.findIndex(expense => expense.id === id);
-    
+
     if (index === -1) throw new Error('Expense not found');
     // Prevent duplicate expense codes (excluding current expense)
     if (expenseData.code && expenses.some(e => e.code === expenseData.code && e.id !== id)) {
       throw new Error(`Mã chi phí "${expenseData.code}" đã tồn tại`);
     }
-    
+
     expenses[index] = {
       ...expenses[index],
       ...expenseData,
       updatedAt: new Date(),
     };
-    
+
     saveToStorage(STORAGE_KEYS.EXPENSES, expenses);
     try {
       await mirrorUpdate('expenses', id, expenses[index]);
