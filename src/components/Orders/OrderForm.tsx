@@ -484,8 +484,9 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
     const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
     const allowed = profiles.filter((p: any) => {
       if (!p || typeof p !== 'object') return false;
-      if (inventoryExpired) {
-        // When expired, only keep slots already assigned to this order
+      // Allow if not expired OR if manually marked as active
+      if (inventoryExpired && !inv.isActive) {
+        // When expired and NOT active, only keep slots already assigned to this order
         return p.isAssigned && p.assignedOrderId === (order?.id || '');
       }
       return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
@@ -597,7 +598,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         const expiresAt = inv.expiryDate ? normalizeExpiryDate(inv.expiryDate) : undefined;
         const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
         const isEditingLinked = !!order && order.inventoryItemId === inv.id;
-        if (inventoryExpired && !isEditingLinked) {
+        // Allow selection if manually set to active even if expired
+        if (inventoryExpired && !isEditingLinked && inv.isActive === false) {
           newErrors["inventory"] = 'Kho hàng này đã hết hạn';
         }
         if (inv.isAccountBased) {
@@ -609,7 +611,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               const chosen = (inv.profiles || []).find(p => p && p.id === profileId);
               if (!chosen || typeof chosen !== 'object') return true;
               if ((chosen as any).needsUpdate) return true;
-              if (inventoryExpired && (chosen as any).assignedOrderId !== (order?.id || '')) return true;
+              if (inventoryExpired && !inv.isActive && (chosen as any).assignedOrderId !== (order?.id || '')) return true;
               if ((chosen as any).isAssigned && (chosen as any).assignedOrderId !== (order?.id || '')) return true;
               return false;
             });
@@ -1956,7 +1958,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         const displayNote = notePreview.length > 40 ? `${notePreview.slice(0, 40)}...` : notePreview;
 
                         return (
-                          <option key={item.id} value={item.id} disabled={isExpired && item.id !== selectedInventoryId}>
+                          <option key={item.id} value={item.id} disabled={isExpired && item.isActive === false && item.id !== selectedInventoryId}>
                             #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}{displayNote ? ` | Ghi chú: ${displayNote}` : ''}
                           </option>
                         );
@@ -2127,7 +2129,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                 const availableSlots = (item.profiles || [])
                                   .filter(p => {
                                     // Show slot if inventory not expired and slot is free (or assigned to this order) and not needsUpdate
-                                    if (inventoryExpired) {
+                                    if (inventoryExpired && !item.isActive) {
                                       return p.isAssigned && p.assignedOrderId === (order?.id || '');
                                     }
                                     return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
@@ -2157,7 +2159,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                               type="checkbox"
                                               id={`slot-${p.id}`}
                                               checked={selectedProfileIds.includes(p.id)}
-                                              disabled={inventoryExpired && !(p as any).assignedOrderId}
+                                              disabled={inventoryExpired && !item.isActive && !(p as any).assignedOrderId}
                                               onChange={(e) => {
                                                 if (e.target.checked) {
                                                   setSelectedProfileIds(prev => [...prev, p.id]);
