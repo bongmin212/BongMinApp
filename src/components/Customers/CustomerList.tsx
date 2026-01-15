@@ -404,16 +404,16 @@ const CustomerList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm khách hàng..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm khách hàng..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
           <div>
             <select
               className="form-control"
@@ -442,7 +442,7 @@ const CustomerList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'auto' }}>
             <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>

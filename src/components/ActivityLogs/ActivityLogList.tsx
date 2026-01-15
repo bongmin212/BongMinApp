@@ -44,7 +44,7 @@ const ActivityLogList: React.FC = () => {
       setSelectedEmployee(emp);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
-    } catch {}
+    } catch { }
   }, []);
 
   // Debounce search
@@ -71,14 +71,14 @@ const ActivityLogList: React.FC = () => {
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
-    } catch {}
+    } catch { }
   }, [debouncedSearchTerm, selectedEmployee, page, limit]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const sb = getSupabase();
       if (!sb) {
         setError('Không thể kết nối đến cơ sở dữ liệu. Vui lòng kiểm tra cấu hình Supabase.');
@@ -92,7 +92,7 @@ const ActivityLogList: React.FC = () => {
         console.warn('ActivityLogs: No active session');
         // Continue anyway - RLS will handle permissions
       }
-      
+
       const [
         logsRes,
         empRes,
@@ -121,90 +121,90 @@ const ActivityLogList: React.FC = () => {
       }
 
 
-    const allLogs = (logsRes.data || []).map((r: any) => {
-      // Handle timestamp parsing more robustly
-      let timestamp: Date;
-      if (r.timestamp) {
-        timestamp = new Date(r.timestamp);
-        // Check if date is valid
-        if (isNaN(timestamp.getTime())) {
-          console.warn('Invalid timestamp for log:', r.id, r.timestamp);
+      const allLogs = (logsRes.data || []).map((r: any) => {
+        // Handle timestamp parsing more robustly
+        let timestamp: Date;
+        if (r.timestamp) {
+          timestamp = new Date(r.timestamp);
+          // Check if date is valid
+          if (isNaN(timestamp.getTime())) {
+            console.warn('Invalid timestamp for log:', r.id, r.timestamp);
+            timestamp = new Date();
+          }
+        } else {
           timestamp = new Date();
         }
-      } else {
-        timestamp = new Date();
-      }
-      
-      return {
+
+        return {
+          id: r.id,
+          employeeId: r.employee_id || r.employeeId || null,
+          action: r.action || 'Không xác định',
+          details: r.details || undefined,
+          timestamp
+        };
+      }) as ActivityLog[];
+      const allEmployees = (empRes.data || []).map((r: any) => ({
         id: r.id,
-        employeeId: r.employee_id || r.employeeId || null,
-        action: r.action || 'Không xác định',
-        details: r.details || undefined,
-        timestamp
-      };
-    }) as ActivityLog[];
-    const allEmployees = (empRes.data || []).map((r: any) => ({
-      id: r.id,
-      code: r.code,
-      username: r.username || r.email || r.id,
-      passwordHash: '',
-      role: String(r.role || '').toUpperCase() === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE',
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    })) as Employee[];
-    const allOrders = (ordersRes.data || []).map((r: any) => ({
-      ...r,
-      purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
-      expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    })) as Order[];
-    const allCustomers = (customersRes.data || []).map((r: any) => ({
-      ...r,
-      sourceDetail: r.source_detail || '',
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
-    })) as Customer[];
-    const allProducts = (productsRes.data || []) as Product[];
-    const allPackages = (packagesRes.data || []) as ProductPackage[];
-    const allInventory = (invRes.data || []).map((i: any) => ({
-      ...i,
-      purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(i.purchaseDate),
-      expiryDate: i.expiry_date ? new Date(i.expiry_date) : new Date(i.expiryDate),
-      createdAt: i.created_at ? new Date(i.created_at) : new Date(),
-      updatedAt: i.updated_at ? new Date(i.updated_at) : new Date()
-    })) as InventoryItem[];
-    const allWarranties = (warrantiesRes.data || []).map((w: any) => ({
-      id: w.id,
-      code: w.code,
-      createdAt: w.created_at ? new Date(w.created_at) : new Date(),
-      updatedAt: w.updated_at ? new Date(w.updated_at) : new Date(),
-      orderId: w.order_id || w.orderId,
-      reason: w.reason,
-      status: (w.status || 'PENDING').toUpperCase(),
-      createdBy: 'system',
-      replacementInventoryId: w.replacement_inventory_id || w.replacementInventoryId
-    })) as Warranty[];
+        code: r.code,
+        username: r.username || r.email || r.id,
+        passwordHash: '',
+        role: String(r.role || '').toUpperCase() === 'MANAGER' ? 'MANAGER' : 'EMPLOYEE',
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      })) as Employee[];
+      const allOrders = (ordersRes.data || []).map((r: any) => ({
+        ...r,
+        purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(r.purchaseDate),
+        expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(r.expiryDate),
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      })) as Order[];
+      const allCustomers = (customersRes.data || []).map((r: any) => ({
+        ...r,
+        sourceDetail: r.source_detail || '',
+        createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
+      })) as Customer[];
+      const allProducts = (productsRes.data || []) as Product[];
+      const allPackages = (packagesRes.data || []) as ProductPackage[];
+      const allInventory = (invRes.data || []).map((i: any) => ({
+        ...i,
+        purchaseDate: i.purchase_date ? new Date(i.purchase_date) : new Date(i.purchaseDate),
+        expiryDate: i.expiry_date ? new Date(i.expiry_date) : new Date(i.expiryDate),
+        createdAt: i.created_at ? new Date(i.created_at) : new Date(),
+        updatedAt: i.updated_at ? new Date(i.updated_at) : new Date()
+      })) as InventoryItem[];
+      const allWarranties = (warrantiesRes.data || []).map((w: any) => ({
+        id: w.id,
+        code: w.code,
+        createdAt: w.created_at ? new Date(w.created_at) : new Date(),
+        updatedAt: w.updated_at ? new Date(w.updated_at) : new Date(),
+        orderId: w.order_id || w.orderId,
+        reason: w.reason,
+        status: (w.status || 'PENDING').toUpperCase(),
+        createdBy: 'system',
+        replacementInventoryId: w.replacement_inventory_id || w.replacementInventoryId
+      })) as Warranty[];
 
-    const sortedLogs = allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const sortedLogs = allLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
 
-    if (!mounted) return;
-    
-    setLogs(sortedLogs);
-    try {
-      if (state?.user && !allEmployees.some(e => e.id === state.user!.id)) {
-        allEmployees.push({ ...state.user });
-      }
-    } catch {}
-    setEmployees(allEmployees);
-    setOrders(allOrders);
-    setCustomers(allCustomers);
-    setProducts(allProducts);
-    setPackages(allPackages);
-    setInventory(allInventory);
-    setWarranties(allWarranties);
-    setLoading(false);
+      if (!mounted) return;
+
+      setLogs(sortedLogs);
+      try {
+        if (state?.user && !allEmployees.some(e => e.id === state.user!.id)) {
+          allEmployees.push({ ...state.user });
+        }
+      } catch { }
+      setEmployees(allEmployees);
+      setOrders(allOrders);
+      setCustomers(allCustomers);
+      setProducts(allProducts);
+      setPackages(allPackages);
+      setInventory(allInventory);
+      setWarranties(allWarranties);
+      setLoading(false);
     } catch (err: any) {
       if (mounted) {
         console.error('ActivityLogs loadData error:', err);
@@ -227,12 +227,12 @@ const ActivityLogList: React.FC = () => {
         }
       })
       .subscribe();
-    return () => { try { channel.unsubscribe(); } catch {} };
+    return () => { try { channel.unsubscribe(); } catch { } };
   }, [mounted]);
 
   const getEmployeeName = (employeeId?: string | null) => {
     if (!employeeId || employeeId === 'system') return 'Hệ thống';
-    
+
     const employee = employees.find(e => e.id === employeeId);
     if (employee) return employee.username;
     if (state?.user && state.user.id === employeeId) return state.user.username;
@@ -314,7 +314,7 @@ const ActivityLogList: React.FC = () => {
         if (pr2) parts.push(`Sản phẩm ${pr2.name}`);
       }
     }
-    
+
     // If inventoryCode exists but no inventoryItem found, check for product/package info
     // This handles deleted inventory items
     if (kv.inventoryCode && !inventoryItem && (kv.productId || kv.packageId)) {
@@ -472,26 +472,26 @@ const ActivityLogList: React.FC = () => {
   const filteredLogs = useMemo(() => {
     // Ensure logs is an array before filtering
     const logsArray = Array.isArray(logs) ? logs : [];
-    
+
     return logsArray.filter(log => {
       if (!log) return false;
-      
+
       // Employee filter
       const matchesEmployee = !selectedEmployee || log.employeeId === selectedEmployee;
       if (!matchesEmployee) return false;
-      
+
       // Search filter - if searchTerm is empty, match all
       if (!debouncedSearchTerm || debouncedSearchTerm.trim() === '') {
         return true;
       }
-      
+
       const searchLower = debouncedSearchTerm.toLowerCase().trim();
       const employeeName = getEmployeeName(log.employeeId).toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         employeeName.includes(searchLower) ||
         (log.action && log.action.toLowerCase().includes(searchLower)) ||
         (log.details && log.details.toLowerCase().includes(searchLower));
-      
+
       return matchesSearch;
     });
   }, [logs, selectedEmployee, debouncedSearchTerm, employees, state]);
@@ -517,7 +517,7 @@ const ActivityLogList: React.FC = () => {
   const exportLogsXlsx = (items: ActivityLog[], filename: string) => {
     const rows = items.map((log) => {
       const employee = employees.find(e => e.id === log.employeeId);
-      
+
       return {
         // Basic info
         timestamp: new Date(log.timestamp).toLocaleString('vi-VN'),
@@ -528,7 +528,7 @@ const ActivityLogList: React.FC = () => {
         action: log.action,
         details: renderFriendlyDetails(log),
         detailsRaw: log.details || '',
-        
+
         // System info
         id: log.id,
         employeeId: log.employeeId,
@@ -536,7 +536,7 @@ const ActivityLogList: React.FC = () => {
         createdAtRaw: log.timestamp.toISOString(),
       };
     });
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Thời gian', key: 'timestamp', width: 22 },
@@ -546,7 +546,7 @@ const ActivityLogList: React.FC = () => {
       { header: 'Hành động', key: 'action', width: 30 },
       { header: 'Chi tiết', key: 'details', width: 60 },
       { header: 'Chi tiết (raw)', key: 'detailsRaw', width: 60 },
-      
+
       // System info
       { header: 'ID', key: 'id', width: 20 },
       { header: 'ID nhân viên', key: 'employeeId', width: 20 },
@@ -614,16 +614,16 @@ const ActivityLogList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm hoạt động..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm hoạt động..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
           <div>
             <select
               className="form-control"
@@ -652,7 +652,7 @@ const ActivityLogList: React.FC = () => {
               </div>
             </div>
           )}
-          <div>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'auto' }}>
             <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
@@ -661,7 +661,7 @@ const ActivityLogList: React.FC = () => {
       {pageItems.length === 0 ? (
         <div className="text-center py-4">
           <p>
-            {logs.length === 0 
+            {logs.length === 0
               ? 'Không có dữ liệu lịch sử hoạt động. Vui lòng kiểm tra console để xem chi tiết.'
               : 'Không có hoạt động nào phù hợp với bộ lọc hiện tại'}
           </p>
@@ -677,50 +677,50 @@ const ActivityLogList: React.FC = () => {
         </div>
       ) : (
         <>
-        {/* Mobile cards */}
-        <div className="activity-mobile">
-          {pageItems.map(log => (
-            <div key={log.id} className="activity-card">
-              <div className="activity-card-header">
-                <div className="activity-card-title">{log.action}</div>
-                <div className="activity-card-subtitle">{formatDateTime(log.timestamp)}</div>
-              </div>
+          {/* Mobile cards */}
+          <div className="activity-mobile">
+            {pageItems.map(log => (
+              <div key={log.id} className="activity-card">
+                <div className="activity-card-header">
+                  <div className="activity-card-title">{log.action}</div>
+                  <div className="activity-card-subtitle">{formatDateTime(log.timestamp)}</div>
+                </div>
 
-              <div className="activity-card-row">
-                <div className="activity-card-label">Nhân viên</div>
-                <div className="activity-card-value">{getEmployeeName(log.employeeId)}</div>
-              </div>
-              
-              <div className="activity-card-details">
-                {renderFriendlyDetails(log)}
-              </div>
-            </div>
-          ))}
-        </div>
+                <div className="activity-card-row">
+                  <div className="activity-card-label">Nhân viên</div>
+                  <div className="activity-card-value">{getEmployeeName(log.employeeId)}</div>
+                </div>
 
-        {/* Desktop table */}
-        <div className="table-responsive activity-table">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Thời gian</th>
-                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Nhân viên</th>
-                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Hành động</th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '250px' }}>Chi tiết</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map(log => (
-                <tr key={log.id}>
-                  <td>{formatDateTime(log.timestamp)}</td>
-                  <td>{getEmployeeName(log.employeeId)}</td>
-                  <td>{log.action}</td>
-                  <td>{renderFriendlyDetails(log)}</td>
+                <div className="activity-card-details">
+                  {renderFriendlyDetails(log)}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="table-responsive activity-table">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Thời gian</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Nhân viên</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Hành động</th>
+                  <th style={{ width: '200px', minWidth: '200px', maxWidth: '250px' }}>Chi tiết</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {pageItems.map(log => (
+                  <tr key={log.id}>
+                    <td>{formatDateTime(log.timestamp)}</td>
+                    <td>{getEmployeeName(log.employeeId)}</td>
+                    <td>{log.action}</td>
+                    <td>{renderFriendlyDetails(log)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 

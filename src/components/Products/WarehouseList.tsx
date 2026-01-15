@@ -1975,17 +1975,17 @@ const WarehouseList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: 12 }}>
-          {/* Row 1: Search, Product, Package, Source */}
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm mã, sản phẩm, ghi chú..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm mã, sản phẩm, ghi chú..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
+          {/* Row 1: Product, Package, Source, Status */}
           <div>
             <select
               className="form-control"
@@ -2122,7 +2122,7 @@ const WarehouseList: React.FC = () => {
               <option value="FREE">Chỉ còn slot trống</option>
             </select>
           </div>
-          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày nhập"
               from={dateFrom}
@@ -2130,8 +2130,8 @@ const WarehouseList: React.FC = () => {
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <button className="btn btn-light" onClick={resetFilters}>Reset bộ lọc</button>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'auto', display: 'flex', alignItems: 'center' }}>
+            <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
       </div>

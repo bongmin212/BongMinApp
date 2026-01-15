@@ -2358,17 +2358,17 @@ const OrderList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: 12 }}>
-          {/* Row 1: Search, Customer, Product, Package */}
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm đơn hàng..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm đơn hàng..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 8 }}>
+          {/* Row 1: Customer, Product, Package, Status */}
           <div>
             <select
               className="form-control"
@@ -2504,7 +2504,7 @@ const OrderList: React.FC = () => {
           </div>
 
           {/* Row 3: Date Ranges */}
-          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày mua"
               from={dateFrom}
@@ -2512,7 +2512,7 @@ const OrderList: React.FC = () => {
               onChange={(f, t) => { setDateFrom(f); setDateTo(t); }}
             />
           </div>
-          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 2' }}>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày hết hạn"
               from={expiryDateFrom}
@@ -2522,7 +2522,7 @@ const OrderList: React.FC = () => {
           </div>
 
           {/* Row 4: Reset */}
-          <div style={{ gridColumn: isMobile ? 'span 2' : 'span 4', display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'span 4', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="btn btn-light" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>

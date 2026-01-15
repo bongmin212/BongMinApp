@@ -96,7 +96,7 @@ const ProductList: React.FC = () => {
       setDebouncedSearchTerm(q);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
-    } catch {}
+    } catch { }
   }, []);
 
   // Debounce search
@@ -122,7 +122,7 @@ const ProductList: React.FC = () => {
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
-    } catch {}
+    } catch { }
   }, [debouncedSearchTerm, page, limit]);
 
   const loadProducts = async () => {
@@ -180,7 +180,7 @@ const ProductList: React.FC = () => {
         loadProducts();
       })
       .subscribe();
-    return () => { try { channel.unsubscribe(); } catch {} };
+    return () => { try { channel.unsubscribe(); } catch { } };
   }, [page, limit, debouncedSearchTerm]);
 
   // Load when page/limit/search changes
@@ -230,7 +230,7 @@ const ProductList: React.FC = () => {
             // Update local storage immediately
             const currentProducts = Database.getProducts();
             Database.setProducts(currentProducts.filter(p => p.id !== id));
-            
+
             // Force refresh form if it's open
             if (showForm && !editingProduct) {
               setShowForm(false);
@@ -239,11 +239,11 @@ const ProductList: React.FC = () => {
                 setShowForm(true);
               }, 50); // Reduced delay for better UX
             }
-            
+
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa sản phẩm', details: `productId=${id}; productCode=${snapshot?.code || ''}; productName=${snapshot?.name || ''}` });
-            } catch {}
+            } catch { }
             loadProducts();
             notify('Xóa sản phẩm thành công', 'success');
           } else {
@@ -320,7 +320,7 @@ const ProductList: React.FC = () => {
             // Update local storage immediately
             const currentProducts = Database.getProducts();
             Database.setProducts(currentProducts.filter(p => !deletableIds.includes(p.id)));
-            
+
             // Force refresh form if it's open
             if (showForm && !editingProduct) {
               setShowForm(false);
@@ -329,11 +329,11 @@ const ProductList: React.FC = () => {
                 setShowForm(true);
               }, 50); // Reduced delay for better UX
             }
-            
+
             try {
               const sb2 = getSupabase();
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Xóa hàng loạt sản phẩm', details: `ids=${deletableIds.join(',')}; names=${names}; codes=${codes}` });
-            } catch {}
+            } catch { }
             setSelectedIds([]);
             loadProducts();
             notify('Đã xóa sản phẩm đã chọn', 'success');
@@ -385,30 +385,30 @@ const ProductList: React.FC = () => {
       code: p.code || `SP${idx + 1}`,
       name: p.name || '',
       description: p.description || '',
-      
+
       // Product features
       sharedInventoryPool: p.sharedInventoryPool ? 'Có' : 'Không',
       sharedInventoryPoolValue: p.sharedInventoryPool || false,
-      
+
       // System info
       createdAt: new Date(p.createdAt).toLocaleDateString('vi-VN'),
       updatedAt: new Date(p.updatedAt).toLocaleDateString('vi-VN'),
-      
+
       // Raw dates for sorting
       createdAtRaw: p.createdAt.toISOString(),
       updatedAtRaw: p.updatedAt.toISOString(),
     }));
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Mã sản phẩm', key: 'code', width: 16 },
       { header: 'Tên sản phẩm', key: 'name', width: 28 },
       { header: 'Mô tả', key: 'description', width: 60 },
-      
+
       // Product features
       { header: 'Kho chung', key: 'sharedInventoryPool', width: 12 },
       { header: 'Kho chung (giá trị)', key: 'sharedInventoryPoolValue', width: 16 },
-      
+
       // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
       { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
@@ -437,7 +437,7 @@ const ProductList: React.FC = () => {
             {!isMobile && (
               <>
                 <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('SanPham', { 
+                  const filename = generateExportFilename('SanPham', {
                     debouncedSearchTerm,
                     total: sortedProducts.length
                   }, 'KetQuaLoc');
@@ -456,17 +456,17 @@ const ProductList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm sản phẩm..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm sản phẩm..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'auto' }}>
             <button className="btn btn-light w-100" onClick={resetFilters}>Reset bộ lọc</button>
           </div>
         </div>
@@ -481,161 +481,161 @@ const ProductList: React.FC = () => {
         </div>
       ) : (
         <>
-        {/* Mobile cards */}
-        <div className="product-mobile">
-          {paginatedProducts.map((product, index) => (
-            <div key={product.id} className="product-card">
-              <div className="product-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="product-card-title">{product.name}</div>
+          {/* Mobile cards */}
+          <div className="product-mobile">
+            {paginatedProducts.map((product, index) => (
+              <div key={product.id} className="product-card">
+                <div className="product-card-header">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="product-card-title">{product.name}</div>
+                  </div>
+                  <div className="product-card-subtitle">{product.code || `SP${index + 1}`}</div>
                 </div>
-                <div className="product-card-subtitle">{product.code || `SP${index + 1}`}</div>
-              </div>
 
-              <div className="product-card-row">
-                <div className="product-card-label">Mã SP</div>
-                <div className="product-card-value">{product.code || `SP${index + 1}`}</div>
-              </div>
-              <div className="product-card-row">
-                <div className="product-card-label">Ngày tạo</div>
-                <div className="product-card-value">{new Date(product.createdAt).toLocaleDateString('vi-VN')}</div>
-              </div>
-              
-              {product.description && (
-                <div className="product-card-description">
-                  {product.description}
+                <div className="product-card-row">
+                  <div className="product-card-label">Mã SP</div>
+                  <div className="product-card-value">{product.code || `SP${index + 1}`}</div>
                 </div>
-              )}
+                <div className="product-card-row">
+                  <div className="product-card-label">Ngày tạo</div>
+                  <div className="product-card-value">{new Date(product.createdAt).toLocaleDateString('vi-VN')}</div>
+                </div>
 
-              <div className="product-card-actions">
-                <button
-                  onClick={() => handleCopyDescription(product)}
-                  className="btn btn-light"
-                  title="Copy mô tả"
-                >
-                  Copy
-                </button>
-                <button
-                  onClick={() => handleEdit(product)}
-                  className="btn btn-secondary"
-                >
-                  Sửa
-                </button>
-                {canDeleteProduct(product) ? (
-                  <button
-                    onClick={() => handleDelete(product.id)}
-                    className="btn btn-danger"
-                  >
-                    Xóa
-                  </button>
-                ) : (
-                  <span className="badge bg-light text-dark" title={getUsageLabel(product)}>
-                    Đang dùng
-                  </span>
+                {product.description && (
+                  <div className="product-card-description">
+                    {product.description}
+                  </div>
                 )}
-              </div>
-            </div>
-          ))}
-        </div>
 
-        {/* Desktop table */}
-        <div className="table-responsive product-table">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectablePageIds.length > 0 && selectablePageIds.every(id => selectedIds.includes(id))}
-                    disabled={selectablePageIds.length === 0}
-                    onChange={(e) => handleToggleSelectAll(e.target.checked, selectablePageIds)}
-                  />
-                </th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã sản phẩm</th>
-                <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Tên sản phẩm</th>
-                <th style={{ width: '200px', minWidth: '200px', maxWidth: '250px' }}>Mô tả</th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedProducts.map((product, index) => (
-                <tr key={product.id}>
-                  <td style={{ width: 36 }}>
+                <div className="product-card-actions">
+                  <button
+                    onClick={() => handleCopyDescription(product)}
+                    className="btn btn-light"
+                    title="Copy mô tả"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => handleEdit(product)}
+                    className="btn btn-secondary"
+                  >
+                    Sửa
+                  </button>
+                  {canDeleteProduct(product) ? (
+                    <button
+                      onClick={() => handleDelete(product.id)}
+                      className="btn btn-danger"
+                    >
+                      Xóa
+                    </button>
+                  ) : (
+                    <span className="badge bg-light text-dark" title={getUsageLabel(product)}>
+                      Đang dùng
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="table-responsive product-table">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(product.id)}
-                      disabled={!canDeleteProduct(product)}
-                      title={canDeleteProduct(product) ? undefined : 'Sản phẩm đang được sử dụng, không thể xóa'}
-                      onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
+                      checked={selectablePageIds.length > 0 && selectablePageIds.every(id => selectedIds.includes(id))}
+                      disabled={selectablePageIds.length === 0}
+                      onChange={(e) => handleToggleSelectAll(e.target.checked, selectablePageIds)}
                     />
-                  </td>
-                  <td style={{ width: '15%' }}>
-                    <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                      {product.code || `SP${index + 1}`}
-                    </div>
-                  </td>
-                  <td style={{ width: '20%' }}>
-                    <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
-                      {product.name}
-                    </div>
-                  </td>
-                  <td style={{ width: '35%', color: 'var(--text-secondary)' }}>
-                    <div
-                      title={product.description || ''}
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical' as any,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'normal'
-                      }}
-                    >
-                      {product.description || '-'}
-                    </div>
-                  </td>
-                  <td style={{ width: '15%', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                    {new Date(product.createdAt).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td style={{ width: '15%' }}>
-                    <div className="d-flex gap-2">
-                      <button
-                        onClick={() => handleCopyDescription(product)}
-                        className="btn btn-light btn-sm"
-                        title="Copy mô tả"
-                      >
-                        Copy
-                      </button>
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        Sửa
-                      </button>
-                      {canDeleteProduct(product) ? (
-                        <button
-                          onClick={() => handleDelete(product.id)}
-                          className="btn btn-danger btn-sm"
-                        >
-                          Xóa
-                        </button>
-                      ) : (
-                        <span
-                          className="badge bg-light text-dark align-self-center"
-                          title={getUsageLabel(product)}
-                          style={{ cursor: 'not-allowed' }}
-                        >
-                          Đang dùng
-                        </span>
-                      )}
-                    </div>
-                  </td>
+                  </th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Mã sản phẩm</th>
+                  <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Tên sản phẩm</th>
+                  <th style={{ width: '200px', minWidth: '200px', maxWidth: '250px' }}>Mô tả</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày tạo</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {paginatedProducts.map((product, index) => (
+                  <tr key={product.id}>
+                    <td style={{ width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(product.id)}
+                        disabled={!canDeleteProduct(product)}
+                        title={canDeleteProduct(product) ? undefined : 'Sản phẩm đang được sử dụng, không thể xóa'}
+                        onChange={(e) => handleToggleSelect(product.id, e.target.checked)}
+                      />
+                    </td>
+                    <td style={{ width: '15%' }}>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                        {product.code || `SP${index + 1}`}
+                      </div>
+                    </td>
+                    <td style={{ width: '20%' }}>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                        {product.name}
+                      </div>
+                    </td>
+                    <td style={{ width: '35%', color: 'var(--text-secondary)' }}>
+                      <div
+                        title={product.description || ''}
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: 'vertical' as any,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'normal'
+                        }}
+                      >
+                        {product.description || '-'}
+                      </div>
+                    </td>
+                    <td style={{ width: '15%', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                      {new Date(product.createdAt).toLocaleDateString('vi-VN')}
+                    </td>
+                    <td style={{ width: '15%' }}>
+                      <div className="d-flex gap-2">
+                        <button
+                          onClick={() => handleCopyDescription(product)}
+                          className="btn btn-light btn-sm"
+                          title="Copy mô tả"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          onClick={() => handleEdit(product)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Sửa
+                        </button>
+                        {canDeleteProduct(product) ? (
+                          <button
+                            onClick={() => handleDelete(product.id)}
+                            className="btn btn-danger btn-sm"
+                          >
+                            Xóa
+                          </button>
+                        ) : (
+                          <span
+                            className="badge bg-light text-dark align-self-center"
+                            title={getUsageLabel(product)}
+                            style={{ cursor: 'not-allowed' }}
+                          >
+                            Đang dùng
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 

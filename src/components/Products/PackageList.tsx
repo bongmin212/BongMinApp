@@ -115,7 +115,7 @@ const PackageList: React.FC = () => {
       .channel('realtime:packages')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'packages' }, () => loadData())
       .subscribe();
-    return () => { try { ch.unsubscribe(); } catch {} };
+    return () => { try { ch.unsubscribe(); } catch { } };
   }, []);
 
   const handleCreate = () => {
@@ -157,7 +157,7 @@ const PackageList: React.FC = () => {
           // Update local storage immediately
           const currentPackages = Database.getPackages();
           Database.setPackages(currentPackages.filter(p => p.id !== id));
-          
+
           // Update related inventory items to remove package reference
           try {
             await sb.from('inventory')
@@ -168,7 +168,7 @@ const PackageList: React.FC = () => {
                 total_slots: null
               })
               .eq('package_id', id);
-            
+
             // Update local storage inventory items
             const currentInventory = Database.getInventory();
             const updatedInventory = currentInventory.map(item => {
@@ -185,8 +185,8 @@ const PackageList: React.FC = () => {
               return item;
             });
             Database.setInventory(updatedInventory);
-          } catch {}
-          
+          } catch { }
+
           // Force refresh form if it's open
           if (showForm && !editingPackage) {
             setShowForm(false);
@@ -194,21 +194,21 @@ const PackageList: React.FC = () => {
               setShowForm(true);
             }, 50); // Reduced delay for better UX
           }
-          
+
           try {
             const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({
-          employee_id: state.user?.id || null,
-          action: 'Xóa gói sản phẩm',
-          details: [
-            `packageId=${id}`,
-            target?.code ? `packageCode=${target.code}` : '',
-            target?.name ? `packageName=${target.name}` : '',
-            target?.productId ? `productId=${target.productId}` : '',
-            target?.productId ? `productName=${getProductName(target.productId)}` : ''
-          ].filter(Boolean).join('; ')
-        });
-          } catch {}
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: state.user?.id || null,
+              action: 'Xóa gói sản phẩm',
+              details: [
+                `packageId=${id}`,
+                target?.code ? `packageCode=${target.code}` : '',
+                target?.name ? `packageName=${target.name}` : '',
+                target?.productId ? `productId=${target.productId}` : '',
+                target?.productId ? `productName=${getProductName(target.productId)}` : ''
+              ].filter(Boolean).join('; ')
+            });
+          } catch { }
           loadData();
           notify('Xóa gói sản phẩm thành công', 'success');
         } else {
@@ -278,7 +278,7 @@ const PackageList: React.FC = () => {
           // Update local storage immediately
           const currentPackages = Database.getPackages();
           Database.setPackages(currentPackages.filter(p => !deletableIds.includes(p.id)));
-          
+
           // Update related inventory items to remove package references
           try {
             await sb.from('inventory')
@@ -289,7 +289,7 @@ const PackageList: React.FC = () => {
                 total_slots: null
               })
               .in('package_id', deletableIds);
-            
+
             // Update local storage inventory items
             const currentInventory = Database.getInventory();
             const updatedInventory = currentInventory.map(item => {
@@ -306,8 +306,8 @@ const PackageList: React.FC = () => {
               return item;
             });
             Database.setInventory(updatedInventory);
-          } catch {}
-          
+          } catch { }
+
           // Force refresh form if it's open
           if (showForm && !editingPackage) {
             setShowForm(false);
@@ -315,19 +315,19 @@ const PackageList: React.FC = () => {
               setShowForm(true);
             }, 50); // Reduced delay for better UX
           }
-          
+
           try {
             const sb2 = getSupabase();
-        if (sb2) await sb2.from('activity_logs').insert({
-          employee_id: state.user?.id || null,
-          action: 'Xóa hàng loạt gói',
-          details: [
-            `ids=${deletableIds.join(',')}`,
-            `codes=${targets.map(t => t.code).filter(Boolean).join(',')}`,
-            `names=${targets.map(t => t.name).filter(Boolean).join(',')}`
-          ].filter(Boolean).join('; ')
-        });
-          } catch {}
+            if (sb2) await sb2.from('activity_logs').insert({
+              employee_id: state.user?.id || null,
+              action: 'Xóa hàng loạt gói',
+              details: [
+                `ids=${deletableIds.join(',')}`,
+                `codes=${targets.map(t => t.code).filter(Boolean).join(',')}`,
+                `names=${targets.map(t => t.name).filter(Boolean).join(',')}`
+              ].filter(Boolean).join('; ')
+            });
+          } catch { }
           setSelectedIds([]);
           loadData();
           notify('Đã xóa gói đã chọn', 'success');
@@ -364,13 +364,13 @@ const PackageList: React.FC = () => {
   const exportPackagesXlsx = (items: ProductPackage[], filename: string) => {
     const rows = items.map((pkg, idx) => {
       const product = products.find(p => p.id === pkg.productId);
-      
+
       // Build custom fields info
       const customFieldsInfo = (pkg.customFields || []).filter(cf => cf && cf.title).map(cf => cf.title).join('; ');
-      
+
       // Build account columns info
       const accountColumnsInfo = (pkg.accountColumns || []).filter(col => col && col.title).map(col => col.title).join('; ');
-      
+
       return {
         // Basic info
         code: pkg.code || `PK${idx + 1}`,
@@ -378,37 +378,37 @@ const PackageList: React.FC = () => {
         productName: product?.name || 'Không xác định',
         productCode: product?.code || '',
         productDescription: product?.description || '',
-        
+
         // Warranty info
         warrantyPeriod: formatWarrantyPeriod(pkg.warrantyPeriod),
         warrantyPeriodValue: pkg.warrantyPeriod,
-        
+
         // Pricing
         costPrice: pkg.costPrice || 0,
         ctvPrice: pkg.ctvPrice || 0,
         retailPrice: pkg.retailPrice || 0,
-        
+
         // Custom fields
         customFields: customFieldsInfo,
         customFieldsCount: pkg.customFields?.length || 0,
-        
+
         // Account-based info
         isAccountBased: pkg.isAccountBased ? 'Có' : 'Không',
         isAccountBasedValue: pkg.isAccountBased || false,
         accountColumns: accountColumnsInfo,
         accountColumnsCount: pkg.accountColumns?.length || 0,
         defaultSlots: pkg.defaultSlots || 0,
-        
+
         // System info
         createdAt: new Date(pkg.createdAt).toLocaleDateString('vi-VN'),
         updatedAt: new Date(pkg.updatedAt).toLocaleDateString('vi-VN'),
-        
+
         // Raw dates for sorting
         createdAtRaw: pkg.createdAt.toISOString(),
         updatedAtRaw: pkg.updatedAt.toISOString(),
       };
     });
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Mã gói', key: 'code', width: 16 },
@@ -416,27 +416,27 @@ const PackageList: React.FC = () => {
       { header: 'Tên sản phẩm', key: 'productName', width: 24 },
       { header: 'Mã sản phẩm', key: 'productCode', width: 16 },
       { header: 'Mô tả sản phẩm', key: 'productDescription', width: 30 },
-      
+
       // Warranty info
       { header: 'Thời hạn bảo hành', key: 'warrantyPeriod', width: 16 },
       { header: 'Thời hạn (tháng)', key: 'warrantyPeriodValue', width: 14 },
-      
+
       // Pricing
       { header: 'Giá gốc', key: 'costPrice', width: 14 },
       { header: 'Giá CTV', key: 'ctvPrice', width: 14 },
       { header: 'Giá lẻ', key: 'retailPrice', width: 14 },
-      
+
       // Custom fields
       { header: 'Trường tùy chỉnh', key: 'customFields', width: 30 },
       { header: 'Số trường tùy chỉnh', key: 'customFieldsCount', width: 16 },
-      
+
       // Account-based info
       { header: 'Dạng tài khoản', key: 'isAccountBased', width: 14 },
       { header: 'Dạng tài khoản (giá trị)', key: 'isAccountBasedValue', width: 18 },
       { header: 'Cột tài khoản', key: 'accountColumns', width: 30 },
       { header: 'Số cột tài khoản', key: 'accountColumnsCount', width: 16 },
       { header: 'Slot mặc định', key: 'defaultSlots', width: 14 },
-      
+
       // System info
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
       { header: 'Ngày cập nhật', key: 'updatedAt', width: 14 },
@@ -447,8 +447,8 @@ const PackageList: React.FC = () => {
     const normalizedSearch = searchTerm.toLowerCase();
     const productName = getProductName(pkg.productId).toLowerCase();
     const matchesSearch = pkg.name.toLowerCase().includes(normalizedSearch) ||
-                         (pkg.code || '').toLowerCase().includes(normalizedSearch) ||
-                         productName.includes(normalizedSearch);
+      (pkg.code || '').toLowerCase().includes(normalizedSearch) ||
+      productName.includes(normalizedSearch);
     return matchesSearch;
   });
 
@@ -487,7 +487,7 @@ const PackageList: React.FC = () => {
             {!isMobile && (
               <>
                 <button className="btn btn-light" onClick={() => {
-                  const filename = generateExportFilename('GoiSanPham', { 
+                  const filename = generateExportFilename('GoiSanPham', {
                     searchTerm,
                     total: filteredPackages.length
                   }, 'KetQuaLoc');
@@ -506,16 +506,14 @@ const PackageList: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm gói sản phẩm..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm gói sản phẩm..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
@@ -525,143 +523,143 @@ const PackageList: React.FC = () => {
         </div>
       ) : (
         <>
-        {/* Mobile cards */}
-        <div className="package-mobile">
-          {pageItems.map((pkg, index) => (
-            <div key={pkg.id} className="package-card">
-              <div className="package-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="package-card-title">{pkg.name}</div>
+          {/* Mobile cards */}
+          <div className="package-mobile">
+            {pageItems.map((pkg, index) => (
+              <div key={pkg.id} className="package-card">
+                <div className="package-card-header">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="package-card-title">{pkg.name}</div>
+                  </div>
+                  <div className="package-card-subtitle">{pkg.code || `PK${index + 1}`}</div>
                 </div>
-                <div className="package-card-subtitle">{pkg.code || `PK${index + 1}`}</div>
-              </div>
 
-              <div className="package-card-row">
-                <div className="package-card-label">Mã gói</div>
-                <div className="package-card-value">{pkg.code || `PK${index + 1}`}</div>
-              </div>
-              <div className="package-card-row">
-                <div className="package-card-label">Sản phẩm</div>
-                <div className="package-card-value">{getProductName(pkg.productId)}</div>
-              </div>
-              <div className="package-card-row">
-                <div className="package-card-label">Bảo hành</div>
-                <div className="package-card-value">{formatWarrantyPeriod(pkg.warrantyPeriod)}</div>
-              </div>
-              <div className="package-card-row">
-                <div className="package-card-label">Giá gốc</div>
-                <div className="package-card-value">{formatPrice(pkg.costPrice)}</div>
-              </div>
-              <div className="package-card-row">
-                <div className="package-card-label">Giá CTV</div>
-                <div className="package-card-value">{formatPrice(pkg.ctvPrice)}</div>
-              </div>
-              <div className="package-card-row">
-                <div className="package-card-label">Giá lẻ</div>
-                <div className="package-card-value">{formatPrice(pkg.retailPrice)}</div>
-              </div>
+                <div className="package-card-row">
+                  <div className="package-card-label">Mã gói</div>
+                  <div className="package-card-value">{pkg.code || `PK${index + 1}`}</div>
+                </div>
+                <div className="package-card-row">
+                  <div className="package-card-label">Sản phẩm</div>
+                  <div className="package-card-value">{getProductName(pkg.productId)}</div>
+                </div>
+                <div className="package-card-row">
+                  <div className="package-card-label">Bảo hành</div>
+                  <div className="package-card-value">{formatWarrantyPeriod(pkg.warrantyPeriod)}</div>
+                </div>
+                <div className="package-card-row">
+                  <div className="package-card-label">Giá gốc</div>
+                  <div className="package-card-value">{formatPrice(pkg.costPrice)}</div>
+                </div>
+                <div className="package-card-row">
+                  <div className="package-card-label">Giá CTV</div>
+                  <div className="package-card-value">{formatPrice(pkg.ctvPrice)}</div>
+                </div>
+                <div className="package-card-row">
+                  <div className="package-card-label">Giá lẻ</div>
+                  <div className="package-card-value">{formatPrice(pkg.retailPrice)}</div>
+                </div>
 
-              <div className="package-card-actions">
-                <button
-                  onClick={() => handleEdit(pkg)}
-                  className="btn btn-secondary"
-                >
-                  Sửa
-                </button>
-                {canDeletePackage(pkg) ? (
+                <div className="package-card-actions">
                   <button
-                    onClick={() => handleDelete(pkg.id)}
-                    className="btn btn-danger"
+                    onClick={() => handleEdit(pkg)}
+                    className="btn btn-secondary"
                   >
-                    Xóa
+                    Sửa
                   </button>
-                ) : (
-                  <span className="badge bg-light text-dark" title={getUsageLabel(pkg)}>
-                    Đang dùng
-                  </span>
-                )}
+                  {canDeletePackage(pkg) ? (
+                    <button
+                      onClick={() => handleDelete(pkg.id)}
+                      className="btn btn-danger"
+                    >
+                      Xóa
+                    </button>
+                  ) : (
+                    <span className="badge bg-light text-dark" title={getUsageLabel(pkg)}>
+                      Đang dùng
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {/* Desktop table */}
-        <div className="table-responsive package-table">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectablePageIds.length > 0 && selectablePageIds.every(id => selectedIds.includes(id))}
-                    disabled={selectablePageIds.length === 0}
-                    onChange={(e) => toggleSelectAll(e.target.checked, selectablePageIds)}
-                  />
-                </th>
-                <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã gói</th>
-                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Tên gói</th>
-                <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thời hạn bảo hành</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá gốc</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá CTV</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá khách lẻ</th>
-                <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageItems.map((pkg, index) => (
-                <tr key={pkg.id}>
-                  <td>
+          {/* Desktop table */}
+          <div className="table-responsive package-table">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(pkg.id)}
-                      disabled={!canDeletePackage(pkg)}
-                      title={canDeletePackage(pkg) ? undefined : 'Gói đang được sử dụng, không thể xóa'}
-                      onChange={(e) => toggleSelect(pkg.id, e.target.checked)}
+                      checked={selectablePageIds.length > 0 && selectablePageIds.every(id => selectedIds.includes(id))}
+                      disabled={selectablePageIds.length === 0}
+                      onChange={(e) => toggleSelectAll(e.target.checked, selectablePageIds)}
                     />
-                  </td>
-                  <td>{pkg.code || `PK${index + 1}`}</td>
-                  <td>
-                    <div className="line-clamp-3" title={pkg.name} style={{ maxWidth: 360 }}>
-                      {pkg.name}
-                    </div>
-                  </td>
-                  <td>{getProductName(pkg.productId)}</td>
-                  <td>{formatWarrantyPeriod(pkg.warrantyPeriod)}</td>
-                  <td>{formatPrice(pkg.costPrice)}</td>
-                  <td>{formatPrice(pkg.ctvPrice)}</td>
-                  <td>{formatPrice(pkg.retailPrice)}</td>
-                  <td>
-                    <div className="d-flex gap-2">
-                      <button
-                        onClick={() => handleEdit(pkg)}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        Sửa
-                      </button>
-                      {canDeletePackage(pkg) ? (
-                        <button
-                          onClick={() => handleDelete(pkg.id)}
-                          className="btn btn-danger btn-sm"
-                        >
-                          Xóa
-                        </button>
-                      ) : (
-                        <span
-                          className="badge bg-light text-dark align-self-center"
-                          title={getUsageLabel(pkg)}
-                          style={{ cursor: 'not-allowed' }}
-                        >
-                          Đang dùng
-                        </span>
-                      )}
-                    </div>
-                  </td>
+                  </th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã gói</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Tên gói</th>
+                  <th style={{ width: '120px', minWidth: '120px', maxWidth: '150px' }}>Sản phẩm</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thời hạn bảo hành</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá gốc</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá CTV</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Giá khách lẻ</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {pageItems.map((pkg, index) => (
+                  <tr key={pkg.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(pkg.id)}
+                        disabled={!canDeletePackage(pkg)}
+                        title={canDeletePackage(pkg) ? undefined : 'Gói đang được sử dụng, không thể xóa'}
+                        onChange={(e) => toggleSelect(pkg.id, e.target.checked)}
+                      />
+                    </td>
+                    <td>{pkg.code || `PK${index + 1}`}</td>
+                    <td>
+                      <div className="line-clamp-3" title={pkg.name} style={{ maxWidth: 360 }}>
+                        {pkg.name}
+                      </div>
+                    </td>
+                    <td>{getProductName(pkg.productId)}</td>
+                    <td>{formatWarrantyPeriod(pkg.warrantyPeriod)}</td>
+                    <td>{formatPrice(pkg.costPrice)}</td>
+                    <td>{formatPrice(pkg.ctvPrice)}</td>
+                    <td>{formatPrice(pkg.retailPrice)}</td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <button
+                          onClick={() => handleEdit(pkg)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          Sửa
+                        </button>
+                        {canDeletePackage(pkg) ? (
+                          <button
+                            onClick={() => handleDelete(pkg.id)}
+                            className="btn btn-danger btn-sm"
+                          >
+                            Xóa
+                          </button>
+                        ) : (
+                          <span
+                            className="badge bg-light text-dark align-self-center"
+                            title={getUsageLabel(pkg)}
+                            style={{ cursor: 'not-allowed' }}
+                          >
+                            Đang dùng
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 

@@ -51,7 +51,7 @@ const ExpenseList: React.FC = () => {
       setMaxAmount(max);
       setPage(!Number.isNaN(p) && p > 0 ? p : 1);
       if (!Number.isNaN(l) && l > 0) setLimit(l);
-    } catch {}
+    } catch { }
   }, []);
 
   // Debounce search
@@ -67,7 +67,7 @@ const ExpenseList: React.FC = () => {
 
   // Persist limit
   useEffect(() => {
-    try { localStorage.setItem('expenseList.limit', String(limit)); } catch {}
+    try { localStorage.setItem('expenseList.limit', String(limit)); } catch { }
   }, [limit]);
 
   // Sync URL
@@ -85,7 +85,7 @@ const ExpenseList: React.FC = () => {
       const s = params.toString();
       const url = `${window.location.pathname}${s ? `?${s}` : ''}`;
       window.history.replaceState(null, '', url);
-    } catch {}
+    } catch { }
   }, [debouncedSearchQuery, filterType, dateFrom, dateTo, minAmount, maxAmount, page, limit]);
 
   const loadExpenses = async () => {
@@ -238,7 +238,7 @@ const ExpenseList: React.FC = () => {
       amount: e.amount || 0,
       date: formatDate(e.date),
       dateRaw: e.date.toISOString().split('T')[0],
-      
+
       // System info
       createdBy: e.createdBy || '',
       createdAt: new Date(e.createdAt).toLocaleDateString('vi-VN'),
@@ -246,7 +246,7 @@ const ExpenseList: React.FC = () => {
       createdAtRaw: e.createdAt.toISOString(),
       updatedAtRaw: e.updatedAt.toISOString(),
     }));
-    
+
     exportToXlsx(rows, [
       // Basic info
       { header: 'Mã chi phí', key: 'code', width: 14 },
@@ -255,7 +255,7 @@ const ExpenseList: React.FC = () => {
       { header: 'Mô tả', key: 'description', width: 50 },
       { header: 'Số tiền', key: 'amount', width: 14 },
       { header: 'Ngày', key: 'date', width: 14 },
-      
+
       // System info
       { header: 'Người tạo', key: 'createdBy', width: 16 },
       { header: 'Ngày tạo', key: 'createdAt', width: 14 },
@@ -310,7 +310,7 @@ const ExpenseList: React.FC = () => {
                 )}
               </>
             )}
-            <button 
+            <button
               className="btn btn-primary"
               onClick={() => setShowForm(true)}
             >
@@ -332,16 +332,16 @@ const ExpenseList: React.FC = () => {
       )}
 
       <div className="mb-3">
-        <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-          <div>
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Tìm kiếm chi phí..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+        <div className="mb-3">
+          <input
+            type="text"
+            className="form-control"
+            placeholder="Tìm kiếm chi phí..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8 }}>
           <div>
             <select
               className="form-control"
@@ -354,7 +354,7 @@ const ExpenseList: React.FC = () => {
               ))}
             </select>
           </div>
-          <div style={{ gridColumn: 'span 2' }}>
+          <div style={{ gridColumn: isMobile ? 'auto' : 'span 2' }}>
             <DateRangeInput
               label="Khoảng ngày"
               from={dateFrom}
@@ -382,7 +382,7 @@ const ExpenseList: React.FC = () => {
               onChange={(e) => setMaxAmount(e.target.value)}
             />
           </div>
-          <div>
+          <div style={{ gridColumn: isMobile ? '1 / -1' : 'auto' }}>
             <button
               className="btn btn-light w-100"
               onClick={resetFilters}
@@ -399,112 +399,112 @@ const ExpenseList: React.FC = () => {
         </div>
       ) : (
         <>
-        {/* Mobile cards */}
-        <div className="expense-mobile">
-          {pageItems.map(expense => (
-            <div key={expense.id} className="expense-card">
-              <div className="expense-card-header">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="expense-card-title">{expense.code}</div>
-                </div>
-                <div className="expense-card-subtitle">{formatDate(expense.date)}</div>
-              </div>
-
-              <div className="expense-card-row">
-                <div className="expense-card-label">Loại</div>
-                <div className="expense-card-value">{getExpenseTypeLabel(expense.type)}</div>
-              </div>
-              <div className="expense-card-row">
-                <div className="expense-card-label">Số tiền</div>
-                <div className="expense-card-value amount">{formatCurrency(expense.amount)}</div>
-              </div>
-              
-              {expense.description && (
-                <div className="expense-card-description">
-                  {expense.description}
-                </div>
-              )}
-
-              <div className="expense-card-actions">
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setEditingExpense(expense);
-                    setShowForm(true);
-                  }}
-                >
-                  Sửa
-                </button>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => handleDelete(expense.id)}
-                >
-                  Xóa
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Desktop table */}
-        <div className="table-responsive expense-table">
-          <table className="table">
-          <thead>
-            <tr>
-              <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
-                <input
-                  type="checkbox"
-                  checked={pageItems.length > 0 && pageItems.every(e => selectedIds.includes(e.id))}
-                  onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(e => e.id))}
-                />
-              </th>
-              <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã</th>
-              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Loại</th>
-              <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Mô tả</th>
-              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Số tiền</th>
-              <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày</th>
-              <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
+          {/* Mobile cards */}
+          <div className="expense-mobile">
             {pageItems.map(expense => (
-              <tr key={expense.id}>
-                <td>
-                  <input type="checkbox" checked={selectedIds.includes(expense.id)} onChange={(e) => toggleSelect(expense.id, e.target.checked)} />
-                </td>
-                <td>{expense.code}</td>
-                <td>{getExpenseTypeLabel(expense.type)}</td>
-                <td>
-                  <div className="line-clamp-3" title={expense.description} style={{ maxWidth: 420 }}>
+              <div key={expense.id} className="expense-card">
+                <div className="expense-card-header">
+                  <div className="d-flex align-items-center gap-2">
+                    <div className="expense-card-title">{expense.code}</div>
+                  </div>
+                  <div className="expense-card-subtitle">{formatDate(expense.date)}</div>
+                </div>
+
+                <div className="expense-card-row">
+                  <div className="expense-card-label">Loại</div>
+                  <div className="expense-card-value">{getExpenseTypeLabel(expense.type)}</div>
+                </div>
+                <div className="expense-card-row">
+                  <div className="expense-card-label">Số tiền</div>
+                  <div className="expense-card-value amount">{formatCurrency(expense.amount)}</div>
+                </div>
+
+                {expense.description && (
+                  <div className="expense-card-description">
                     {expense.description}
                   </div>
-                </td>
-                <td className="amount">{formatCurrency(expense.amount)}</td>
-                <td>{formatDate(expense.date)}</td>
-                <td>
-                  <div className="d-flex gap-2">
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setEditingExpense(expense);
-                        setShowForm(true);
-                      }}
-                    >
-                      Sửa
-                    </button>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => handleDelete(expense.id)}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                )}
+
+                <div className="expense-card-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setEditingExpense(expense);
+                      setShowForm(true);
+                    }}
+                  >
+                    Sửa
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleDelete(expense.id)}
+                  >
+                    Xóa
+                  </button>
+                </div>
+              </div>
             ))}
-          </tbody>
-          </table>
-        </div>
+          </div>
+
+          {/* Desktop table */}
+          <div className="table-responsive expense-table">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th style={{ width: 36, minWidth: 36, maxWidth: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={pageItems.length > 0 && pageItems.every(e => selectedIds.includes(e.id))}
+                      onChange={(e) => toggleSelectAll(e.target.checked, pageItems.map(e => e.id))}
+                    />
+                  </th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Mã</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Loại</th>
+                  <th style={{ width: '150px', minWidth: '150px', maxWidth: '180px' }}>Mô tả</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Số tiền</th>
+                  <th style={{ width: '80px', minWidth: '80px', maxWidth: '100px' }}>Ngày</th>
+                  <th style={{ width: '100px', minWidth: '100px', maxWidth: '120px' }}>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map(expense => (
+                  <tr key={expense.id}>
+                    <td>
+                      <input type="checkbox" checked={selectedIds.includes(expense.id)} onChange={(e) => toggleSelect(expense.id, e.target.checked)} />
+                    </td>
+                    <td>{expense.code}</td>
+                    <td>{getExpenseTypeLabel(expense.type)}</td>
+                    <td>
+                      <div className="line-clamp-3" title={expense.description} style={{ maxWidth: 420 }}>
+                        {expense.description}
+                      </div>
+                    </td>
+                    <td className="amount">{formatCurrency(expense.amount)}</td>
+                    <td>{formatDate(expense.date)}</td>
+                    <td>
+                      <div className="d-flex gap-2">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setEditingExpense(expense);
+                            setShowForm(true);
+                          }}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => handleDelete(expense.id)}
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
 
@@ -552,7 +552,7 @@ const ExpenseForm: React.FC<{
   onCancel: () => void;
 }> = ({ expense, onSubmit, onCancel }) => {
   const { notify } = useToast();
-  
+
   const coerceDate = (value: unknown): Date => {
     if (value instanceof Date) return value;
     if (typeof value === 'string' || typeof value === 'number') return new Date(value);
@@ -581,7 +581,7 @@ const ExpenseForm: React.FC<{
         try {
           const next = await Database.generateNextExpenseCode();
           setFormData(prev => ({ ...prev, code: next }));
-        } catch {}
+        } catch { }
       })();
     }
   }, [expense]);
@@ -605,9 +605,9 @@ const ExpenseForm: React.FC<{
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
-    const newErrors: {[key: string]: string} = {};
+    const newErrors: { [key: string]: string } = {};
     if (!formData.amount || formData.amount <= 0) {
       newErrors.amount = 'Số tiền phải lớn hơn 0';
     }
@@ -617,13 +617,13 @@ const ExpenseForm: React.FC<{
     if (!formData.date || isNaN(formData.date.getTime())) {
       newErrors.date = 'Ngày là bắt buộc';
     }
-    
+
     if (Object.keys(newErrors).length > 0) {
       const errorMessages = Object.values(newErrors).join(', ');
       notify(`Vui lòng kiểm tra: ${errorMessages}`, 'warning', 4000);
       return;
     }
-    
+
     onSubmit(formData);
   };
 
