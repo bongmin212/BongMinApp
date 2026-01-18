@@ -3965,6 +3965,7 @@ const WarehouseList: React.FC = () => {
                         const { error } = await sb2.from('inventory').update({
                           payment_status: 'REFUNDED',
                           status: 'EXPIRED',
+                          is_active: false,
                           refund_amount: finalAmount,
                           refund_at: nowIso,
                           refund_reason: refundReason
