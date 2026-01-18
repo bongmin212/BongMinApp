@@ -292,6 +292,12 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					{(inv as any).paymentStatus && (
 						<div><strong>Thanh toán:</strong> {(inv as any).paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
 					)}
+					<div>
+						<strong>Trạng thái Active:</strong>{' '}
+						<span style={{ color: (inv as any).isActive !== false ? '#28a745' : '#dc3545', fontWeight: 500 }}>
+							{(inv as any).isActive !== false ? 'Active' : 'Not Active'}
+						</span>
+					</div>
 					{inv.productInfo && (
 						<div style={{ marginTop: 6 }}>
 							<strong>Thông tin sản phẩm:</strong>

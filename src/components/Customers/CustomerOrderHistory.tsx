@@ -158,6 +158,8 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
         })(),
         linkedOrderId: r.linked_order_id || undefined,
         linked_order_id: r.linked_order_id, // Keep both for compatibility
+        paymentStatus: r.payment_status || 'UNPAID',
+        isActive: r.is_active !== false,
         createdAt: r.created_at ? new Date(r.created_at) : new Date(),
         updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
       };
