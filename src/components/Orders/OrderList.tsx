@@ -558,7 +558,7 @@ const OrderList: React.FC = () => {
             // 1) Classic link: inventory.linked_order_id === order.id
             const { data: classicLinked, error: classicError } = await sb
               .from('inventory')
-              .select('id')
+              .select('id, expiry_date')
               .eq('linked_order_id', id);
 
             if (classicError) {
@@ -566,12 +566,20 @@ const OrderList: React.FC = () => {
               return;
             }
 
-            const classicIds = (classicLinked || []).map((r: any) => r.id);
-            if (classicIds.length) {
+            // Update each classic inventory, checking if expired
+            const now = new Date();
+            for (const inv of (classicLinked || [])) {
+              const invExpiry = inv.expiry_date ? new Date(inv.expiry_date) : null;
+              const isInvExpired = invExpiry ? invExpiry < now : false;
               const { error: updateError } = await sb
                 .from('inventory')
-                .update({ status: 'AVAILABLE', linked_order_id: null })
-                .in('id', classicIds);
+                .update({
+                  status: 'AVAILABLE',
+                  linked_order_id: null,
+                  // Only set inactive if inventory is expired
+                  ...(isInvExpired ? { is_active: false } : {})
+                })
+                .eq('id', inv.id);
 
               if (updateError) {
                 notify('Lỗi khi cập nhật trạng thái kho hàng', 'error');
@@ -591,6 +599,7 @@ const OrderList: React.FC = () => {
             }
 
             const toUpdate = (accountItems || []).filter((it: any) => Array.isArray(it.profiles) && it.profiles.some((p: any) => p.assignedOrderId === id));
+            const now2 = new Date();
             for (const it of toUpdate) {
               const nextProfiles = (Array.isArray(it.profiles) ? it.profiles : []).map((p: any) => (
                 p.assignedOrderId === id
@@ -603,9 +612,15 @@ const OrderList: React.FC = () => {
                 !p.isAssigned && !(p as any).needsUpdate
               );
 
+              // Check if inventory is expired
+              const invExpiry2 = it.expiry_date ? new Date(it.expiry_date) : null;
+              const isInvExpired2 = invExpiry2 ? invExpiry2 < now2 : false;
+
               const { error: profileError } = await sb.from('inventory').update({
                 profiles: nextProfiles,
-                status: hasFreeSlots ? 'AVAILABLE' : 'SOLD'
+                status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                // Only set inactive if inventory is expired
+                ...(isInvExpired2 ? { is_active: false } : {})
               }).eq('id', it.id);
 
               if (profileError) {
@@ -4068,6 +4083,9 @@ const OrderList: React.FC = () => {
 
                     // Release inventory using direct Supabase query with error handling (same as OrderForm)
                     let inventoryUpdateSuccess = false;
+                    // Check if inventory item is expired (only set is_active = false if expired)
+                    const invExpiryDate = invItem.expiryDate ? new Date(invItem.expiryDate) : null;
+                    const isInventoryExpired = invExpiryDate ? invExpiryDate < new Date() : false;
                     if (invItem.is_account_based || (Array.isArray(invItem.profiles) && invItem.profiles.length > 0)) {
                       // Release account-based slots or slot-based inventory
                       const profiles = invItem.profiles || [];
@@ -4098,6 +4116,8 @@ const OrderList: React.FC = () => {
                       const { error: updateError } = await sb.from('inventory').update({
                         profiles: updatedProfiles,
                         status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                        // Only set inactive if inventory is expired
+                        ...(isInventoryExpired ? { is_active: false } : {}),
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
 
@@ -4113,6 +4133,8 @@ const OrderList: React.FC = () => {
                       const { error: updateError } = await sb.from('inventory').update({
                         status: 'AVAILABLE',
                         linked_order_id: null,
+                        // Only set inactive if inventory is expired
+                        ...(isInventoryExpired ? { is_active: false } : {}),
                         updated_at: new Date().toISOString()
                       }).eq('id', inventoryId);
 

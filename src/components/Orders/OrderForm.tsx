@@ -918,6 +918,10 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   }
 
                   if (prevInventory) {
+                    // Check if inventory is expired
+                    const invExpiryDate = prevInventory.expiry_date ? new Date(prevInventory.expiry_date) : null;
+                    const isInvExpired = invExpiryDate ? invExpiryDate < new Date() : false;
+
                     if (prevInventory.is_account_based) {
                       // Release account-based slots
                       const profiles = prevInventory.profiles || [];
@@ -942,6 +946,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       const { error: updateError } = await sb2.from('inventory').update({
                         profiles: updatedProfiles,
                         status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
+                        // Only set inactive if inventory is expired
+                        ...(isInvExpired ? { is_active: false } : {}),
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
 
@@ -955,6 +961,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       const { error: updateError } = await sb2.from('inventory').update({
                         status: 'AVAILABLE',
                         linked_order_id: null,
+                        // Only set inactive if inventory is expired
+                        ...(isInvExpired ? { is_active: false } : {}),
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
 
