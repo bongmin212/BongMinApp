@@ -1382,14 +1382,14 @@ const WarrantyList: React.FC = () => {
       return (codeMatch || nameMatch) && matchesStatus && inRange;
     }).sort((a, b) => {
       const getCodeNumber = (code: string | undefined | null) => {
-        if (!code) return Number.POSITIVE_INFINITY;
+        if (!code) return Number.NEGATIVE_INFINITY;
         const m = String(code).match(/\d+/);
-        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+        return m ? parseInt(m[0], 10) : Number.NEGATIVE_INFINITY;
       };
       const na = getCodeNumber(a.code);
       const nb = getCodeNumber(b.code);
-      if (na !== nb) return na - nb;
-      return (a.code || '').localeCompare(b.code || '');
+      if (na !== nb) return nb - na; // Mới nhất trước (số lớn hơn)
+      return (b.code || '').localeCompare(a.code || '');
     });
   }, [warranties, debouncedSearchTerm, searchStatus, orders, customers, packages, products, dateFrom, dateTo]);
 

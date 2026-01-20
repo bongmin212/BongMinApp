@@ -217,14 +217,14 @@ const ExpenseList: React.FC = () => {
     .slice()
     .sort((a, b) => {
       const getNum = (code?: string | null) => {
-        if (!code) return Number.POSITIVE_INFINITY;
+        if (!code) return Number.NEGATIVE_INFINITY;
         const m = String(code).match(/\d+/);
-        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+        return m ? parseInt(m[0], 10) : Number.NEGATIVE_INFINITY;
       };
       const na = getNum(a.code as any);
       const nb = getNum(b.code as any);
-      if (na !== nb) return na - nb;
-      return (a.code || '').localeCompare(b.code || '');
+      if (na !== nb) return nb - na; // Mới nhất trước (số lớn hơn)
+      return (b.code || '').localeCompare(a.code || '');
     });
   const pageItems = sortedExpenses.slice(start, start + limit);
 

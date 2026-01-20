@@ -610,7 +610,7 @@ const WarehouseList: React.FC = () => {
     if (!sb) return;
     // Optional sweep on client for local display of expired flags is no longer needed
     const [invRes, prodRes, pkgRes, custRes] = await Promise.all([
-      sb.from('inventory').select('*').order('created_at', { ascending: true }),
+      sb.from('inventory').select('*').order('created_at', { ascending: false }),
       sb.from('products').select('*').order('created_at', { ascending: true }),
       sb.from('packages').select('*').order('created_at', { ascending: true }),
       sb.from('customers').select('*').order('created_at', { ascending: true })
@@ -1420,14 +1420,14 @@ const WarehouseList: React.FC = () => {
     .slice()
     .sort((a, b) => {
       const getNum = (code?: string | null) => {
-        if (!code) return Number.POSITIVE_INFINITY;
+        if (!code) return Number.NEGATIVE_INFINITY;
         const m = String(code).match(/\d+/);
-        return m ? parseInt(m[0], 10) : Number.POSITIVE_INFINITY;
+        return m ? parseInt(m[0], 10) : Number.NEGATIVE_INFINITY;
       };
       const na = getNum(a.code as any);
       const nb = getNum(b.code as any);
-      if (na !== nb) return na - nb;
-      return (a.code || '').localeCompare(b.code || '');
+      if (na !== nb) return nb - na; // Mới nhất trước (số lớn hơn)
+      return (b.code || '').localeCompare(a.code || '');
     });
   const pageItems = sortedItems.slice(start, start + limit);
   const deletablePageIds = pageItems.filter(i => canDeleteInventoryItem(i)).map(i => i.id);

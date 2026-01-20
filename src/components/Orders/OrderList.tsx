@@ -3900,11 +3900,29 @@ const OrderList: React.FC = () => {
                     <div className="card-body">
                       <div><strong>Sản phẩm:</strong> {product?.name || productId || 'Không xác định'}</div>
                       <div><strong>Gói/Pool:</strong> {packageName}</div>
+                      <div><strong>Mã kho:</strong> {invItem.code || '-'}</div>
                       <div><strong>Nhập:</strong> {purchaseDate ? new Date(purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
                       <div><strong>Hết hạn:</strong> {expiryDate ? new Date(expiryDate).toLocaleDateString('vi-VN') : 'N/A'}</div>
                       <div><strong>Nguồn:</strong> {invItem.sourceNote || '-'}</div>
                       <div><strong>Giá mua:</strong> {typeof invItem.purchasePrice === 'number' ? `${invItem.purchasePrice.toLocaleString('vi-VN')} ${invItem.currency || 'VND'}` : '-'}</div>
+                      <div><strong>Trạng thái:</strong> {invItem.status === 'AVAILABLE' ? 'Có sẵn' : invItem.status === 'SOLD' ? 'Đã bán' : invItem.status === 'RESERVED' ? 'Đã giữ' : invItem.status === 'NEEDS_UPDATE' ? 'Cần cập nhật' : (invItem.status || '-')}</div>
                       <div><strong>Thanh toán:</strong> {invItem.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
+                      <div>
+                        <strong>Trạng thái Active:</strong>{' '}
+                        <span style={{ color: invItem.isActive !== false ? '#28a745' : '#dc3545', fontWeight: 500 }}>
+                          {invItem.isActive !== false ? 'Active' : 'Not Active'}
+                        </span>
+                      </div>
+                      {(() => {
+                        const linkedSlots: string[] = Array.isArray(invItem.profiles)
+                          ? (invItem.profiles as any[])
+                            .filter(p => p.assignedOrderId === returnConfirmState.order.id)
+                            .map(p => (p.label || p.id))
+                          : [];
+                        return linkedSlots.length > 0 ? (
+                          <div><strong>Slot liên kết:</strong> {linkedSlots.join(', ')}</div>
+                        ) : null;
+                      })()}
                       {invItem.status === 'NEEDS_UPDATE' && invItem.previousLinkedOrderId && (() => {
                         const prevOrder = orders.find(o => o.id === invItem.previousLinkedOrderId);
                         return prevOrder ? (
