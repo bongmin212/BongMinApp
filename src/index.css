@@ -462,7 +462,7 @@ p {
 /* Navigation */
 .navbar {
   background: var(--bg-primary);
-  padding: var(--space-4) 0;
+  padding: calc(var(--space-4) + env(safe-area-inset-top, 0px)) var(--space-4) var(--space-4);
   box-shadow: var(--shadow-md);
   margin-bottom: var(--space-6);
   border-bottom: 1px solid var(--border-color);
