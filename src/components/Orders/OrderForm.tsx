@@ -943,11 +943,16 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                         !p.isAssigned && !(p as any).needsUpdate
                       );
 
+                      // Check if there are other slots still assigned to OTHER orders
+                      const hasOtherAssignedSlots = updatedProfiles.some((p: any) =>
+                        p.isAssigned && p.assignedOrderId && p.assignedOrderId !== order.id
+                      );
+
                       const { error: updateError } = await sb2.from('inventory').update({
                         profiles: updatedProfiles,
                         status: hasFreeSlots ? 'AVAILABLE' : 'SOLD',
-                        // Only set inactive if inventory is expired
-                        ...(isInvExpired ? { is_active: false } : {}),
+                        // Only set inactive if inventory is expired AND no other orders are using it
+                        ...(isInvExpired && !hasOtherAssignedSlots ? { is_active: false } : {}),
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
 
@@ -958,10 +963,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       }
                     } else {
                       // Release classic inventory
+                      // Classic inventory only has one linked_order_id, so if we're releasing it, no other orders are linked
                       const { error: updateError } = await sb2.from('inventory').update({
                         status: 'AVAILABLE',
                         linked_order_id: null,
-                        // Only set inactive if inventory is expired
+                        // Only set inactive if inventory is expired (classic has only one link)
                         ...(isInvExpired ? { is_active: false } : {}),
                         updated_at: new Date().toISOString()
                       }).eq('id', prevInventoryId);
