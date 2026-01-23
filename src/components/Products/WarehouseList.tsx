@@ -609,12 +609,28 @@ const WarehouseList: React.FC = () => {
     const sb = getSupabase();
     if (!sb) return;
     // Optional sweep on client for local display of expired flags is no longer needed
-    const [invRes, prodRes, pkgRes, custRes] = await Promise.all([
+    const [invRes, prodRes, pkgRes, custRes, renewalsRes] = await Promise.all([
       sb.from('inventory').select('*').order('created_at', { ascending: false }),
       sb.from('products').select('*').order('created_at', { ascending: true }),
       sb.from('packages').select('*').order('created_at', { ascending: true }),
-      sb.from('customers').select('*').order('created_at', { ascending: true })
+      sb.from('customers').select('*').order('created_at', { ascending: true }),
+      sb.from('inventory_renewals').select('*')
     ]);
+
+    // Update inventory renewals state
+    const mappedRenewals = (renewalsRes.data || []).map((r: any) => ({
+      id: r.id,
+      inventoryId: r.inventory_id,
+      months: r.months,
+      amount: Number(r.amount) || 0,
+      previousExpiryDate: r.previous_expiry_date ? new Date(r.previous_expiry_date) : new Date(),
+      newExpiryDate: r.new_expiry_date ? new Date(r.new_expiry_date) : new Date(),
+      note: r.note || undefined,
+      paymentStatus: r.payment_status || undefined,
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      createdBy: r.created_by || r.createdBy || '',
+    }));
+    setInventoryRenewals(mappedRenewals);
 
     // WarehouseList: Data loaded
 

@@ -15,6 +15,7 @@ const CustomerList: React.FC = () => {
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { notify } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersWithOrders, setCustomersWithOrders] = useState<Set<string>>(new Set());
   const [showForm, setShowForm] = useState(false);
   const [showOrderHistory, setShowOrderHistory] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -112,6 +113,13 @@ const CustomerList: React.FC = () => {
       updatedAt: r.updated_at ? new Date(r.updated_at) : new Date()
     })) as Customer[];
     setCustomers(allCustomers);
+
+    // Load customers that have linked orders
+    const { data: ordersData } = await sb.from('orders').select('customer_id');
+    const customerIdsWithOrders = new Set<string>(
+      (ordersData || []).map((o: any) => o.customer_id).filter(Boolean)
+    );
+    setCustomersWithOrders(customerIdsWithOrders);
   };
 
   // Load customers on mount and subscribe to realtime updates
@@ -512,12 +520,14 @@ const CustomerList: React.FC = () => {
                   >
                     Sửa
                   </button>
-                  <button
-                    onClick={() => handleDelete(customer.id)}
-                    className="btn btn-danger"
-                  >
-                    Xóa
-                  </button>
+                  {!customersWithOrders.has(customer.id) && (
+                    <button
+                      onClick={() => handleDelete(customer.id)}
+                      className="btn btn-danger"
+                    >
+                      Xóa
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -549,11 +559,13 @@ const CustomerList: React.FC = () => {
                 {paginatedCustomers.map((customer, index) => (
                   <tr key={customer.id}>
                     <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(customer.id)}
-                        onChange={(e) => handleToggleSelect(customer.id, e.target.checked)}
-                      />
+                      {!customersWithOrders.has(customer.id) && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(customer.id)}
+                          onChange={(e) => handleToggleSelect(customer.id, e.target.checked)}
+                        />
+                      )}
                     </td>
                     <td>{customer.code || `KH${index + 1}`}</td>
                     <td>{customer.name}</td>
@@ -589,12 +601,14 @@ const CustomerList: React.FC = () => {
                         >
                           Sửa
                         </button>
-                        <button
-                          onClick={() => handleDelete(customer.id)}
-                          className="btn btn-danger btn-sm"
-                        >
-                          Xóa
-                        </button>
+                        {!customersWithOrders.has(customer.id) && (
+                          <button
+                            onClick={() => handleDelete(customer.id)}
+                            className="btn btn-danger btn-sm"
+                          >
+                            Xóa
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

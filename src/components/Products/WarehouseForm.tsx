@@ -37,6 +37,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   });
   const [renewals, setRenewals] = useState<InventoryRenewal[]>([]);
   const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, InventoryPaymentStatus>>({});
+  const [renewalAmounts, setRenewalAmounts] = useState<Record<string, number>>({});
   const [loadingRenewals, setLoadingRenewals] = useState(false);
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
   // Search states (debounced)
@@ -179,6 +180,12 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             return acc;
           }, {} as Record<string, InventoryPaymentStatus>)
         );
+        setRenewalAmounts(
+          mapped.reduce((acc, renewal) => {
+            acc[renewal.id] = renewal.amount || 0;
+            return acc;
+          }, {} as Record<string, number>)
+        );
       } catch {
         if (cancelled) return;
         const local = Database.getInventoryRenewals().filter(r => r.inventoryId === item.id);
@@ -188,6 +195,12 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             acc[renewal.id] = (renewal.paymentStatus || 'UNPAID') as InventoryPaymentStatus;
             return acc;
           }, {} as Record<string, InventoryPaymentStatus>)
+        );
+        setRenewalAmounts(
+          local.reduce((acc, renewal) => {
+            acc[renewal.id] = renewal.amount || 0;
+            return acc;
+          }, {} as Record<string, number>)
         );
       } finally {
         if (!cancelled) setLoadingRenewals(false);
@@ -483,6 +496,7 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
           throw new Error(error.message || 'Không thể cập nhật kho hàng');
         }
         let renewalStatusChanges: Array<{ id: string; previous: InventoryPaymentStatus; next: InventoryPaymentStatus }> = [];
+        let renewalAmountChanges: Array<{ id: string; previous: number; next: number }> = [];
         if (renewals.length > 0) {
           renewalStatusChanges = renewals
             .map(renewal => {
@@ -491,22 +505,52 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
               return { id: renewal.id, previous, next };
             })
             .filter(change => change.previous !== change.next);
-          for (const change of renewalStatusChanges) {
+          renewalAmountChanges = renewals
+            .map(renewal => {
+              const previous = renewal.amount || 0;
+              const next = renewalAmounts[renewal.id] ?? previous;
+              return { id: renewal.id, previous, next };
+            })
+            .filter(change => change.previous !== change.next);
+
+          // Update renewals that have either status or amount changed
+          const renewalIdsToUpdate = Array.from(new Set([
+            ...renewalStatusChanges.map(c => c.id),
+            ...renewalAmountChanges.map(c => c.id)
+          ]));
+
+          for (const renewalId of renewalIdsToUpdate) {
+            const statusChange = renewalStatusChanges.find(c => c.id === renewalId);
+            const amountChange = renewalAmountChanges.find(c => c.id === renewalId);
+
+            const updateData: any = {};
+            if (statusChange) updateData.payment_status = statusChange.next;
+            if (amountChange) updateData.amount = amountChange.next;
+
             const { error: renewalUpdateError } = await sb
               .from('inventory_renewals')
-              .update({ payment_status: change.next })
-              .eq('id', change.id);
+              .update(updateData)
+              .eq('id', renewalId);
             if (renewalUpdateError) {
-              throw new Error(renewalUpdateError.message || 'Không thể cập nhật trạng thái thanh toán gia hạn');
+              throw new Error(renewalUpdateError.message || 'Không thể cập nhật gia hạn');
             }
             try {
-              Database.updateInventoryRenewal(change.id, { paymentStatus: change.next } as any);
+              const localUpdate: any = {};
+              if (statusChange) localUpdate.paymentStatus = statusChange.next;
+              if (amountChange) localUpdate.amount = amountChange.next;
+              Database.updateInventoryRenewal(renewalId, localUpdate);
             } catch { }
           }
-          if (renewalStatusChanges.length > 0) {
+
+          if (renewalStatusChanges.length > 0 || renewalAmountChanges.length > 0) {
             setRenewals(prev => prev.map(r => {
-              const change = renewalStatusChanges.find(c => c.id === r.id);
-              return change ? { ...r, paymentStatus: change.next } : r;
+              const statusChange = renewalStatusChanges.find(c => c.id === r.id);
+              const amountChange = renewalAmountChanges.find(c => c.id === r.id);
+              return {
+                ...r,
+                ...(statusChange ? { paymentStatus: statusChange.next } : {}),
+                ...(amountChange ? { amount: amountChange.next } : {})
+              };
             }));
           }
         }
@@ -944,19 +988,42 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                         <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                           {new Date(renewal.previousExpiryDate).toLocaleDateString('vi-VN')} → <span style={{ color: '#28a745', fontWeight: 500 }}>{new Date(renewal.newExpiryDate).toLocaleDateString('vi-VN')}</span>
                         </div>
-                        <select
-                          className="form-control form-control-sm"
-                          value={formData.paymentStatus === 'REFUNDED' ? 'REFUNDED' : (renewalPaymentStatuses[renewal.id] || 'UNPAID')}
-                          onChange={(e) => {
-                            const value = e.target.value as InventoryPaymentStatus;
-                            setRenewalPaymentStatuses(prev => ({ ...prev, [renewal.id]: value }));
-                          }}
-                          disabled={formData.paymentStatus === 'REFUNDED'}
-                        >
-                          {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
-                            <option key={status.value} value={status.value}>{status.label}</option>
-                          ))}
-                        </select>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '2px', display: 'block' }}>Giá gia hạn</label>
+                            <input
+                              type="text"
+                              className="form-control form-control-sm"
+                              value={
+                                new Intl.NumberFormat('vi-VN').format(renewalAmounts[renewal.id] ?? renewal.amount ?? 0) + ' đ'
+                              }
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/[^0-9]/g, '');
+                                const num = raw ? Number(raw) : 0;
+                                setRenewalAmounts(prev => ({ ...prev, [renewal.id]: num }));
+                              }}
+                              placeholder="0 đ"
+                              inputMode="numeric"
+                              disabled={formData.paymentStatus === 'REFUNDED'}
+                            />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '2px', display: 'block' }}>Thanh toán</label>
+                            <select
+                              className="form-control form-control-sm"
+                              value={formData.paymentStatus === 'REFUNDED' ? 'REFUNDED' : (renewalPaymentStatuses[renewal.id] || 'UNPAID')}
+                              onChange={(e) => {
+                                const value = e.target.value as InventoryPaymentStatus;
+                                setRenewalPaymentStatuses(prev => ({ ...prev, [renewal.id]: value }));
+                              }}
+                              disabled={formData.paymentStatus === 'REFUNDED'}
+                            >
+                              {INVENTORY_PAYMENT_STATUSES_FULL.map(status => (
+                                <option key={status.value} value={status.value}>{status.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
                         {formData.paymentStatus === 'REFUNDED' && (
                           <div className="small text-warning mt-1">🔒 Kho đã hoàn tiền - không thể thay đổi</div>
                         )}

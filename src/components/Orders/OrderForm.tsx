@@ -40,6 +40,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const [inventoryError, setInventoryError] = useState<string>('');
   // Payment status cho các lần gia hạn: key = renewal.id, value = paymentStatus
   const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, string>>({});
+  // Giá gia hạn: key = renewal.id, value = price (số tiền)
+  const [renewalPrices, setRenewalPrices] = useState<Record<string, number>>({});
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
@@ -142,15 +144,22 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         setSelectedProfileIds([(order as any).inventoryProfileId]);
       }
 
-      // Load payment status của các lần gia hạn
+      // Load payment status và giá của các lần gia hạn
       const renewals = Array.isArray((order as any).renewals) ? ((order as any).renewals || []) : [];
       const renewalPaymentStatusMap: Record<string, string> = {};
+      const renewalPriceMap: Record<string, number> = {};
       renewals.forEach((r: any) => {
-        if (r.id && r.paymentStatus) {
-          renewalPaymentStatusMap[r.id] = r.paymentStatus;
+        if (r.id) {
+          if (r.paymentStatus) {
+            renewalPaymentStatusMap[r.id] = r.paymentStatus;
+          }
+          if (typeof r.price === 'number') {
+            renewalPriceMap[r.id] = r.price;
+          }
         }
       });
       setRenewalPaymentStatuses(renewalPaymentStatusMap);
+      setRenewalPrices(renewalPriceMap);
     } else {
       // Code will be generated client-side
       setFormData(prev => ({ ...prev, code: '' }));
@@ -817,19 +826,22 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           const sb = getSupabase();
           if (!sb) throw new Error('Supabase not configured');
 
-          // Cập nhật payment status của các lần gia hạn nếu có thay đổi
+
+          // Cập nhật payment status và price của các lần gia hạn nếu có thay đổi
           let updatedRenewals = (order as any).renewals || [];
-          if (Array.isArray(updatedRenewals) && updatedRenewals.length > 0 && Object.keys(renewalPaymentStatuses).length > 0) {
+          if (Array.isArray(updatedRenewals) && updatedRenewals.length > 0) {
             updatedRenewals = updatedRenewals.map((r: any) => {
+              let updated = { ...r };
               if (renewalPaymentStatuses[r.id] !== undefined) {
-                return {
-                  ...r,
-                  paymentStatus: renewalPaymentStatuses[r.id]
-                };
+                updated.paymentStatus = renewalPaymentStatuses[r.id];
               }
-              return r;
+              if (renewalPrices[r.id] !== undefined) {
+                updated.price = renewalPrices[r.id];
+              }
+              return updated;
             });
           }
+
 
           const updateData = {
             code: orderData.code,
@@ -2373,6 +2385,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       const renewalPaymentStatus = renewalPaymentStatuses[r.id] || r.paymentStatus || 'UNPAID';
                       const renewalDate = r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : 'N/A';
                       const renewalMonths = r.months || 0;
+                      const renewalPrice = renewalPrices[r.id] !== undefined ? renewalPrices[r.id] : (r.price || 0);
 
                       return (
                         <div key={r.id} style={{ marginBottom: index < ((order as any).renewals || []).length - 1 ? '12px' : '0', paddingBottom: index < ((order as any).renewals || []).length - 1 ? '12px' : '0', borderBottom: index < ((order as any).renewals || []).length - 1 ? '1px solid var(--border-color)' : 'none' }}>
@@ -2384,28 +2397,52 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                               </div>
                             </div>
                           </div>
-                          <select
-                            className="form-control form-control-sm"
-                            value={formData.paymentStatus === 'REFUNDED' ? 'REFUNDED' : renewalPaymentStatus}
-                            onChange={(e) => {
-                              setRenewalPaymentStatuses(prev => ({
-                                ...prev,
-                                [r.id]: e.target.value
-                              }));
-                            }}
-                            disabled={formData.paymentStatus === 'REFUNDED'}
-                          >
-                            {PAYMENT_STATUSES.map(s => (
-                              <option key={s.value} value={s.value}>
-                                {s.label}
-                              </option>
-                            ))}
-                          </select>
+                          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <div style={{ flex: '1 1 140px' }}>
+                              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>Giá gia hạn</label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                className="form-control form-control-sm"
+                                value={renewalPrice === 0 ? '0 ₫' : (renewalPrice ? new Intl.NumberFormat('vi-VN').format(renewalPrice) + ' ₫' : '')}
+                                onChange={(e) => {
+                                  const numericValue = e.target.value.replace(/[^\d]/g, '');
+                                  setRenewalPrices(prev => ({
+                                    ...prev,
+                                    [r.id]: parseInt(numericValue, 10) || 0
+                                  }));
+                                }}
+                                disabled={formData.paymentStatus === 'REFUNDED'}
+                                placeholder="Nhập giá"
+                              />
+                            </div>
+                            <div style={{ flex: '1 1 140px' }}>
+                              <label style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>Thanh toán</label>
+                              <select
+                                className="form-control form-control-sm"
+                                value={formData.paymentStatus === 'REFUNDED' ? 'REFUNDED' : renewalPaymentStatus}
+                                onChange={(e) => {
+                                  setRenewalPaymentStatuses(prev => ({
+                                    ...prev,
+                                    [r.id]: e.target.value
+                                  }));
+                                }}
+                                disabled={formData.paymentStatus === 'REFUNDED'}
+                              >
+                                {PAYMENT_STATUSES.map(s => (
+                                  <option key={s.value} value={s.value}>
+                                    {s.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
                           {formData.paymentStatus === 'REFUNDED' && (
                             <div className="small text-warning mt-1">🔒 Đơn đã hoàn tiền - không thể thay đổi</div>
                           )}
                         </div>
                       );
+
                     })}
                   </div>
                 </div>
