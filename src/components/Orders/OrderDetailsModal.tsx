@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEffect, useState } from 'react';
-import { Order, PaymentStatus, PAYMENT_STATUSES, WARRANTY_STATUSES } from '../../types';
+import { Order, PaymentStatus, PAYMENT_STATUSES, WARRANTY_STATUSES, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { useToast } from '../../contexts/ToastContext';
@@ -290,7 +290,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					)}
 					<div><strong>Trạng thái:</strong> {inv.status === 'AVAILABLE' ? 'Có sẵn' : inv.status === 'SOLD' ? 'Đã bán' : inv.status === 'RESERVED' ? 'Đã giữ' : (inv.status || '-')}</div>
 					{(inv as any).paymentStatus && (
-						<div><strong>Thanh toán:</strong> {(inv as any).paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
+						<div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === (inv as any).paymentStatus)?.label || 'Chưa thanh toán'}</div>
 					)}
 					<div>
 						<strong>Trạng thái Active:</strong>{' '}

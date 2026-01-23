@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
-import { Customer, Order, Product, ProductPackage, Warranty, WarrantyFormData, WARRANTY_STATUSES, InventoryItem, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES } from '../../types';
+import { Customer, Order, Product, ProductPackage, Warranty, WarrantyFormData, WARRANTY_STATUSES, InventoryItem, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
@@ -920,7 +920,7 @@ const WarrantyForm: React.FC<{ onClose: () => void; onSuccess: (orderId?: string
                               )}
                               <div><strong>Trạng thái:</strong> {item.status === 'AVAILABLE' ? 'Có sẵn' : item.status === 'SOLD' ? 'Đã bán' : item.status || '-'}</div>
                               {(item as any).paymentStatus && (
-                                <div><strong>Thanh toán:</strong> {(item as any).paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
+                                <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === (item as any).paymentStatus)?.label || 'Chưa thanh toán'}</div>
                               )}
                               {item.productInfo && (
                                 <div style={{ marginTop: 6 }}>

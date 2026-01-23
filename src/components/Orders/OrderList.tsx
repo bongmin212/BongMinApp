@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import DateRangeInput from '../Shared/DateRangeInput';
-import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, CUSTOMER_SOURCES } from '../../types';
+import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, CUSTOMER_SOURCES, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Database } from '../../utils/database';
 import OrderForm from './OrderForm';
@@ -3912,7 +3912,7 @@ const OrderList: React.FC = () => {
                       <div><strong>Nguồn:</strong> {invItem.sourceNote || '-'}</div>
                       <div><strong>Giá mua:</strong> {typeof invItem.purchasePrice === 'number' ? `${invItem.purchasePrice.toLocaleString('vi-VN')} ${invItem.currency || 'VND'}` : '-'}</div>
                       <div><strong>Trạng thái:</strong> {invItem.status === 'AVAILABLE' ? 'Có sẵn' : invItem.status === 'SOLD' ? 'Đã bán' : invItem.status === 'RESERVED' ? 'Đã giữ' : invItem.status === 'NEEDS_UPDATE' ? 'Cần cập nhật' : (invItem.status || '-')}</div>
-                      <div><strong>Thanh toán:</strong> {invItem.paymentStatus === 'PAID' ? 'Đã thanh toán' : 'Chưa thanh toán'}</div>
+                      <div><strong>Thanh toán:</strong> {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === invItem.paymentStatus)?.label || 'Chưa thanh toán'}</div>
                       <div>
                         <strong>Trạng thái Active:</strong>{' '}
                         <span style={{ color: invItem.isActive !== false ? '#28a745' : '#dc3545', fontWeight: 500 }}>
