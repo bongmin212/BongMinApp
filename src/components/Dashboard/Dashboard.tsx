@@ -172,6 +172,7 @@ const Dashboard: React.FC = () => {
           status: r.status,
           paymentStatus: r.payment_status,
           useCustomPrice: r.use_custom_price || false,
+          useCustomExpiry: r.use_custom_expiry || false,
           customPrice: r.custom_price,
           purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),
           expiryDate: r.expiry_date ? new Date(r.expiry_date) : new Date(),

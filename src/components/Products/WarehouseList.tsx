@@ -1890,6 +1890,7 @@ const WarehouseList: React.FC = () => {
                 inventoryItemId: r.inventory_item_id,
                 inventoryProfileIds: r.inventory_profile_ids || undefined,
                 useCustomPrice: r.use_custom_price || false,
+                useCustomExpiry: r.use_custom_expiry || false,
                 customPrice: r.custom_price,
                 customFieldValues: r.custom_field_values,
                 purchaseDate: r.purchase_date ? new Date(r.purchase_date) : new Date(),

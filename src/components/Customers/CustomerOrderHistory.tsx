@@ -67,6 +67,7 @@ const CustomerOrderHistory: React.FC<CustomerOrderHistoryProps> = ({ customer, o
         inventoryProfileIds: r.inventory_profile_ids || undefined,
         cogs: r.cogs,
         useCustomPrice: r.use_custom_price || false,
+        useCustomExpiry: r.use_custom_expiry || false,
         customPrice: r.custom_price,
         salePrice: r.sale_price,
         customFieldValues: r.custom_field_values,

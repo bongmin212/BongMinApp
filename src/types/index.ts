@@ -76,6 +76,7 @@ export interface Order {
   salePrice?: number; // Giá bán snapshot tại thời điểm tạo/cập nhật
   originalSalePrice?: number; // Giá bán ban đầu khi mua (snapshot tại thời điểm tạo đơn)
   useCustomPrice?: boolean; // Sử dụng giá tùy chỉnh
+  useCustomExpiry?: boolean; // Sử dụng hạn tùy chỉnh
   customPrice?: number; // Giá tùy chỉnh
   customFieldValues?: Record<string, string>; // key = PackageCustomField.id -> value nhập khi tạo đơn
   // Gia hạn

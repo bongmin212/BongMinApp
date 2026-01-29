@@ -134,7 +134,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         useCustomPrice: order.useCustomPrice || false,
         customPrice: order.customPrice || 0,
         customFieldValues: (order as any).customFieldValues || {},
-        useCustomExpiry: false,
+        useCustomExpiry: order.useCustomExpiry || false,
         customExpiryDate: order.expiryDate ? new Date(order.expiryDate) : undefined
       });
       if ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds)) {
@@ -855,6 +855,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             inventory_item_id: orderData.inventoryItemId || null,
             inventory_profile_ids: orderData.inventoryProfileIds || null,
             use_custom_price: orderData.useCustomPrice || false,
+            use_custom_expiry: formData.useCustomExpiry || false,
             custom_price: orderData.customPrice || null,
             custom_field_values: orderData.customFieldValues || null,
             sale_price: (orderData as any).salePrice || null,
@@ -895,6 +896,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
               inventoryProfileIds: updateResult.inventory_profile_ids || undefined,
               cogs: updateResult.cogs,
               useCustomPrice: updateResult.use_custom_price,
+              useCustomExpiry: updateResult.use_custom_expiry,
               customPrice: updateResult.custom_price,
               salePrice: updateResult.sale_price,
               customFieldValues: updateResult.custom_field_values,
@@ -1144,6 +1146,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           inventory_item_id: orderData.inventoryItemId || null,
           inventory_profile_ids: orderData.inventoryProfileIds || null,
           use_custom_price: orderData.useCustomPrice || false,
+          use_custom_expiry: formData.useCustomExpiry || false,
           custom_price: orderData.customPrice || null,
           custom_field_values: orderData.customFieldValues || null,
           sale_price: (orderData as any).salePrice || null
@@ -1174,6 +1177,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           inventoryProfileIds: createData.inventory_profile_ids || undefined,
           cogs: createData.cogs,
           useCustomPrice: createData.use_custom_price,
+          useCustomExpiry: createData.use_custom_expiry,
           customPrice: createData.custom_price,
           salePrice: createData.sale_price,
           customFieldValues: createData.custom_field_values,
