@@ -352,6 +352,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           return hasAvailable;
         }
         // For classic inventory, only show items that are AVAILABLE and not linked to any order
+        // Also allow items manually set to active (isActive === true) even if status is EXPIRED
+        if (i.isActive === true && !i.linked_order_id) return true;
         return i.status === 'AVAILABLE' && !i.linked_order_id;
       });
 

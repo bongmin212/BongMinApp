@@ -487,7 +487,11 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
             payment_status: formData.paymentStatus || 'UNPAID',
             account_data: formData.accountData,
             pool_warranty_months: currentProduct?.sharedInventoryPool ? Math.max(1, Number(poolMonths || 1)) : null,
-            is_active: formData.isActive !== false
+            is_active: formData.isActive !== false,
+            // When re-activating, reset status to AVAILABLE for classic inventory (non-account-based) without a linked order
+            ...(formData.isActive !== false && item.isActive === false && !item.isAccountBased && !item.linkedOrderId
+              ? { status: 'AVAILABLE', linked_order_id: null }
+              : {})
           })
           .eq('id', item.id);
 
