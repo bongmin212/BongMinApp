@@ -49,6 +49,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
   const [inventorySearch, setInventorySearch] = useState('');
   const [debouncedInventorySearch, setDebouncedInventorySearch] = useState('');
+  const [visibleInventoryCount, setVisibleInventoryCount] = useState(5);
   const [newCustomerData, setNewCustomerData] = useState<{
     code: string;
     name: string;
@@ -299,7 +300,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
       } else {
         query = query.eq('package_id', formData.packageId);
       }
-      const { data } = await query.order('created_at', { ascending: true });
+      const { data } = await query.order('created_at', { ascending: false });
       let items = (data || []).map((i: any) => {
         const item = {
           ...i,
@@ -426,6 +427,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
         }
       }
       setAvailableInventory(merged);
+      setVisibleInventoryCount(5);
 
       // Keep selectedInventoryId if editing with existing link; otherwise reset when package changes
       if (!(order && order.inventoryItemId && order.packageId === formData.packageId)) {
@@ -1933,303 +1935,333 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             })()}
 
             {/* 4. Kiểm tra kho - Inventory selection */}
-            {!!availableInventory.length && (
-              <div className="card mb-3">
-                <div className="card-header">
-                  <h5>Kho hàng sẵn có cho gói này ({availableInventory.length})</h5>
-                </div>
-                <div className="card-body">
-                  <div className="form-group">
-                    <label className="form-label">Chọn hàng trong kho (không bắt buộc)</label>
-                    <input
-                      type="text"
-                      inputMode="search"
-                      className="form-control mb-2"
-                      placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
-                      value={inventorySearch}
-                      onChange={(e) => setInventorySearch(e.target.value)}
-                    />
-                    <select
-                      className="form-control"
-                      value={selectedInventoryId}
-                      onChange={(e) => {
-                        // Inventory selection changed
-                        setSelectedInventoryId(e.target.value);
-                      }}
-                    >
-                      <option value="">Không chọn</option>
-                      {getFilteredInventory.map((item: InventoryItem) => {
+            {!!availableInventory.length && (() => {
+              const allFiltered = getFilteredInventory;
+              const visibleItems = allFiltered.slice(0, visibleInventoryCount);
+              const hasMore = allFiltered.length > visibleInventoryCount;
+              return (
+                <div className="card mb-3">
+                  <div className="card-header">
+                    <h5>Kho hàng sẵn có cho gói này ({availableInventory.length})</h5>
+                  </div>
+                  <div className="card-body">
+                    <div className="form-group">
+                      <label className="form-label">Chọn hàng trong kho (không bắt buộc)</label>
+                      <input
+                        type="text"
+                        inputMode="search"
+                        className="form-control mb-2"
+                        placeholder="Tìm kho theo mã/thông tin/sản phẩm/gói..."
+                        value={inventorySearch}
+                        onChange={(e) => { setInventorySearch(e.target.value); setVisibleInventoryCount(5); }}
+                      />
+                      <select
+                        className="form-control"
+                        value={selectedInventoryId}
+                        onChange={(e) => {
+                          setSelectedInventoryId(e.target.value);
+                        }}
+                      >
+                        <option value="">Không chọn</option>
+                        {visibleItems.map((item: InventoryItem) => {
+                          const product = products.find(p => p.id === item.productId);
+                          const packageInfo = item.packageId ? packages.find(p => p.id === item.packageId) : null;
+                          const productName = product?.name || 'Không xác định';
+                          const packageName = packageInfo?.name || (product?.sharedInventoryPool ? 'Kho chung' : 'Không có gói');
+                          const expiryDate = (() => {
+                            if (item.expiryDate) {
+                              return new Date(item.expiryDate).toISOString().split('T')[0];
+                            }
+                            // Calculate expiry date preview: if shared pool, use warehouse item's stored pool months or selected package's warranty
+                            const product = products.find(p => p.id === item.productId);
+                            const purchaseDate = new Date(item.purchaseDate);
+                            const expiry = new Date(purchaseDate);
+                            if (product?.sharedInventoryPool) {
+                              const months = (item as any).poolWarrantyMonths || getSelectedPackage()?.warrantyPeriod || 1;
+                              expiry.setMonth(expiry.getMonth() + months);
+                            } else {
+                              const packageInfo = packages.find(p => p.id === item.packageId);
+                              const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+                              expiry.setMonth(expiry.getMonth() + warrantyPeriod);
+                            }
+                            return expiry.toISOString().split('T')[0];
+                          })();
+                          const isExpired = item.expiryDate ? new Date(item.expiryDate) < new Date() : false;
+
+                          // Get product info for display - Updated to remove status and payment
+                          const productInfo = item.productInfo ? item.productInfo.split('\n')[0] : '';
+                          const displayProductInfo = productInfo.length > 50 ? productInfo.substring(0, 50) + '...' : productInfo;
+                          const notePreview = item.notes ? item.notes.replace(/\s+/g, ' ').trim() : '';
+                          const displayNote = notePreview.length > 40 ? `${notePreview.slice(0, 40)}...` : notePreview;
+
+                          return (
+                            <option key={item.id} value={item.id} disabled={isExpired && item.isActive === false && item.id !== selectedInventoryId}>
+                              #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}{displayNote ? ` | Ghi chú: ${displayNote}` : ''}
+                            </option>
+                          );
+                        })}
+                        {/* Always include currently selected item if not in visible slice */}
+                        {selectedInventoryId && !visibleItems.some(i => i.id === selectedInventoryId) && (() => {
+                          const item = getFilteredInventory.find(i => i.id === selectedInventoryId);
+                          if (!item) return null;
+                          const product = products.find(p => p.id === item.productId);
+                          const packageInfo = item.packageId ? packages.find(p => p.id === item.packageId) : null;
+                          const productName = product?.name || 'Không xác định';
+                          const packageName = packageInfo?.name || (product?.sharedInventoryPool ? 'Kho chung' : 'Không có gói');
+                          const expiryDate = item.expiryDate ? new Date(item.expiryDate).toISOString().split('T')[0] : '';
+                          const productInfo = item.productInfo ? item.productInfo.split('\n')[0] : '';
+                          const displayProductInfo = productInfo.length > 50 ? productInfo.substring(0, 50) + '...' : productInfo;
+                          return (
+                            <option key={item.id} value={item.id}>
+                              #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}
+                            </option>
+                          );
+                        })()}
+                      </select>
+                      {hasMore && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm mt-1"
+                          onClick={() => setVisibleInventoryCount(c => c + 5)}
+                        >
+                          Hiển thị thêm ({allFiltered.length - visibleInventoryCount} kho còn lại)
+                        </button>
+                      )}
+                      <div className="small text-muted mt-1">Nếu chọn, đơn sẽ sử dụng hàng trong kho và tự đánh dấu là đã bán.</div>
+                      {!!selectedInventoryId && (() => {
+                        const item = availableInventory.find(i => i.id === selectedInventoryId);
+                        if (!item) return null;
+
                         const product = products.find(p => p.id === item.productId);
                         const packageInfo = item.packageId ? packages.find(p => p.id === item.packageId) : null;
                         const productName = product?.name || 'Không xác định';
                         const packageName = packageInfo?.name || (product?.sharedInventoryPool ? 'Kho chung' : 'Không có gói');
-                        const expiryDate = (() => {
-                          if (item.expiryDate) {
-                            return new Date(item.expiryDate).toISOString().split('T')[0];
-                          }
-                          // Calculate expiry date preview: if shared pool, use warehouse item's stored pool months or selected package's warranty
-                          const product = products.find(p => p.id === item.productId);
-                          const purchaseDate = new Date(item.purchaseDate);
-                          const expiry = new Date(purchaseDate);
-                          if (product?.sharedInventoryPool) {
-                            const months = (item as any).poolWarrantyMonths || getSelectedPackage()?.warrantyPeriod || 1;
-                            expiry.setMonth(expiry.getMonth() + months);
-                          } else {
-                            const packageInfo = packages.find(p => p.id === item.packageId);
-                            const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
-                            expiry.setMonth(expiry.getMonth() + warrantyPeriod);
-                          }
-                          return expiry.toISOString().split('T')[0];
-                        })();
-                        const isExpired = item.expiryDate ? new Date(item.expiryDate) < new Date() : false;
+                        const isSharedPool = product?.sharedInventoryPool;
 
-                        // Get product info for display - Updated to remove status and payment
-                        const productInfo = item.productInfo ? item.productInfo.split('\n')[0] : '';
-                        const displayProductInfo = productInfo.length > 50 ? productInfo.substring(0, 50) + '...' : productInfo;
-                        const notePreview = item.notes ? item.notes.replace(/\s+/g, ' ').trim() : '';
-                        const displayNote = notePreview.length > 40 ? `${notePreview.slice(0, 40)}...` : notePreview;
+                        // Debug logging
+                        // Inventory card debug
 
                         return (
-                          <option key={item.id} value={item.id} disabled={isExpired && item.isActive === false && item.id !== selectedInventoryId}>
-                            #{item.code} | {productName} | {packageName} | {displayProductInfo} | Nhập: {item.purchaseDate ? new Date(item.purchaseDate).toISOString().split('T')[0] : 'N/A'} | HSD: {expiryDate}{displayNote ? ` | Ghi chú: ${displayNote}` : ''}
-                          </option>
-                        );
-                      })}
-                    </select>
-                    <div className="small text-muted mt-1">Nếu chọn, đơn sẽ sử dụng hàng trong kho và tự đánh dấu là đã bán.</div>
-                    {!!selectedInventoryId && (() => {
-                      const item = availableInventory.find(i => i.id === selectedInventoryId);
-                      if (!item) return null;
-
-                      const product = products.find(p => p.id === item.productId);
-                      const packageInfo = item.packageId ? packages.find(p => p.id === item.packageId) : null;
-                      const productName = product?.name || 'Không xác định';
-                      const packageName = packageInfo?.name || (product?.sharedInventoryPool ? 'Kho chung' : 'Không có gói');
-                      const isSharedPool = product?.sharedInventoryPool;
-
-                      // Debug logging
-                      // Inventory card debug
-
-                      return (
-                        <div className="mt-3">
-                          <div className="card">
-                            <div className="card-header">
-                              <h6 className="mb-0">📦 Thông tin chi tiết kho hàng</h6>
-                            </div>
-                            <div className="card-body">
-                              <div className="row">
-                                <div className="col-md-6">
-                                  <div className="mb-2">
-                                    <strong>Mã kho:</strong> <span className="badge bg-primary">{item.code}</span>
-                                  </div>
-                                  <div className="mb-2">
-                                    <strong>Sản phẩm:</strong> <span className="text-primary fw-bold">{productName}</span>
-                                  </div>
-                                  <div className="mb-2">
-                                    <strong>Gói/Pool:</strong>
-                                    <span className="badge bg-info ms-1">
-                                      {isSharedPool ? 'Pool chung' : packageName}
-                                    </span>
-                                  </div>
-                                  <div className="mb-2">
-                                    <strong>Trạng thái:</strong>
-                                    <span className={`badge ms-1 ${item.status === 'AVAILABLE' ? 'bg-success' :
-                                      item.status === 'SOLD' ? 'bg-danger' :
-                                        item.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
-                                      }`}>
-                                      {item.status === 'AVAILABLE' ? 'Có sẵn' :
-                                        item.status === 'SOLD' ? 'Đã bán' :
-                                          item.status === 'RESERVED' ? 'Đã giữ' : item.status}
-                                    </span>
-                                  </div>
-                                  <div className="mb-2">
-                                    <strong>Ngày nhập:</strong> {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
-                                  </div>
-                                  <div className="mb-2">
-                                    <strong>Hạn sử dụng:</strong>
-                                    {(() => {
-                                      if (item.expiryDate) {
-                                        return ' ' + new Date(item.expiryDate).toLocaleDateString('vi-VN');
-                                      }
-                                      // Calculate expiry date based on selection
-                                      const purchaseDate = new Date(item.purchaseDate);
-                                      const expiry = new Date(purchaseDate);
-                                      if (isSharedPool) {
-                                        const selPkg = getSelectedPackage();
-                                        const months = (item as any).poolWarrantyMonths || selPkg?.warrantyPeriod || 1;
-                                        expiry.setMonth(expiry.getMonth() + months);
-                                      } else {
-                                        const packageInfo = packages.find(p => p.id === item.packageId);
-                                        const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
-                                        expiry.setMonth(expiry.getMonth() + warrantyPeriod);
-                                      }
-                                      return ' ' + expiry.toLocaleDateString('vi-VN');
-                                    })()}
-                                  </div>
-                                </div>
-                                <div className="col-md-6">
-                                  {typeof item.purchasePrice === 'number' && (
+                          <div className="mt-3">
+                            <div className="card">
+                              <div className="card-header">
+                                <h6 className="mb-0">📦 Thông tin chi tiết kho hàng</h6>
+                              </div>
+                              <div className="card-body">
+                                <div className="row">
+                                  <div className="col-md-6">
                                     <div className="mb-2">
-                                      <strong>Giá nhập:</strong>
-                                      <span className="text-success fw-bold">
-                                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchasePrice)}
+                                      <strong>Mã kho:</strong> <span className="badge bg-primary">{item.code}</span>
+                                    </div>
+                                    <div className="mb-2">
+                                      <strong>Sản phẩm:</strong> <span className="text-primary fw-bold">{productName}</span>
+                                    </div>
+                                    <div className="mb-2">
+                                      <strong>Gói/Pool:</strong>
+                                      <span className="badge bg-info ms-1">
+                                        {isSharedPool ? 'Pool chung' : packageName}
                                       </span>
                                     </div>
-                                  )}
-                                  <div className="mb-2">
-                                    <strong>Thanh toán:</strong>
-                                    <span className={`badge ${item.paymentStatus === 'PAID' ? 'bg-success' : 'bg-warning'
-                                      }`}>
-                                      {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === item.paymentStatus)?.label || 'Chưa thanh toán'}
-                                    </span>
+                                    <div className="mb-2">
+                                      <strong>Trạng thái:</strong>
+                                      <span className={`badge ms-1 ${item.status === 'AVAILABLE' ? 'bg-success' :
+                                        item.status === 'SOLD' ? 'bg-danger' :
+                                          item.status === 'RESERVED' ? 'bg-warning' : 'bg-secondary'
+                                        }`}>
+                                        {item.status === 'AVAILABLE' ? 'Có sẵn' :
+                                          item.status === 'SOLD' ? 'Đã bán' :
+                                            item.status === 'RESERVED' ? 'Đã giữ' : item.status}
+                                      </span>
+                                    </div>
+                                    <div className="mb-2">
+                                      <strong>Ngày nhập:</strong> {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString('vi-VN') : 'N/A'}
+                                    </div>
+                                    <div className="mb-2">
+                                      <strong>Hạn sử dụng:</strong>
+                                      {(() => {
+                                        if (item.expiryDate) {
+                                          return ' ' + new Date(item.expiryDate).toLocaleDateString('vi-VN');
+                                        }
+                                        // Calculate expiry date based on selection
+                                        const purchaseDate = new Date(item.purchaseDate);
+                                        const expiry = new Date(purchaseDate);
+                                        if (isSharedPool) {
+                                          const selPkg = getSelectedPackage();
+                                          const months = (item as any).poolWarrantyMonths || selPkg?.warrantyPeriod || 1;
+                                          expiry.setMonth(expiry.getMonth() + months);
+                                        } else {
+                                          const packageInfo = packages.find(p => p.id === item.packageId);
+                                          const warrantyPeriod = packageInfo?.warrantyPeriod || 1;
+                                          expiry.setMonth(expiry.getMonth() + warrantyPeriod);
+                                        }
+                                        return ' ' + expiry.toLocaleDateString('vi-VN');
+                                      })()}
+                                    </div>
                                   </div>
-                                  {item.sourceNote && (
-                                    <div className="mb-2">
-                                      <strong>Nguồn nhập:</strong> <em>{item.sourceNote}</em>
-                                    </div>
-                                  )}
-                                  {item.isAccountBased && (
-                                    <div className="mb-2">
-                                      <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
-                                    </div>
-                                  )}
-                                  <div className="mb-2">
-                                    <strong>Ghi chú:</strong>
-                                    {item.notes ? (
-                                      <div className="mt-1 p-2 bg-light rounded small" style={{ whiteSpace: 'pre-wrap' }}>
-                                        {item.notes}
+                                  <div className="col-md-6">
+                                    {typeof item.purchasePrice === 'number' && (
+                                      <div className="mb-2">
+                                        <strong>Giá nhập:</strong>
+                                        <span className="text-success fw-bold">
+                                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchasePrice)}
+                                        </span>
                                       </div>
-                                    ) : (
-                                      <span className="text-muted ms-1">Không có</span>
                                     )}
+                                    <div className="mb-2">
+                                      <strong>Thanh toán:</strong>
+                                      <span className={`badge ${item.paymentStatus === 'PAID' ? 'bg-success' : 'bg-warning'
+                                        }`}>
+                                        {INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === item.paymentStatus)?.label || 'Chưa thanh toán'}
+                                      </span>
+                                    </div>
+                                    {item.sourceNote && (
+                                      <div className="mb-2">
+                                        <strong>Nguồn nhập:</strong> <em>{item.sourceNote}</em>
+                                      </div>
+                                    )}
+                                    {item.isAccountBased && (
+                                      <div className="mb-2">
+                                        <strong>Loại:</strong> <span className="badge bg-info">Tài khoản nhiều slot</span>
+                                      </div>
+                                    )}
+                                    <div className="mb-2">
+                                      <strong>Ghi chú:</strong>
+                                      {item.notes ? (
+                                        <div className="mt-1 p-2 bg-light rounded small" style={{ whiteSpace: 'pre-wrap' }}>
+                                          {item.notes}
+                                        </div>
+                                      ) : (
+                                        <span className="text-muted ms-1">Không có</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
 
-                              {item.productInfo && (
-                                <div className="mt-3">
-                                  <strong>Thông tin sản phẩm:</strong>
-                                  <div className="mt-1 p-2 bg-light rounded">
-                                    <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{item.productInfo}</pre>
+                                {item.productInfo && (
+                                  <div className="mt-3">
+                                    <strong>Thông tin sản phẩm:</strong>
+                                    <div className="mt-1 p-2 bg-light rounded">
+                                      <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap' }}>{item.productInfo}</pre>
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
 
-                              {/* Account Information Section */}
-                              {(() => {
-                                const accountColumns = item.accountColumns || packageInfo?.accountColumns || [];
-                                const accountData = item.accountData || {};
+                                {/* Account Information Section */}
+                                {(() => {
+                                  const accountColumns = item.accountColumns || packageInfo?.accountColumns || [];
+                                  const accountData = item.accountData || {};
 
-                                if (accountColumns.length > 0) {
+                                  if (accountColumns.length > 0) {
+                                    return (
+                                      <div className="mt-3">
+                                        <strong>Thông tin tài khoản:</strong>
+                                        <div className="mt-2">
+                                          {accountColumns.map((col: any) => {
+                                            const value = accountData[col.id] || '';
+                                            if (!value) return null;
+                                            return (
+                                              <div key={col.id} style={{ marginBottom: 8 }}>
+                                                <div><strong>{col.title}:</strong></div>
+                                                <pre style={{
+                                                  whiteSpace: 'pre-wrap',
+                                                  margin: 0,
+                                                  padding: '8px',
+                                                  backgroundColor: 'var(--bg-tertiary)',
+                                                  color: 'var(--text-primary)',
+                                                  borderRadius: '4px',
+                                                  fontSize: '14px',
+                                                  border: '1px solid var(--border-color)'
+                                                }}>
+                                                  {value}
+                                                </pre>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+
+                                {item.isAccountBased && (() => {
+                                  // Filter available slots
+                                  const now = new Date();
+                                  const expiresAt = item.expiryDate ? normalizeExpiryDate(item.expiryDate) : undefined;
+                                  const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
+                                  const availableSlots = (item.profiles || [])
+                                    .filter(p => {
+                                      // Show slot if inventory not expired and slot is free (or assigned to this order) and not needsUpdate
+                                      if (inventoryExpired && !item.isActive) {
+                                        return p.isAssigned && p.assignedOrderId === (order?.id || '');
+                                      }
+                                      return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
+                                    })
+                                    // Sort by slot number (extract number from label/id)
+                                    .sort((a, b) => {
+                                      const aNum = parseInt((a.label?.match(/\d+/)?.[0] || a.id?.match(/\d+/)?.[0] || '0')) || 0;
+                                      const bNum = parseInt((b.label?.match(/\d+/)?.[0] || b.id?.match(/\d+/)?.[0] || '0')) || 0;
+                                      return aNum - bNum;
+                                    });
+
+                                  // Show only first 5 slots
+                                  const visibleSlots = availableSlots.slice(0, 5);
+                                  const totalSlots = availableSlots.length;
+
                                   return (
                                     <div className="mt-3">
-                                      <strong>Thông tin tài khoản:</strong>
-                                      <div className="mt-2">
-                                        {accountColumns.map((col: any) => {
-                                          const value = accountData[col.id] || '';
-                                          if (!value) return null;
-                                          return (
-                                            <div key={col.id} style={{ marginBottom: 8 }}>
-                                              <div><strong>{col.title}:</strong></div>
-                                              <pre style={{
-                                                whiteSpace: 'pre-wrap',
-                                                margin: 0,
-                                                padding: '8px',
-                                                backgroundColor: 'var(--bg-tertiary)',
-                                                color: 'var(--text-primary)',
-                                                borderRadius: '4px',
-                                                fontSize: '14px',
-                                                border: '1px solid var(--border-color)'
-                                              }}>
-                                                {value}
-                                              </pre>
+                                      <label className="form-label">
+                                        <strong>Chọn các slot để cấp (có thể chọn nhiều)</strong>
+                                      </label>
+                                      <div className="row">
+                                        {visibleSlots.map(p => (
+                                          <div key={p.id} className="col-md-6 mb-2">
+                                            <div className="form-check">
+                                              <input
+                                                className="form-check-input"
+                                                type="checkbox"
+                                                id={`slot-${p.id}`}
+                                                checked={selectedProfileIds.includes(p.id)}
+                                                disabled={inventoryExpired && !item.isActive && !(p as any).assignedOrderId}
+                                                onChange={(e) => {
+                                                  if (e.target.checked) {
+                                                    setSelectedProfileIds(prev => [...prev, p.id]);
+                                                  } else {
+                                                    setSelectedProfileIds(prev => prev.filter(id => id !== p.id));
+                                                  }
+                                                }}
+                                              />
+                                              <label className="form-check-label" htmlFor={`slot-${p.id}`}>
+                                                {p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}
+                                              </label>
                                             </div>
-                                          );
-                                        })}
+                                          </div>
+                                        ))}
+                                      </div>
+                                      {totalSlots > 5 && (
+                                        <div className="alert alert-info mt-2 mb-2">
+                                          <small>⚡ Còn {totalSlots - 5} slot khác ngoài 5 slot đã hiển thị</small>
+                                        </div>
+                                      )}
+                                      <div className="small text-muted mt-2">
+                                        Đã chọn: {selectedProfileIds.length} slot
+                                      </div>
+                                      <div className="small text-muted mt-1">
+                                        Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.
                                       </div>
                                     </div>
                                   );
-                                }
-                                return null;
-                              })()}
-
-                              {item.isAccountBased && (() => {
-                                // Filter available slots
-                                const now = new Date();
-                                const expiresAt = item.expiryDate ? normalizeExpiryDate(item.expiryDate) : undefined;
-                                const inventoryExpired = expiresAt ? expiresAt.getTime() < now.getTime() : false;
-                                const availableSlots = (item.profiles || [])
-                                  .filter(p => {
-                                    // Show slot if inventory not expired and slot is free (or assigned to this order) and not needsUpdate
-                                    if (inventoryExpired && !item.isActive) {
-                                      return p.isAssigned && p.assignedOrderId === (order?.id || '');
-                                    }
-                                    return (!p.isAssigned || p.assignedOrderId === (order?.id || '')) && !(p as any).needsUpdate;
-                                  })
-                                  // Sort by slot number (extract number from label/id)
-                                  .sort((a, b) => {
-                                    const aNum = parseInt((a.label?.match(/\d+/)?.[0] || a.id?.match(/\d+/)?.[0] || '0')) || 0;
-                                    const bNum = parseInt((b.label?.match(/\d+/)?.[0] || b.id?.match(/\d+/)?.[0] || '0')) || 0;
-                                    return aNum - bNum;
-                                  });
-
-                                // Show only first 5 slots
-                                const visibleSlots = availableSlots.slice(0, 5);
-                                const totalSlots = availableSlots.length;
-
-                                return (
-                                  <div className="mt-3">
-                                    <label className="form-label">
-                                      <strong>Chọn các slot để cấp (có thể chọn nhiều)</strong>
-                                    </label>
-                                    <div className="row">
-                                      {visibleSlots.map(p => (
-                                        <div key={p.id} className="col-md-6 mb-2">
-                                          <div className="form-check">
-                                            <input
-                                              className="form-check-input"
-                                              type="checkbox"
-                                              id={`slot-${p.id}`}
-                                              checked={selectedProfileIds.includes(p.id)}
-                                              disabled={inventoryExpired && !item.isActive && !(p as any).assignedOrderId}
-                                              onChange={(e) => {
-                                                if (e.target.checked) {
-                                                  setSelectedProfileIds(prev => [...prev, p.id]);
-                                                } else {
-                                                  setSelectedProfileIds(prev => prev.filter(id => id !== p.id));
-                                                }
-                                              }}
-                                            />
-                                            <label className="form-check-label" htmlFor={`slot-${p.id}`}>
-                                              {p.label} {p.isAssigned ? '(đang cấp cho đơn này)' : ''}
-                                            </label>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {totalSlots > 5 && (
-                                      <div className="alert alert-info mt-2 mb-2">
-                                        <small>⚡ Còn {totalSlots - 5} slot khác ngoài 5 slot đã hiển thị</small>
-                                      </div>
-                                    )}
-                                    <div className="small text-muted mt-2">
-                                      Đã chọn: {selectedProfileIds.length} slot
-                                    </div>
-                                    <div className="small text-muted mt-1">
-                                      Tự động import các cột đã tick vào Thông tin đơn hàng và đánh dấu slot.
-                                    </div>
-                                  </div>
-                                );
-                              })()}
+                                })()}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })()}
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Informational message for new orders */}
             {(() => {
