@@ -1,353 +1,288 @@
-# BongMin App — Order, Product, and Customer Management
+# BongMin App
 
-Comprehensive management app for distributing digital license keys and entertainment services.
+> Full-stack business management system for digital license key distribution — built solo as a real-world production application.
 
-## Core Features
+**Live project** managing 871+ orders, 148+ customers, 306+ inventory items with real revenue data.
 
-### 🔐 Authentication & Authorization
-- Username/password login
-- Two roles: Manager and Employee
-- Fine-grained, role-based permissions
-- Employee activity logging
-- Supabase Row Level Security (RLS)
+---
 
-### 📦 Product Management
-- Manage catalog of digital-license products
-- Multiple packages per product with different warranty/expiry terms
-- Separate pricing for collaborators vs. retail customers
-- “Lifetime” package support (defaults to 24 months)
-- Custom fields per package
-- Multi-profile account support
+## 🎯 Project Overview
 
-### 👥 Customer Management
-- Two customer types: Collaborator and Retail
-- Track acquisition source (Facebook, Telegram, Page, Web, Zalo)
-- Store detailed info and notes
-- Per-customer order history
+BongMin App is a **production-grade internal tool** designed to replace manual spreadsheet workflows for a digital product reselling business. Built entirely from scratch, it handles the full business lifecycle: product catalog, inventory, customer relationships, orders, warranties, financials, and analytics — all in one integrated system.
 
-### 🛒 Order Management
-- Create full-detail orders
-- Auto-calculate expiry date based on package term
-- Order statuses: Processing, Completed, Cancelled, Expired
-- Powerful search and filters
-- Payment status tracking
-- Renewals with full history
-- Per-order custom pricing
-- Link to inventory and manage profiles
+**Why it matters for your CV**: This isn't a tutorial project. It runs real money transactions, has been iterated on for months based on actual business needs, and demonstrates full-stack engineering judgment across data modeling, UX design, security, and performance optimization.
 
-### 🗃 Inventory Management
-- Detailed inventory status tracking
-- Track vendor payment status
-- Multi-profile slots support
-- Warranty and renewal management
-- Auto-release profiles when expired
-- Shared inventory pool across packages
+---
+
+## ✨ Key Features
+
+### 🔐 Authentication & Role-Based Access Control
+- Custom username/password auth on top of Supabase Auth
+- Two roles: **Manager** (full access) and **Employee** (restricted)
+- Fine-grained permissions enforced at both UI and database (RLS) levels
+- Session persistence and secure logout
+- Employee activity logging for audit trails
+
+### 📦 Product & Package Management
+- Multi-tier catalog: Products → Packages (e.g., Netflix 1-month, 3-month, 12-month)
+- **Dual pricing model**: separate price for Collaborators (CTV) vs. Retail customers
+- Custom fields per package (configurable key-value metadata)
+- Multi-profile account support (one inventory item, multiple customer slots)
+- Shared inventory pool mode across packages
+
+### 👥 CRM — Customer Management
+- Customer classification: Collaborator (CTV) vs. Retail
+- Acquisition source tracking (Facebook, Telegram, Zalo, Web, Page)
+- Full order history per customer with revenue & profit breakdown
+- Smart deduplication (unique customer codes)
+- Protected deletion: cannot delete customers with linked order history
+
+### 🛒 Order Management (Core Module)
+- End-to-end order lifecycle: Creating → Processing → Completed → Expired/Cancelled
+- Auto-expiry calculation from package warranty period
+- **Custom pricing** override per order
+- **Custom expiry** override when needed
+- Renewal system with full renewal history
+- Linked inventory slot assignment (with profile-level tracking)
+- Payment status: Unpaid / Paid / Refunded
+- Partial refund support with adjusted revenue and COGS calculation
+- Advanced search & multi-filter: by status, payment, customer, product, expiry, date range
+- Deep-link navigation from Dashboard to specific orders
+- Renewal reminder message tracking (sent/not sent, by whom)
+
+### 🗃 Inventory (Warehouse) Management
+- Detailed item status: Available / Reserved / Sold / Expired / Needs Update
+- **Multi-slot account**: single inventory item serving multiple customers simultaneously
+- Per-slot profile assignment and tracking
+- Vendor payment tracking per item (Unpaid / Paid / Refunded)
+- Supplier management with supplier name/ID
+- Inventory renewal system with date tracking and cost logging
+- Auto-deactivation of expired slots when all linked orders expire
+- COGS (Cost of Goods Sold) snapshot captured at order time for accurate profit calc
+- Shared pool inventory for products without fixed license slots
 
 ### 🔧 Warranty Management
-- Create and track warranty tickets
-- Warranty statuses: Pending, Fixed, Replaced
-- Link to replacement items from inventory
+- Ticket-based warranty system linked to orders
+- Statuses: Pending → Fixed / Replaced
+- Replacement inventory assignment from existing stock
+- Staff attribution and timestamped history
 
-### 💰 Expense Management
-- Track operating/business expenses
-- Categorize by type (Purchasing, Operations, Marketing, Other)
-- Generate expense reports
+### 💰 Expense Tracking
+- Record operational expenses with categories (Purchasing, Operations, Marketing, Other)
+- Monthly expense summaries feeding into Dashboard net profit calculation
+- Excel export for accounting
 
-### 📊 Dashboard & Reports
-- Overview dashboard with trend charts
-- Top customers and top packages tables
-- Revenue and orders statistics
-- Excel and PDF export (VN formatting supported)
+### 📊 Analytics Dashboard (5 Tabs)
+**Overview Tab:**
+- KPI cards: total products, customers, orders, revenue, net profit
+- Recent orders quick-access with deep-link navigation
 
-### 🔔 Notifications
-- Expiry warnings
-- New order notifications
-- Payment reminders
-- Profiles that need updates
-- New warranty tickets
-- Customizable notification settings
-- Desktop and sound notifications
+**Sales Tab:**
+- Month selector with YoY-style comparison
+- Monthly revenue, profit, refunds, expenses, import costs
+- Order backlog: unpaid count, processing count, cancelled count, expected revenue, expiring soon
+- **12-month trend chart** (Recharts AreaChart) — revenue, profit, expenses overlay
+- **🤖 Predictive Analytics** — 7-day revenue forecast using **OLS Linear Regression** (pure JS, no ML library):
+  - Aggregates last 30 days of daily revenue as training data
+  - Projects 7 future days using fitted linear model
+  - Displayed as dashed orange forecast line alongside solid actual line
+  - Vertical "Today" reference line separating history from forecast
+  - Labeled "Inventory Planning" — helps decide when to restock
+- Top-selling packages table with revenue & profit per package
+
+**Inventory Tab:** Live inventory breakdown with status drill-down
+
+**Customers Tab:** Customer segments (CTV vs Retail) + Top customers by revenue/profit table
+
+**Data Audit Tab:** Cross-table reconciliation reports for data integrity checking
+
+### 🔁 Data Reconciliation (Data Audit)
+- Automated checks across `orders` and `inventory` tables
+- Detects: price inconsistencies, incorrect COGS, broken order-inventory links, incorrect payment statuses
+- Visual report with severity levels and export
+
+### 🔔 Notification System
+- Real-time in-app notification panel
+- Event types: expiring orders (7-day warning), expiring inventory, unpaid orders, items needing profile update, new warranties
+- **Desktop push notifications** (Web Notifications API)
+- **Audio alerts** with configurable sound
+- Per-type notification toggle settings
+- Unread badge count on notification icon
 
 ### 📈 Activity Logs
-- Track all staff activities
-- Log details of critical operations
-- Data change history
+- Immutable log of all staff actions (create, update, delete, login, logout)
+- Timestamped with employee attribution
+- Filterable and paginated
+- Manager-only access to sensitive logs
 
-## Security Setup & Configuration
+### 📤 Export
+- **Excel export** (XLSX) for all major data tables: orders, customers, inventory, expenses, warranties
+- **PDF export** for order lists and customer history
+- Vietnamese currency formatting (₫) and locale-aware date formatting
 
-### 🔒 Database Security (CRITICAL)
-This app uses Supabase with strict Row Level Security (RLS). Do not change policies unless you fully understand the implications.
+---
 
-#### Required Environment Variables
-Create a `.env` file in the project root:
-```bash
-REACT_APP_SUPABASE_URL=your_supabase_project_url
-REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+## 🔒 Security Architecture
+
+| Layer | Implementation |
+|---|---|
+| Database | Supabase PostgreSQL with Row Level Security (RLS) on all tables |
+| Auth | Supabase Auth + custom employee role lookup |
+| Role checks | PostgreSQL function `public.is_manager()` used in RLS policies and SECURITY DEFINER functions |
+| Anonymous access | Blocked at RLS level — no data accessible without auth |
+| Employee permissions | Read-only on sensitive tables; write only on own records |
+| Sensitive functions | Wrapped in SECURITY DEFINER; role-checked before execution |
+| Audit log | `security_audit_logs` table for failed logins, policy violations, suspicious access |
+| Passwords | Non-null hash enforcement; placeholder detection |
+
+---
+
+## 📐 Data Model (Key Tables)
+
+```
+employees           → Staff accounts with roles
+customers           → Customer CRM records
+products            → Product catalog
+packages            → Pricing tiers per product
+inventory           → Physical/digital stock items (multi-slot support)
+inventory_renewals  → Renewal history per inventory item
+orders              → Sales transactions with snapshot pricing
+warranties          → Warranty tickets linked to orders
+expenses            → Operating expense ledger
+activity_logs       → Immutable staff action log
+notifications       → In-app notification queue
 ```
 
-#### Database Migration Order
-Run these SQL files in Supabase in order (for fresh installs run reset first):
-1. Base setup: `supabase/reset.sql`
-2. Role helper: `supabase/migration_add_role_check_function.sql`
-3. RLS policies: `supabase/migration_fix_rls_policies.sql`
-4. Function security: `supabase/migration_fix_cleanup_function_permissions.sql`
-5. Password safety: `supabase/migration_fix_password_hash_nullable.sql`
-6. Security audits: `supabase/migration_add_security_audit_logs.sql`
+---
 
-#### Implemented Security
-- RLS: no anonymous access; authenticated only; Managers can delete sensitive records; Employees have limited write; users can update only their own employee record
-- Functions: sensitive functions require Manager role; use SECURITY DEFINER with role checks
-- Passwords: non-null hashes; placeholder passwords must be changed; basic constraints enforced
-- Auditing: critical security events logged to `security_audit_logs`; failed login tracking; suspicious activity detection; only Managers can view
+## 🛠 Tech Stack
 
-#### Rate Limiting Recommendations
-- Supabase API limits: Anonymous ~10 req/min; Authenticated ~100 req/min
-- DB limits: Max connections ~100; statement timeout ~30s
-- Enable email confirmations; enforce password policy; enable brute force protection
-- Consider Supabase Edge Functions for sensitive ops
+| Area | Technology |
+|---|---|
+| **Frontend** | React 18.2, TypeScript 4.9 |
+| **State Management** | React Context API + custom hooks |
+| **Routing** | React Router DOM v6 |
+| **Database** | Supabase (PostgreSQL 17) |
+| **Auth** | Supabase Auth (custom employee model on top) |
+| **Real-time** | Supabase Realtime (WebSocket subscriptions) |
+| **Charts** | Recharts 2.15 (AreaChart, LineChart, ReferenceLine) |
+| **Predictive ML** | Custom OLS Linear Regression (pure TypeScript, no library) |
+| **Export** | xlsx 0.18, jsPDF 3.0, jspdf-autotable 5.0, html2canvas 1.4 |
+| **Performance** | react-window 1.8 (virtualized lists for large datasets) |
+| **Styling** | Custom CSS (design system with variables, dark/light mode support) |
+| **Build** | Create React App 5, cross-env |
+| **Deployment** | Vercel (with vercel.json config) |
 
-#### Testing Security
-1) Anonymous access (should fail):
-```bash
-curl -H "Authorization: Bearer YOUR_ANON_KEY" https://your-project.supabase.co/rest/v1/employees
-```
-2) Role permissions:
-- Employee: deleting a customer should fail
-- Manager: deleting a customer should succeed
-3) Function guard (should fail if not Manager):
-```sql
-SELECT * FROM public.cleanup_orphaned_employees();
-```
+---
 
-#### Security Monitoring
-- Tables to monitor: `security_audit_logs` and `activity_logs`
-- Alerts to watch: >5 failed logins/hour, repeated policy violations, unusual access
-
-### ⚠️ Security Warnings
-1) Never disable RLS
-2) Never grant anon access to sensitive functions
-3) Use Manager role for admin tasks
-4) Monitor `security_audit_logs` regularly
-5) Keep Supabase keys secret
-
-### 🔧 Troubleshooting (Security)
-- Access denied: ensure authentication, verify role in `employees`, confirm RLS rules
-- Function fails: verify Manager role, check function perms, check audit logs
-- Data not loading: check auth, RLS, and browser console
-
-Useful SQL:
-```sql
--- Who am I (app helper)
-SELECT public.is_manager();
--- View policies
-SELECT * FROM pg_policies WHERE schemaname = 'public';
--- Recent security events
-SELECT * FROM public.security_audit_logs ORDER BY created_at DESC LIMIT 10;
-```
-
-## Installation & Setup
-
-### Requirements
-- Node.js 18+
-- npm (or yarn/pnpm if you prefer)
-
-### Install
-```bash
-# Clone
-git clone <repository-url>
-cd BongMinApp
-
-# Dependencies
-npm install
-
-# Dev server
-npm start
-```
-
-### Build & Deploy
-```bash
-# Production build
-npm run build
-```
-- Deploy the `build/` output (e.g., Vercel). Copy `.env` vars to your hosting provider.
-- `vercel.json` is present for basic Vercel config.
-
-### First-time Account
-- Create the first Manager account after launch (or seed via Supabase if desired)
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 src/
-├── components/          # React components
-│   ├── Auth/            # Authentication UI
-│   ├── Layout/          # Header, sidebar, app shell
-│   ├── Products/        # Product & package management
-│   │   ├── ProductList.tsx
-│   │   ├── ProductForm.tsx
-│   │   ├── PackageList.tsx
-│   │   ├── PackageForm.tsx
-│   │   ├── WarehouseList.tsx
-│   │   └── WarehouseForm.tsx
-│   ├── Customers/       # Customer management
-│   │   ├── CustomerList.tsx
-│   │   ├── CustomerForm.tsx
-│   │   └── CustomerOrderHistory.tsx
-│   ├── Orders/          # Order, details, warranty
-│   │   ├── OrderList.tsx
-│   │   ├── OrderForm.tsx
+├── components/
+│   ├── Auth/                  # Login page
+│   ├── Dashboard/             # Analytics dashboard (5 tabs)
+│   │   ├── Dashboard.tsx      # Main orchestrator (1132 lines)
+│   │   ├── TrendsChart.tsx    # Monthly trends + 7-day forecast chart
+│   │   ├── DataAudit.tsx      # Data reconciliation reports
+│   │   ├── TopPackagesTable.tsx
+│   │   └── TopCustomersTable.tsx
+│   ├── Orders/
+│   │   ├── OrderList.tsx      # Order management with filters
+│   │   ├── OrderForm.tsx      # Order create/edit with inventory linking
 │   │   ├── OrderDetailsModal.tsx
 │   │   └── WarrantyList.tsx
-│   ├── Expenses/        # Expenses module
-│   │   └── ExpenseList.tsx
-│   ├── Dashboard/       # Overview & analytics
-│   │   ├── Dashboard.tsx
-│   │   ├── TrendsChart.tsx
-│   │   ├── TopCustomersTable.tsx
-│   │   └── TopPackagesTable.tsx
-│   ├── ActivityLogs/    # Staff actions history
-│   │   └── ActivityLogList.tsx
-│   ├── Notifications/   # Alerts panel
-│   │   └── NotificationPanel.tsx
-│   ├── Export/          # Data export helpers
-│   ├── Shared/          # Shared components
-│   │   └── DateRangeInput.tsx
-│   └── Icons.tsx        # Icon components
-├── contexts/            # React Contexts
-│   ├── AuthContext.tsx
-│   ├── ThemeContext.tsx
-│   ├── ToastContext.tsx
+│   ├── Products/
+│   │   ├── ProductList/Form   # Product catalog
+│   │   ├── PackageList/Form   # Pricing packages
+│   │   └── WarehouseList/Form # Inventory management
+│   ├── Customers/
+│   │   ├── CustomerList/Form
+│   │   └── CustomerOrderHistory.tsx
+│   ├── Expenses/
+│   ├── Notifications/
+│   ├── ActivityLogs/
+│   └── Layout/                # App shell, sidebar, header
+├── contexts/
+│   ├── AuthContext.tsx         # Global auth state
+│   ├── ThemeContext.tsx        # Light/dark mode
+│   ├── ToastContext.tsx        # Toast notification system
 │   └── NotificationContext.tsx
-├── types/               # TypeScript types
-│   └── index.ts
-├── utils/               # Utilities
-│   ├── database.ts              # DB ops
-│   ├── excel.ts                 # Excel export
-│   ├── money.ts                 # Currency formatting
-│   ├── date.ts                  # Date helpers
-│   ├── supabaseClient.ts        # Supabase client
-│   ├── supabaseAuth.ts          # Auth helpers
-│   ├── supabaseRealtime.ts      # Realtime listeners
-│   ├── supabaseSync.ts          # Data sync
-│   ├── desktopNotification.ts   # Desktop notifications
-│   ├── notificationSound.ts     # Audio notifications
-│   └── excel.ts                 # Excel helpers
-└── App.tsx              # Main component
+├── utils/
+│   ├── forecast.ts            # OLS Linear Regression engine
+│   ├── supabaseClient.ts      # DB connection
+│   ├── supabaseAuth.ts        # Auth helpers
+│   ├── supabaseRealtime.ts    # Real-time subscriptions
+│   ├── supabaseSync.ts        # Data synchronization
+│   ├── database.ts            # Offline fallback (localStorage)
+│   ├── excel.ts               # Excel export helpers
+│   ├── money.ts               # VND currency formatting
+│   ├── date.ts                # Date utilities
+│   ├── desktopNotification.ts # Push notification API
+│   └── notificationSound.ts  # Audio alert system
+└── types/index.ts             # Shared TypeScript interfaces
 ```
 
-## Detailed Capabilities
+---
 
-### Products
-- Add/edit/remove products and packages
-- Flexible warranty/expiry terms
-- Search, filter, and custom fields
-- Multi-profile accounts
+## 🚀 Getting Started
 
-### Customers
-- Add/edit/remove customers
-- Classify Collaborator vs Retail
-- Track acquisition source
-- Stable customer codes
-- Full order history
+### Prerequisites
+- Node.js 18+
+- A Supabase project (PostgreSQL)
 
-### Orders
-- Create/renew orders with history
-- Auto expiry calculation
-- Statuses and filters
-- Revenue stats
-- Custom pricing per order
-- Link to inventory and manage slots
+### Setup
+```bash
+git clone <repository-url>
+cd BongMinApp
+npm install
 
-### Inventory
-- Detailed status and payments
-- Multi-profile slot management
-- Warranty and renewals
-- Auto release expired profiles
-- Shared pool
+# Configure environment
+cp .env.example .env
+# Fill in REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY
 
-### Warranty
-- Tickets, status, linking replacements
-- History
+npm start       # Development server at http://localhost:3000
+npm run build   # Production build → deploy build/ to Vercel
+```
 
-### Data Export
-- Excel for all lists
-- PDF for orders and customers
-- Vietnamese formatting supported
+### Database Setup
+Run migration SQL files in order against your Supabase project:
+1. `supabase/reset.sql` — base schema
+2. `supabase/migration_add_role_check_function.sql`
+3. `supabase/migration_fix_rls_policies.sql`
+4. `supabase/migration_fix_cleanup_function_permissions.sql`
+5. `supabase/migration_fix_password_hash_nullable.sql`
+6. `supabase/migration_add_security_audit_logs.sql`
 
-### Expenses
-- Track, categorize, and report
-- Excel report export
+---
 
-### Dashboard & Analytics
-- Overview, trends, tops, and time series
-- Recharts-based visualizations
+## 🧠 Engineering Highlights (CV-Relevant)
 
-### Notifications
-- Expiry, new orders, payments, profiles, warranty
-- Desktop + sound notifications
+- **Real production data**: 871 orders, 148 customers, 306 inventory items running in production
+- **Complex financial logic**: COGS snapshot at order time, partial refund ratios, net profit after import cost & external expenses — all without double-counting
+- **ML-adjacent feature**: implemented OLS Linear Regression from scratch in TypeScript without any ML library to forecast 7-day revenue for inventory planning
+- **Data integrity system**: automated cross-table reconciliation detects COGS/price/link inconsistencies between orders and inventory
+- **Multi-slot inventory model**: one inventory item can serve N customers simultaneously, with per-slot profile tracking and smart deactivation logic
+- **Optimistic UI patterns**: deep-link navigation via custom browser events, virtualized lists for 800+ item datasets
+- **Security-first design**: Supabase RLS + SECURITY DEFINER functions + audit logging — zero raw data exposure to anonymous clients
+- **Real-time architecture**: WebSocket-based data sync via Supabase Realtime for multi-user consistency
 
-## Technology Stack
-- Frontend: React 18.2.0 + TypeScript ^4.9.5
-- Styling: CSS, responsive layout
-- State: React Context + Hooks
-- Database: Supabase (PostgreSQL) with RLS
-- Auth: Supabase Auth with custom roles
-- Charts: Recharts ^2.15.4
-- Export: xlsx ^0.18.5, jspdf ^3.0.3, jspdf-autotable ^5.0.2, html2canvas ^1.4.0
-- Virtualization: react-window ^1.8.8
-- Build: Create React App 5 (+ cross-env)
-- Deployment: Vercel
-- Realtime: Supabase Realtime
+---
 
-## Usage Guide
-1) Login with your account (Manager = full access; Employee = restricted)
-2) Products tab: manage products, packages, warehouse, custom fields, pricing
-3) Customers tab: manage customers, types, sources, and view history
-4) Orders tab: create/manage orders, link inventory, renew, custom pricing
-5) Warranty tab: create/manage tickets, statuses, replacements
-6) Expenses tab: track expenses and export reports
-7) Dashboard: trends, tops, and exports
-8) Exports: use export buttons on each page (Excel/PDF)
-9) Notifications: view panel, configure types, desktop/audio
+## 📅 Development Timeline
 
-## Important Notes
-- Data stored in Supabase; realtime sync across devices
-- Basic offline safety via local storage fallback
-- Automated backups/restore recommended (via Supabase)
-- Multi-user with role-based permissions
-- RLS protection across all data
-- Realtime notifications (desktop + sound)
-- Virtualized lists for performance
-- Responsive UI
+This project was built and iterated incrementally to solve real business problems:
 
-## Development
+- Multi-slot inventory with smart deactivation logic
+- COGS snapshot calculation for accurate profit reporting
+- Partial refund system (proportional COGS adjustment)
+- Data Reconciliation audit system
+- Predictive Analytics with 7-day Linear Regression forecast
+- Paginated warehouse list (newest-first with "load more")
+- Activity Logs with employee attribution
+- Notification system (desktop + audio)
+- Data export to Excel & PDF
 
-### Scripts
-- `npm start` — Start dev server
-- `npm run build` — Production build
-- `npm test` — Run tests
-- `npm run eject` — CRA eject
+---
 
-### Key Dependencies
-- react ^18.2.0, react-dom ^18.2.0
-- typescript ^4.9.5
-- @supabase/supabase-js ^2.58.0
-- react-router-dom ^6.8.0
-- recharts ^2.15.4
-- react-window ^1.8.8
-- xlsx ^0.18.5
-- jspdf ^3.0.3, jspdf-autotable ^5.0.2
-- html2canvas ^1.4.0
-- cross-env ^7.0.3
-
-## Recent Changes (Latest Highlights)
-- Added Notifications module and panel (desktop and sound alerts)
-- Added Expenses module and Excel reporting
-- Added Dashboard: trends, top customers, top packages
-- Expanded Inventory features: multi-profile, shared pool, vendor payment status
-- Added Warranty management and linking replacements
-- Strengthened security: role checker function, RLS fixes, function permissions
-- Added Security Audit Logs and Activity Logs
-- Improved Order Management (filters, renewals, custom pricing)
-
-
+*Built by Minh Phạm — solo full-stack project demonstrating production-grade React/TypeScript/PostgreSQL engineering.*

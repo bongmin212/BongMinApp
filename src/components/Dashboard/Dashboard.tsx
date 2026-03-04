@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Database } from '../../utils/database';
 import { getSupabase } from '../../utils/supabaseClient';
 import { Product, ProductPackage, Customer, Order, InventoryItem, Expense } from '../../types';
-import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit } from '../Icons';
-import TrendsChart, { TrendsPoint } from './TrendsChart';
+import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit, IconShield } from '../Icons';
+import TrendsChart, { TrendsPoint, ForecastPoint } from './TrendsChart';
 import TopPackagesTable, { PackageAggRow } from './TopPackagesTable';
 import TopCustomersTable, { CustomerAggRow } from './TopCustomersTable';
+import DataAudit from './DataAudit';
 import { formatCurrencyVND } from '../../utils/money';
 import { addMonths, toMonthKey, rangeMonths } from '../../utils/date';
+import { linearRegressionForecast, DailyPoint, toDateKey } from '../../utils/forecast';
 
 interface DashboardStats {
   totalProducts: number;
@@ -88,6 +90,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedMonthOffset, setSelectedMonthOffset] = useState<number>(0); // 0 = current, -1..-11 = previous months
   const [trends, setTrends] = useState<TrendsPoint[]>([]);
+  const [forecastData, setForecastData] = useState<ForecastPoint[]>([]);
   const [topPackages, setTopPackages] = useState<PackageAggRow[]>([]);
   const [packagesById, setPackagesById] = useState<Record<string, ProductPackage>>({});
   const [topCustomers, setTopCustomers] = useState<CustomerAggRow[]>([]);
@@ -563,6 +566,35 @@ const Dashboard: React.FC = () => {
         if (b) b.expenses += e.amount || 0;
       }
 
+      // Build daily history for the last 30 days → 7-day forecast
+      const today = new Date();
+      const cutoff = new Date(today);
+      cutoff.setDate(cutoff.getDate() - 30);
+      const dailyMap: Record<string, number> = {};
+      // Fill all 30 days with 0 so regression sees gaps as zero-revenue days
+      for (let i = 0; i <= 30; i++) {
+        const d = new Date(cutoff);
+        d.setDate(d.getDate() + i);
+        dailyMap[toDateKey(d)] = 0;
+      }
+      for (const o of revenueOrders) {
+        const dk = toDateKey(new Date(o.purchaseDate));
+        if (dk >= toDateKey(cutoff) && dk <= toDateKey(today)) {
+          dailyMap[dk] = (dailyMap[dk] || 0) + getOrderSnapshotPrice(o);
+        }
+      }
+      const sortedDailyHistory: DailyPoint[] = Object.keys(dailyMap)
+        .sort()
+        .map(date => ({ date, revenue: dailyMap[date] }));
+      const forecastPoints = linearRegressionForecast(sortedDailyHistory, 7);
+
+      // Merge actual + forecast into ForecastPoint[]
+      const mergedForecast: ForecastPoint[] = [
+        ...sortedDailyHistory.map(p => ({ date: p.date, actual: p.revenue })),
+        ...forecastPoints.map(p => ({ date: p.date, forecast: p.revenue })),
+      ];
+      setForecastData(mergedForecast);
+
       // Top packages - đếm TẤT CẢ orders (không filter theo thời gian) cho số đơn và doanh thu
       // Filter orders hợp lệ (không CANCELLED)
       const validOrders = orders.filter(order => order.status !== 'CANCELLED');
@@ -775,6 +807,7 @@ const Dashboard: React.FC = () => {
     { id: 'sales', label: 'Bán hàng', icon: <IconTrendingUp /> },
     { id: 'inventory', label: 'Kho hàng', icon: <IconBox /> },
     { id: 'customers', label: 'Khách hàng', icon: <IconUsers /> },
+    { id: 'data-audit', label: 'Data Audit', icon: <IconShield /> },
   ];
 
   if (loading) {
@@ -1029,7 +1062,11 @@ const Dashboard: React.FC = () => {
                 <h3 className="card-title">Xu hướng 12 tháng</h3>
               </div>
               <div className="card-body">
-                <TrendsChart data={trends} />
+                <TrendsChart
+                  data={trends}
+                  forecastData={forecastData}
+                  showForecast
+                />
               </div>
             </div>
             <TopPackagesTable rows={topPackages} packagesById={packagesById} />
@@ -1113,6 +1150,12 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             <TopCustomersTable rows={topCustomers} customersById={customersById} />
+          </div>
+        )}
+
+        {activeTab === 'data-audit' && (
+          <div className="data-audit-tab">
+            <DataAudit />
           </div>
         )}
       </div>
