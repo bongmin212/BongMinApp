@@ -51,6 +51,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	const { notify } = useToast();
 	// Local warranties state to ensure live updates without hard refresh
 	const [warranties, setWarranties] = useState<any[]>([]);
+	const [notesExpanded, setNotesExpanded] = useState(false);
 	// Force re-render when warranties for this order change (realtime)
 	const [warrantyTick, setWarrantyTick] = useState(0);
 	useEffect(() => {
@@ -475,7 +476,31 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 					</div>
 					<div><strong>Giá đơn hàng:</strong> {formatPrice ? formatPrice(getOrderPrice()) : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(getOrderPrice())}</div>
 
-					<div><strong>Ghi chú:</strong> {order.notes && String(order.notes).trim() ? order.notes : 'Không có'}</div>
+					<div>
+						<strong>Ghi chú:</strong>{' '}
+						{(() => {
+							const notes = order.notes && String(order.notes).trim() ? String(order.notes).trim() : '';
+							const LIMIT = 120;
+							if (!notes) return <span className="text-muted">Không có</span>;
+							if (notes.length <= LIMIT) return <span style={{ whiteSpace: 'pre-wrap' }}>{notes}</span>;
+							return (
+								<span>
+									<span style={{ whiteSpace: 'pre-wrap' }}>
+										{notesExpanded ? notes : notes.slice(0, LIMIT) + '...'}
+									</span>
+									{' '}
+									<button
+										type="button"
+										className="btn btn-link p-0"
+										style={{ fontSize: '13px', verticalAlign: 'baseline', textDecoration: 'underline' }}
+										onClick={() => setNotesExpanded(v => !v)}
+									>
+										{notesExpanded ? 'Thu gọn' : 'Xem thêm'}
+									</button>
+								</span>
+							);
+						})()}
+					</div>
 					{renderInventoryCard()}
 					{renderCustomFields()}
 					{(() => {
