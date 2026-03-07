@@ -634,7 +634,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
           }
         } else {
           // Classic inventory validation
-          if (inv.status !== 'AVAILABLE' && inv.status !== 'SOLD') {
+          if (inv.status !== 'AVAILABLE' && inv.status !== 'SOLD' && !inv.isActive && !isEditingLinked) {
             newErrors["inventory"] = 'Kho hàng này không khả dụng';
           }
           if (inv.linkedOrderId && inv.linkedOrderId !== (order?.id || '')) {
