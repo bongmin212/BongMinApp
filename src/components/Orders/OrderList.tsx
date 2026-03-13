@@ -862,6 +862,9 @@ const OrderList: React.FC = () => {
       const hasInventoryLink = (order as any).inventoryItemId || ((order as any).inventoryProfileIds && Array.isArray((order as any).inventoryProfileIds) && (order as any).inventoryProfileIds.length > 0);
       if (!hasInventoryLink) return false;
 
+      // Only check for PROCESSING orders - COMPLETED/EXPIRED/CANCELLED are historical
+      if (order.status !== 'PROCESSING') return false;
+
       // Try to find actual inventory link (same logic as OrderDetailsModal)
       let inv = null;
 

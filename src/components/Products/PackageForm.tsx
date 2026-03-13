@@ -414,35 +414,117 @@ const PackageForm: React.FC<PackageFormProps> = ({ package: pkg, onClose, onSucc
               if (sb2) await sb2.from('activity_logs').insert({ employee_id: state.user?.id || null, action: 'Cập nhật gói sản phẩm', details: detail });
             } catch {}
             
-            // Update related inventory items to reflect package changes
+            // Update related inventory items to reflect package changes with data preservation
             try {
               const sb3 = getSupabase();
               if (sb3) {
-                await sb3.from('inventory')
-                  .update({
-                    account_columns: normalizedForm.accountColumns,
-                    is_account_based: !!normalizedForm.isAccountBased,
-                    total_slots: normalizedForm.isAccountBased ? Math.max(1, (normalizedForm.defaultSlots ?? 5)) : null
-                  })
-                  .eq('package_id', pkg.id);
+                const { data: inventoryItems } = await sb3.from('inventory').select('*').eq('package_id', pkg.id);
                 
-                // Update local storage inventory items
-                const currentInventory = Database.getInventory();
-                const updatedInventory = currentInventory.map(item => {
-                  if (item.packageId === pkg.id) {
-                    return {
-                      ...item,
-                      accountColumns: normalizedForm.accountColumns,
-                      isAccountBased: !!normalizedForm.isAccountBased,
-                      totalSlots: normalizedForm.isAccountBased ? Math.max(1, (normalizedForm.defaultSlots ?? 5)) : undefined,
-                      updatedAt: new Date()
+                if (inventoryItems && inventoryItems.length > 0) {
+                  const updates: any[] = [];
+                  for (const item of inventoryItems) {
+                    const wasAccountBased = !!item.is_account_based;
+                    const isNowAccountBased = !!normalizedForm.isAccountBased;
+                    const newTotalSlots = isNowAccountBased ? Math.max(1, (normalizedForm.defaultSlots ?? 5)) : null;
+                    
+                    let nextLinkedOrderId = item.linked_order_id;
+                    let nextProfiles = item.profiles;
+
+                    if (wasAccountBased && !isNowAccountBased) {
+                      // Transition: Slot-based -> Standard (Standardize)
+                      // Move first assigned order to linked_order_id
+                      const profiles = Array.isArray(item.profiles) ? item.profiles : [];
+                      const firstAssigned = profiles.find((p: any) => p.isAssigned && p.assignedOrderId);
+                      nextLinkedOrderId = firstAssigned ? firstAssigned.assignedOrderId : (item.linked_order_id || null);
+                      nextProfiles = null;
+                    } else if (!wasAccountBased && isNowAccountBased) {
+                      // Transition: Standard -> Slot-based (Profileize)
+                      // Move linked_order_id to slot-1
+                      const profiles = [];
+                      for (let i = 1; i <= (newTotalSlots || 5); i++) {
+                        const sId = `slot-${i}`;
+                        if (i === 1 && item.linked_order_id) {
+                          profiles.push({ 
+                            id: sId, 
+                            isAssigned: true, 
+                            assignedOrderId: item.linked_order_id, 
+                            assignedAt: new Date().toISOString() 
+                          });
+                        } else {
+                          profiles.push({ 
+                            id: sId, 
+                            isAssigned: false, 
+                            assignedOrderId: null 
+                          });
+                        }
+                      }
+                      nextLinkedOrderId = null;
+                      nextProfiles = profiles;
+                    } else if (isNowAccountBased && wasAccountBased) {
+                      // Adjust slot count without losing existing data
+                      let profiles = Array.isArray(item.profiles) ? [...item.profiles] : [];
+                      if (newTotalSlots && profiles.length !== newTotalSlots) {
+                        if (profiles.length < newTotalSlots) {
+                          // Add missing slots
+                          for (let i = profiles.length + 1; i <= newTotalSlots; i++) {
+                            profiles.push({ id: `slot-${i}`, isAssigned: false, assignedOrderId: null });
+                          }
+                        } else {
+                          // Truncate (try to avoid if possible, but here we follow new configuration)
+                          profiles = profiles.slice(0, newTotalSlots);
+                        }
+                        nextProfiles = profiles;
+                      }
+                    }
+
+                    const updateData = {
+                      id: item.id,
+                      account_columns: normalizedForm.accountColumns,
+                      is_account_based: isNowAccountBased,
+                      total_slots: newTotalSlots,
+                      linked_order_id: nextLinkedOrderId,
+                      profiles: nextProfiles,
+                      updated_at: new Date().toISOString()
                     };
+                    
+                    updates.push(updateData);
+                    // Update DB individually (upsert is better but single updates are safer for complex jsonb)
+                    await sb3.from('inventory').update(updateData).eq('id', item.id);
                   }
-                  return item;
-                });
-                Database.setInventory(updatedInventory);
+
+                  // Update local storage inventory items
+                  const currentInventory = Database.getInventory();
+                  const updatedInventory = currentInventory.map(localItem => {
+                    const update = updates.find(u => u.id === localItem.id);
+                    if (update) {
+                      return {
+                        ...localItem,
+                        accountColumns: update.account_columns,
+                        isAccountBased: update.is_account_based,
+                        totalSlots: update.total_slots || undefined,
+                        linkedOrderId: update.linked_order_id || undefined,
+                        profiles: update.profiles || undefined,
+                        updatedAt: new Date()
+                      };
+                    }
+                    if (localItem.packageId === pkg.id) {
+                       // Fallback for items that might have been missed or added since fetch
+                       return {
+                         ...localItem,
+                         accountColumns: normalizedForm.accountColumns,
+                         isAccountBased: !!normalizedForm.isAccountBased,
+                         totalSlots: normalizedForm.isAccountBased ? Math.max(1, (normalizedForm.defaultSlots ?? 5)) : undefined,
+                         updatedAt: new Date()
+                       };
+                    }
+                    return localItem;
+                  });
+                  Database.setInventory(updatedInventory);
+                }
               }
-            } catch {}
+            } catch (invError) {
+              console.error('Error updating related inventory:', invError);
+            }
 
             // Auto-sync other packages if this is the first package of a shared pool product
             if (!sharedConfigLocked && firstPackageId === pkg.id) {
