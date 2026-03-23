@@ -2346,11 +2346,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                 name="status"
                 className="form-control"
                 value={formData.status}
-                disabled={formData.status === 'EXPIRED' || formData.paymentStatus === 'REFUNDED'}
+                disabled={formData.status === 'EXPIRED'}
                 onChange={(e) => {
                   const val = e.target.value as any;
-                  // Lock when expired or refunded
-                  if (formData.status === 'EXPIRED' || formData.paymentStatus === 'REFUNDED') return;
+                  // Lock when expired
+                  if (formData.status === 'EXPIRED') return;
                   // Allow changing status between PROCESSING, COMPLETED, and CANCELLED
                   if (['PROCESSING', 'COMPLETED', 'CANCELLED'].includes(val)) {
                     setFormData(prev => ({ ...prev, status: val }));
@@ -2363,15 +2363,12 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   <>
                     <option value="PROCESSING">Đang xử lý</option>
                     <option value="COMPLETED">Đã hoàn thành</option>
-                    {formData.paymentStatus !== 'REFUNDED' && (
-                      <option value="CANCELLED">Đã hủy</option>
-                    )}
+                    <option value="CANCELLED">Đã hủy</option>
                   </>
                 )}
               </select>
               <small className="text-muted">
                 {formData.status === 'EXPIRED' ? 'Đơn đã hết hạn: trạng thái bị khóa.'
-                  : formData.paymentStatus === 'REFUNDED' ? 'Đơn đã hoàn tiền: trạng thái bị khóa ở "Đã hủy".'
                     : selectedInventoryId ? 'Trạng thái tự động chuyển thành "Đã hoàn thành" khi có liên kết kho.'
                       : 'Bạn có thể thay đổi trạng thái thủ công giữa "Đang xử lý" và "Đã hoàn thành".'}
               </small>
@@ -2398,7 +2395,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                     className="form-control form-control-sm"
                     value={formData.paymentStatus}
                     onChange={handleChange}
-                    disabled={formData.paymentStatus === 'REFUNDED'}
                   >
                     {PAYMENT_STATUSES.map(s => (
                       <option key={s.value} value={s.value}>
@@ -2406,9 +2402,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                       </option>
                     ))}
                   </select>
-                  {formData.paymentStatus === 'REFUNDED' && (
-                    <div className="small text-warning mt-1">🔒 Đơn đã hoàn tiền - không thể thay đổi</div>
-                  )}
                 </div>
               </div>
             </div>
@@ -2450,7 +2443,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                     [r.id]: parseInt(numericValue, 10) || 0
                                   }));
                                 }}
-                                disabled={formData.paymentStatus === 'REFUNDED'}
                                 placeholder="Nhập giá"
                               />
                             </div>
@@ -2465,7 +2457,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                                     [r.id]: e.target.value
                                   }));
                                 }}
-                                disabled={formData.paymentStatus === 'REFUNDED'}
                               >
                                 {PAYMENT_STATUSES.map(s => (
                                   <option key={s.value} value={s.value}>
@@ -2475,9 +2466,6 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                               </select>
                             </div>
                           </div>
-                          {formData.paymentStatus === 'REFUNDED' && (
-                            <div className="small text-warning mt-1">🔒 Đơn đã hoàn tiền - không thể thay đổi</div>
-                          )}
                         </div>
                       );
 

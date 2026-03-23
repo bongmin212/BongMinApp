@@ -95,11 +95,11 @@ export class Database {
       }
     });
 
-    // Find the first available number starting from 1
-    // This will reuse deleted codes immediately
+    // Use the highest number + 1 to prevent reusing deleted codes
+    // This avoids duplicate key errors when missing old codes or partial histories are loaded
     let nextNum = 1;
-    while (existingNumbers.has(nextNum)) {
-      nextNum++;
+    if (existingNumbers.size > 0) {
+      nextNum = Math.max(...Array.from(existingNumbers)) + 1;
     }
 
     const width = Math.max(padLength, detectedPad);
@@ -122,11 +122,11 @@ export class Database {
       }
     });
 
-    // Find the first available number starting from 1
-    // This will reuse deleted codes immediately
+    // Use the highest number + 1 to prevent reusing deleted codes
+    // This avoids duplicate key errors when missing old codes or partial histories are loaded
     let nextNum = 1;
-    while (existingNumbers.has(nextNum)) {
-      nextNum++;
+    if (existingNumbers.size > 0) {
+      nextNum = Math.max(...Array.from(existingNumbers)) + 1;
     }
 
     const width = Math.max(padLength, detectedPad);
