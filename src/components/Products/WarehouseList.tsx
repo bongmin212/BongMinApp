@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import DateRangeInput from '../Shared/DateRangeInput';
-import { getSupabase } from '../../utils/supabaseClient';
+import {  getSupabase , fetchAll } from "../../utils/supabaseClient";
 import OrderDetailsModal from '../Orders/OrderDetailsModal';
 import { normalizeExpiryDate } from '../../utils/date';
 import useMediaQuery from '../../hooks/useMediaQuery';
@@ -89,7 +89,7 @@ const WarehouseList: React.FC = () => {
     (async () => {
       const sb = getSupabase();
       if (!sb) return;
-      const { data } = await sb.from('inventory_renewals').select('*');
+      const { data } = await fetchAll(sb.from('inventory_renewals').select('*'));
       const mapped = (data || []).map((r: any) => ({
         id: r.id,
         inventoryId: r.inventory_id,
@@ -610,11 +610,11 @@ const WarehouseList: React.FC = () => {
     if (!sb) return;
     // Optional sweep on client for local display of expired flags is no longer needed
     const [invRes, prodRes, pkgRes, custRes, renewalsRes] = await Promise.all([
-      sb.from('inventory').select('*').order('created_at', { ascending: false }),
-      sb.from('products').select('*').order('created_at', { ascending: true }),
-      sb.from('packages').select('*').order('created_at', { ascending: true }),
-      sb.from('customers').select('*').order('created_at', { ascending: true }),
-      sb.from('inventory_renewals').select('*')
+      fetchAll(sb.from('inventory').select('*').order('created_at', { ascending: false })),
+      fetchAll(sb.from('products').select('*').order('created_at', { ascending: true })),
+      fetchAll(sb.from('packages').select('*').order('created_at', { ascending: true })),
+      fetchAll(sb.from('customers').select('*').order('created_at', { ascending: true })),
+      fetchAll(sb.from('inventory_renewals').select('*'))
     ]);
 
     // Update inventory renewals state

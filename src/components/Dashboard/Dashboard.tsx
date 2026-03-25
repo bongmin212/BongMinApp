@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Database } from '../../utils/database';
-import { getSupabase } from '../../utils/supabaseClient';
+import {  getSupabase , fetchAll } from "../../utils/supabaseClient";
 import { Product, ProductPackage, Customer, Order, InventoryItem, Expense } from '../../types';
 import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit, IconShield } from '../Icons';
 import TrendsChart, { TrendsPoint, ForecastPoint } from './TrendsChart';
@@ -121,13 +121,13 @@ const Dashboard: React.FC = () => {
 
       if (sb) {
         const [pr, pk, cu, or, inv, ex, renewals] = await Promise.all([
-          sb.from('products').select('*'),
-          sb.from('packages').select('*'),
-          sb.from('customers').select('*'),
-          sb.from('orders').select('*'),
-          sb.from('inventory').select('*'),
-          sb.from('expenses').select('*'),
-          sb.from('inventory_renewals').select('*')
+          fetchAll(sb.from('products').select('*')),
+          fetchAll(sb.from('packages').select('*')),
+          fetchAll(sb.from('customers').select('*')),
+          fetchAll(sb.from('orders').select('*')),
+          fetchAll(sb.from('inventory').select('*')),
+          fetchAll(sb.from('expenses').select('*')),
+          fetchAll(sb.from('inventory_renewals').select('*'))
         ]);
         products = (pr.data || []).map((r: any) => ({
           id: r.id,

@@ -5,7 +5,7 @@ import PackageForm from './PackageForm';
 // removed export button
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { getSupabase } from '../../utils/supabaseClient';
+import {  getSupabase , fetchAll } from "../../utils/supabaseClient";
 import { exportToXlsx, generateExportFilename } from '../../utils/excel';
 import useMediaQuery from '../../hooks/useMediaQuery';
 
@@ -64,8 +64,8 @@ const PackageList: React.FC = () => {
     const sb = getSupabase();
     if (!sb) return;
     const [pkRes, prRes] = await Promise.all([
-      sb.from('packages').select('*').order('created_at', { ascending: true }),
-      sb.from('products').select('*').order('created_at', { ascending: true })
+      fetchAll(sb.from('packages').select('*').order('created_at', { ascending: true })),
+      fetchAll(sb.from('products').select('*').order('created_at', { ascending: true }))
     ]);
     const allPackages = (pkRes.data || []).map((r: any) => ({
       id: r.id,

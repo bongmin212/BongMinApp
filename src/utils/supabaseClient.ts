@@ -52,3 +52,19 @@ export async function cleanupOrphanedEmployees() {
   }
 }
 
+
+
+export async function fetchAll(queryBuilder: any) {
+  let allData: any[] = [];
+  let from = 0;
+  const step = 1000;
+  while (true) {
+    const { data, error } = await queryBuilder.range(from, from + step - 1);
+    if (error) return { data: allData.length > 0 ? allData : null, error };
+    if (!data || data.length === 0) break;
+    allData = [...allData, ...data];
+    if (data.length < step) break;
+    from += step;
+  }
+  return { data: allData, error: null };
+}

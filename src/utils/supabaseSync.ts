@@ -1,4 +1,4 @@
-import { getSupabase } from './supabaseClient';
+import {  getSupabase , fetchAll } from "./supabaseClient";
 import { Database } from './database';
 import { ActivityLog, Customer, Employee, Expense, InventoryItem, Order, Product, ProductPackage, Warranty } from '../types';
 
@@ -82,7 +82,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
 
   for (const t of tables) {
     try {
-      const { data, error } = await sb.from(t.name).select('*');
+      const { data, error } = await sb.from(t.name).select('*').limit(10000);
       if (error) throw error;
       const rows = (data || []).map((d: any) => reviveDates(toCamel(d)));
       // SupabaseSync: hydrating table
@@ -94,7 +94,7 @@ export async function hydrateAllFromSupabase(): Promise<void> {
 
   // Activity logs (read-only for hydration)
   try {
-    const { data, error } = await sb.from('activity_logs').select('*').order('timestamp', { ascending: true });
+    const { data, error } = await fetchAll(sb.from('activity_logs').select('*').order('timestamp', { ascending: true }));
     if (error) throw error;
     const rows = (data || []).map((d: any) => reviveDates(toCamel<ActivityLog>(d)));
     Database.setActivityLogs(rows);

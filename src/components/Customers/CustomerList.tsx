@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { Customer, CustomerType, CustomerSource, CUSTOMER_TYPES, CUSTOMER_SOURCES } from '../../types';
-import { getSupabase } from '../../utils/supabaseClient';
+import {  getSupabase , fetchAll } from "../../utils/supabaseClient";
 import { Database } from '../../utils/database';
 import CustomerForm from './CustomerForm';
 import CustomerOrderHistory from './CustomerOrderHistory';
@@ -105,7 +105,7 @@ const CustomerList: React.FC = () => {
   const loadCustomers = async () => {
     const sb = getSupabase();
     if (!sb) return;
-    const { data } = await sb.from('customers').select('*').order('created_at', { ascending: true });
+    const { data } = await fetchAll(sb.from('customers').select('*').order('created_at', { ascending: true }));
     const allCustomers = (data || []).map((r: any) => ({
       ...r,
       sourceDetail: r.source_detail || '',

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import DateRangeInput from '../Shared/DateRangeInput';
 import { Order, Customer, ProductPackage, Product, OrderStatus, ORDER_STATUSES, PaymentStatus, PAYMENT_STATUSES, CUSTOMER_SOURCES, INVENTORY_PAYMENT_STATUSES_FULL } from '../../types';
-import { getSupabase } from '../../utils/supabaseClient';
+import {  getSupabase , fetchAll } from "../../utils/supabaseClient";
 import { Database } from '../../utils/database';
 import OrderForm from './OrderForm';
 import OrderDetailsModal from './OrderDetailsModal';
@@ -271,11 +271,11 @@ const OrderList: React.FC = () => {
     const sb = getSupabase();
     if (!sb) return;
     const [ordersRes, customersRes, packagesRes, productsRes, inventoryRes] = await Promise.all([
-      sb.from('orders').select('*'),
-      sb.from('customers').select('*'),
-      sb.from('packages').select('*'),
-      sb.from('products').select('*'),
-      sb.from('inventory').select('*')
+      fetchAll(sb.from('orders').select('*')),
+      fetchAll(sb.from('customers').select('*')),
+      fetchAll(sb.from('packages').select('*')),
+      fetchAll(sb.from('products').select('*')),
+      fetchAll(sb.from('inventory').select('*'))
     ]);
 
     // Auto-update order status based on expiry_date
