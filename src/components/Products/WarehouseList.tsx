@@ -210,9 +210,9 @@ const WarehouseList: React.FC = () => {
           const fixedDetails: string[] = [];
 
           // Get all existing order IDs first
-          const { data: orders, error: ordersError } = await sb
+          const { data: orders, error: ordersError } = await fetchAll(sb
             .from('orders')
-            .select('id');
+            .select('id'));
 
           if (ordersError) {
             // Error fetching orders - ignore
@@ -224,10 +224,10 @@ const WarehouseList: React.FC = () => {
 
           // 1. Fix regular slots: SOLD but no linked_order_id OR linked_order_id points to non-existent order
           // BUT exclude account-based inventory (they use profiles, not linked_order_id)
-          const { data: allSoldSlots, error: fetchError } = await sb
+          const { data: allSoldSlots, error: fetchError } = await fetchAll(sb
             .from('inventory')
             .select('id, code, status, linked_order_id, is_account_based')
-            .eq('status', 'SOLD');
+            .eq('status', 'SOLD'));
 
           if (fetchError) {
             // Error fetching orphaned slots - ignore
@@ -266,11 +266,11 @@ const WarehouseList: React.FC = () => {
           }
 
           // 1b. Fix AVAILABLE slots that still have stale linked_order_id (blocking deletion)
-          const { data: availableWithLink, error: availableFetchError } = await sb
+          const { data: availableWithLink, error: availableFetchError } = await fetchAll(sb
             .from('inventory')
             .select('id, code, status, linked_order_id, is_account_based')
             .eq('status', 'AVAILABLE')
-            .not('linked_order_id', 'is', null);
+            .not('linked_order_id', 'is', null));
 
           if (!availableFetchError && availableWithLink && availableWithLink.length > 0) {
             // These are AVAILABLE slots with stale linked_order_id - clear the link
@@ -289,10 +289,10 @@ const WarehouseList: React.FC = () => {
 
           // 2. Fix account-based slots: profiles with assignedOrderId pointing to non-existent orders
 
-          const { data: accountBasedItems, error: accountError } = await sb
+          const { data: accountBasedItems, error: accountError } = await fetchAll(sb
             .from('inventory')
             .select('id, code, profiles')
-            .eq('is_account_based', true);
+            .eq('is_account_based', true));
 
           if (accountError) {
             // Error fetching account-based items - ignore
@@ -333,15 +333,15 @@ const WarehouseList: React.FC = () => {
           }
 
           // 3. Fix orders with inventory_item_id but no actual link
-          const { data: allOrders, error: ordersFetchError } = await sb
+          const { data: allOrders, error: ordersFetchError } = await fetchAll(sb
             .from('orders')
-            .select('id, code, inventory_item_id, inventory_profile_ids');
+            .select('id, code, inventory_item_id, inventory_profile_ids'));
 
           if (!ordersFetchError && allOrders) {
             // Get all inventory items
-            const { data: allInventory, error: invFetchError } = await sb
+            const { data: allInventory, error: invFetchError } = await fetchAll(sb
               .from('inventory')
-              .select('id, is_account_based, profiles, linked_order_id');
+              .select('id, is_account_based, profiles, linked_order_id'));
 
             if (!invFetchError && allInventory) {
               const inventoryMap = new Map(allInventory.map((inv: any) => [inv.id, inv]));
@@ -536,9 +536,9 @@ const WarehouseList: React.FC = () => {
 
     try {
       // Get all existing order IDs first
-      const { data: orders, error: ordersError } = await sb
+      const { data: orders, error: ordersError } = await fetchAll(sb
         .from('orders')
-        .select('id');
+        .select('id'));
 
       if (ordersError) {
         // Error fetching orders - ignore
@@ -549,10 +549,10 @@ const WarehouseList: React.FC = () => {
 
       // 1. Check regular slots: SOLD but no linked_order_id OR linked_order_id points to non-existent order
       // BUT exclude account-based inventory (they use profiles, not linked_order_id)
-      const { data: allSoldSlots, error: fetchError } = await sb
+      const { data: allSoldSlots, error: fetchError } = await fetchAll(sb
         .from('inventory')
         .select('id, code, status, linked_order_id, is_account_based')
-        .eq('status', 'SOLD');
+        .eq('status', 'SOLD'));
 
       if (fetchError) {
         // Error checking orphaned slots - ignore
@@ -565,10 +565,10 @@ const WarehouseList: React.FC = () => {
       );
 
       // 2. Check account-based slots: profiles with assignedOrderId pointing to non-existent orders
-      const { data: accountBasedItems, error: accountError } = await sb
+      const { data: accountBasedItems, error: accountError } = await fetchAll(sb
         .from('inventory')
         .select('id, code, profiles')
-        .eq('is_account_based', true);
+        .eq('is_account_based', true));
 
       if (accountError) {
         // Error checking account-based items - ignore
