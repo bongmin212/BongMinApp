@@ -71,6 +71,7 @@ const WarehouseList: React.FC = () => {
     customAmount?: number;
     refundReason: string;
   }>(null);
+  const [allFetchedOrders, setAllFetchedOrders] = useState<Order[]>([]);
   const countAssignedSlots = (item?: InventoryItem | null) => {
     if (!item?.isAccountBased || !Array.isArray(item.profiles)) return 0;
     return item.profiles.filter(slot => slot && (slot.isAssigned || !!slot.assignedOrderId)).length;
@@ -609,12 +610,13 @@ const WarehouseList: React.FC = () => {
     const sb = getSupabase();
     if (!sb) return;
     // Optional sweep on client for local display of expired flags is no longer needed
-    const [invRes, prodRes, pkgRes, custRes, renewalsRes] = await Promise.all([
+    const [invRes, prodRes, pkgRes, custRes, renewalsRes, ordersRes] = await Promise.all([
       fetchAll(sb.from('inventory').select('*').order('created_at', { ascending: false })),
       fetchAll(sb.from('products').select('*').order('created_at', { ascending: true })),
       fetchAll(sb.from('packages').select('*').order('created_at', { ascending: true })),
       fetchAll(sb.from('customers').select('*').order('created_at', { ascending: true })),
-      fetchAll(sb.from('inventory_renewals').select('*'))
+      fetchAll(sb.from('inventory_renewals').select('*')),
+      fetchAll(sb.from('orders').select('*'))
     ]);
 
     // Update inventory renewals state
@@ -763,7 +765,7 @@ const WarehouseList: React.FC = () => {
           if (!!r.is_account_based && profiles.length === 0 && (r.total_slots || 0) > 0) {
             // Try to find linked orders by searching through orders table
             // This is a fallback for display purposes only
-            const linkedOrders = Database.getOrders().filter((order: any) =>
+            const linkedOrders = allFetchedOrders.filter((order: any) =>
               order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
               order.inventoryProfileIds.some((profileId: string) =>
                 profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= (r.total_slots || 0)
@@ -823,10 +825,23 @@ const WarehouseList: React.FC = () => {
     })) as ProductPackage[];
 
     const custs = (custRes.data || []) as Customer[];
+    const fetchedOrders = (ordersRes.data || []).map((r: any) => ({
+      ...r,
+      customerId: r.customer_id || r.customerId,
+      packageId: r.package_id || r.packageId,
+      inventoryItemId: r.inventory_item_id || r.inventoryItemId,
+      inventoryProfileIds: r.inventory_profile_ids || r.inventoryProfileIds,
+      code: r.code || '',
+      notes: r.notes || '',
+      expiryDate: r.expiry_date ? new Date(r.expiry_date) : (r.expiryDate ? new Date(r.expiryDate) : new Date()),
+      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
+    })) as Order[];
     setItems(inv);
     setProducts(prods);
     setPackages(pkgs);
     setCustomers(custs);
+    setAllFetchedOrders(fetchedOrders);
 
     // Check for stuck slots after data is loaded
     checkForStuckSlots();
@@ -1164,7 +1179,7 @@ const WarehouseList: React.FC = () => {
         profiles.forEach((p: any) => { if (p.assignedOrderId) orderIds.push(p.assignedOrderId); });
         const unique = Array.from(new Set(orderIds));
         if (unique.length === 0) return false;
-        const allOrders = Database.getOrders();
+        const allOrders = allFetchedOrders;
         return unique.some(id => {
           const o = allOrders.find((x: any) => x.id === id);
           if (!o) return false;
@@ -2469,7 +2484,7 @@ const WarehouseList: React.FC = () => {
 
                   // If profiles are empty but we have totalSlots, generate fallback profiles from orders
                   if (profiles.length === 0 && totalSlots > 0) {
-                    const linkedOrders = Database.getOrders().filter((order: any) =>
+                    const linkedOrders = allFetchedOrders.filter((order: any) =>
                       order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
                       order.inventoryProfileIds.some((profileId: string) =>
                         profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= totalSlots
@@ -2519,9 +2534,9 @@ const WarehouseList: React.FC = () => {
                         <tbody>
                           {profiles.map(p => {
                             const orderId = p.assignedOrderId;
-                            const order = orderId ? Database.getOrders().find(o => o.id === orderId) : null;
+                            const order = orderId ? allFetchedOrders.find(o => o.id === orderId) : null;
                             const prevOrderId = (p as any).previousOrderId;
-                            const prevOrder = prevOrderId ? Database.getOrders().find(o => o.id === prevOrderId) : null;
+                            const prevOrder = prevOrderId ? allFetchedOrders.find(o => o.id === prevOrderId) : null;
 
                             return (
                               <tr key={p.id}>
