@@ -2,8 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { getSupabase } from '../../utils/supabaseClient';
 import { IconRefresh, IconCheck, IconAlertTriangle } from '../Icons';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
 type Severity = 'ERROR' | 'WARNING';
 
 interface AuditRow {
@@ -23,16 +21,22 @@ interface CheckSummary {
     rows: AuditRow[];
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+interface RenewalLike {
+    id?: string;
+    price?: number | null;
+    createdAt?: string | null;
+    paymentStatus?: string | null;
+    previousExpiryDate?: string | null;
+    newExpiryDate?: string | null;
+}
 
 const fmt = (val: unknown) => {
     if (val == null) return '—';
-    if (typeof val === 'number')
+    if (typeof val === 'number') {
         return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+    }
     return String(val);
 };
-
-// ─── Main Component ──────────────────────────────────────────────────────────
 
 const DataAudit: React.FC = () => {
     const [checks, setChecks] = useState<CheckSummary[]>([]);
@@ -53,38 +57,30 @@ const DataAudit: React.FC = () => {
         setRan(false);
 
         try {
-            // ── Check 1: Orders PAID nhưng sale_price = 0 hoặc NULL ──────────────
+            const parseRenewals = (value: unknown): RenewalLike[] => (
+                Array.isArray(value) ? value as RenewalLike[] : []
+            );
+
             const { data: c1, error: e1 } = await sb
                 .from('orders')
-                .select('code, sale_price, payment_status, status, customer_id, package_id')
+                .select('code, sale_price, payment_status, status, customer_id, package_id, renewals')
                 .eq('payment_status', 'PAID')
                 .neq('status', 'CANCELLED')
                 .or('sale_price.is.null,sale_price.eq.0');
 
-            // ── Check 2: Inventory SOLD nhưng không có order active liên kết ─────
-            // Lưu ý: kho dạng multi-slot account lưu order IDs trong profiles[*].assignedOrderId
-            // chứ không dùng linked_order_id → cần loại trừ các items đó khỏi check này
             const { data: c2Raw, error: e2 } = await sb
                 .from('inventory')
                 .select('code, status, linked_order_id, is_account_based, profiles')
                 .eq('status', 'SOLD')
                 .is('linked_order_id', null);
 
-            // Lọc ra chỉ các items THỰC SỰ orphan:
-            // - Không phải account-based multi-slot, HOẶC
-            // - Là account-based nhưng không có slot nào được assigned
             const c2 = (c2Raw || []).filter((r: any) => {
-                if (!r.is_account_based) return true; // non-slot item: check bình thường
-                // Với multi-slot: kiểm tra nếu không có slot nào isAssigned = true
+                if (!r.is_account_based) return true;
                 const profiles = Array.isArray(r.profiles) ? r.profiles : [];
                 const hasAssignedSlot = profiles.some((p: any) => p.isAssigned === true && p.assignedOrderId);
-                return !hasAssignedSlot; // chỉ báo lỗi nếu không có slot nào assigned
+                return !hasAssignedSlot;
             });
 
-
-            // ── Check 3: Orders có inventory_item_id nhưng inventory không tồn tại ─
-            // Dùng LEFT JOIN qua select với .not('inventory_item_id', 'is', null)
-            // Sau đó lọc phía client (Supabase không hỗ trợ NOT EXISTS trực tiếp)
             const { data: ordersWithInv, error: e3a } = await sb
                 .from('orders')
                 .select('id, code, inventory_item_id, status, payment_status')
@@ -100,9 +96,6 @@ const DataAudit: React.FC = () => {
                 (o: any) => o.inventory_item_id && !invIdSet.has(o.inventory_item_id)
             );
 
-            // ── Check 4: Orders PAID + có inventory_item_id nhưng COGS = 0 / NULL ─
-            // Chỉ báo lỗi khi kho liên kết có purchase_price > 0 (tức là hàng có giá nhập thật)
-            // Nếu giá nhập kho = 0đ thì cogs = 0 là ĐÚNG, không phải lỗi
             const { data: c4Raw, error: e4 } = await sb
                 .from('orders')
                 .select('id, code, sale_price, cogs, status, inventory_item_id')
@@ -111,9 +104,8 @@ const DataAudit: React.FC = () => {
                 .not('inventory_item_id', 'is', null)
                 .or('cogs.is.null,cogs.eq.0');
 
-            // Lấy purchase_price của các inventory items liên quan
             const c4InvIds = Array.from(new Set((c4Raw || []).map((o: any) => o.inventory_item_id).filter(Boolean)));
-            let invPriceMap: Record<string, number> = {};
+            const invPriceMap: Record<string, number> = {};
             if (c4InvIds.length > 0) {
                 const { data: invPrices } = await sb
                     .from('inventory')
@@ -124,25 +116,72 @@ const DataAudit: React.FC = () => {
                 });
             }
 
-            // Chỉ báo lỗi nếu kho liên kết có purchase_price > 0 nhưng cogs = 0
             const c4 = (c4Raw || []).filter((o: any) => {
                 const purchasePrice = invPriceMap[o.inventory_item_id] ?? 0;
-                return purchasePrice > 0; // nếu free (purchase_price=0) thì không phải lỗi
+                return purchasePrice > 0;
             });
 
+            const { data: ordersWithRenewals, error: e5 } = await sb
+                .from('orders')
+                .select('code, status, sale_price, renewals')
+                .neq('status', 'CANCELLED');
 
+            const { error: originalSalePriceError } = await sb
+                .from('orders')
+                .select('original_sale_price')
+                .limit(1);
 
-            if (e1 || e2 || e3a || e3b || e4) {
+            const c5 = originalSalePriceError
+                ? [{ message: originalSalePriceError.message }]
+                : [];
+
+            const c6 = (ordersWithRenewals || []).flatMap((o: any) =>
+                parseRenewals(o.renewals)
+                    .filter((r: RenewalLike) => {
+                        const price = Number(r.price || 0);
+                        const paymentStatus = String(r.paymentStatus || '');
+                        return (paymentStatus === 'PAID' && !(price > 0)) ||
+                            (paymentStatus === 'UNPAID' && price < 0) ||
+                            !['PAID', 'UNPAID', 'REFUNDED'].includes(paymentStatus);
+                    })
+                    .map((r: RenewalLike) => ({
+                        orderCode: o.code,
+                        renewalId: r.id,
+                        paymentStatus: r.paymentStatus,
+                        price: r.price
+                    }))
+            );
+
+            const c7 = (ordersWithRenewals || []).flatMap((o: any) =>
+                parseRenewals(o.renewals)
+                    .filter((r: RenewalLike) => {
+                        const createdAt = r.createdAt ? new Date(r.createdAt) : null;
+                        const previousExpiryDate = r.previousExpiryDate ? new Date(r.previousExpiryDate) : null;
+                        const newExpiryDate = r.newExpiryDate ? new Date(r.newExpiryDate) : null;
+                        if (!createdAt || Number.isNaN(createdAt.getTime())) return true;
+                        if (!previousExpiryDate || Number.isNaN(previousExpiryDate.getTime())) return true;
+                        if (!newExpiryDate || Number.isNaN(newExpiryDate.getTime())) return true;
+                        return newExpiryDate.getTime() < previousExpiryDate.getTime();
+                    })
+                    .map((r: RenewalLike) => ({
+                        orderCode: o.code,
+                        renewalId: r.id,
+                        createdAt: r.createdAt,
+                        previousExpiryDate: r.previousExpiryDate,
+                        newExpiryDate: r.newExpiryDate
+                    }))
+            );
+
+            if (e1 || e2 || e3a || e3b || e4 || e5) {
                 setError('Lỗi khi truy vấn dữ liệu. Vui lòng thử lại.');
                 return;
             }
 
-            // ── Build CheckSummary list ──────────────────────────────────────────
             const results: CheckSummary[] = [
                 {
                     id: 'sale-price-zero',
                     label: 'Giá bán = 0 trên đơn đã thanh toán',
-                    description: 'Đơn PAID nhưng sale_price = 0 hoặc NULL → doanh thu bị sai lệch',
+                    description: 'Đơn PAID nhưng sale_price = 0 hoặc NULL, làm lệch báo cáo doanh thu.',
                     severity: 'ERROR',
                     count: (c1 || []).length,
                     rows: (c1 || []).map((r: any) => ({
@@ -156,10 +195,10 @@ const DataAudit: React.FC = () => {
                 {
                     id: 'inventory-sold-orphan',
                     label: 'Kho SOLD không có đơn hàng liên kết',
-                    description: 'Inventory status = SOLD nhưng linked_order_id = NULL → dữ liệu kho mâu thuẫn',
+                    description: 'Inventory đã SOLD nhưng không còn liên kết hợp lệ với order hoặc slot đang gán.',
                     severity: 'ERROR',
-                    count: (c2 || []).length,
-                    rows: (c2 || []).map((r: any) => ({
+                    count: c2.length,
+                    rows: c2.map((r: any) => ({
                         check_type: 'INV_SOLD_ORPHAN',
                         severity: 'ERROR',
                         entity_code: r.code,
@@ -170,24 +209,24 @@ const DataAudit: React.FC = () => {
                 {
                     id: 'orphan-inventory-ref',
                     label: 'Đơn hàng trỏ tới kho không tồn tại',
-                    description: 'inventory_item_id trên order không khớp với bất kỳ item nào trong kho',
+                    description: 'inventory_item_id trên order không khớp với bất kỳ item nào trong kho.',
                     severity: 'ERROR',
                     count: c3.length,
                     rows: c3.map((r: any) => ({
                         check_type: 'ORPHAN_INV_REF',
                         severity: 'ERROR',
                         entity_code: r.code,
-                        detail: `Trạng thái đơn: ${r.status} | TT TT: ${r.payment_status}`,
+                        detail: `Trạng thái đơn: ${r.status} | Thanh toán: ${r.payment_status}`,
                         extra: `inventory_item_id: ${r.inventory_item_id}`,
                     })),
                 },
                 {
                     id: 'cogs-missing',
                     label: 'COGS bị thiếu trên đơn đã thanh toán',
-                    description: 'Đơn PAID có kho liên kết nhưng cogs = 0 hoặc NULL → lợi nhuận bị tính sai',
+                    description: 'Đơn PAID có kho liên kết nhưng cogs = 0 hoặc NULL, làm lệch profit.',
                     severity: 'WARNING',
-                    count: (c4 || []).length,
-                    rows: (c4 || []).map((r: any) => ({
+                    count: c4.length,
+                    rows: c4.map((r: any) => ({
                         check_type: 'COGS_MISSING',
                         severity: 'WARNING',
                         entity_code: r.code,
@@ -195,11 +234,53 @@ const DataAudit: React.FC = () => {
                         extra: `cogs = ${fmt(r.cogs)}`,
                     })),
                 },
+                {
+                    id: 'original-sale-price-missing',
+                    label: 'Thiếu hỗ trợ giá gốc đơn hàng',
+                    description: 'Schema hiện tại chưa có original_sale_price nên dashboard không thể đối soát chính xác doanh thu mua ban đầu của đơn đã gia hạn.',
+                    severity: 'ERROR',
+                    count: c5.length,
+                    rows: c5.map((r: any) => ({
+                        check_type: 'ORIGINAL_SALE_PRICE_UNAVAILABLE',
+                        severity: 'ERROR',
+                        entity_code: 'orders',
+                        detail: 'Thiếu cột original_sale_price trong Supabase',
+                        extra: r.message,
+                    })),
+                },
+                {
+                    id: 'renewal-price-invalid',
+                    label: 'Gia hạn có giá hoặc trạng thái sai',
+                    description: 'Renewal PAID nhưng price <= 0, hoặc payment_status không hợp lệ.',
+                    severity: 'ERROR',
+                    count: c6.length,
+                    rows: c6.map((r: any) => ({
+                        check_type: 'RENEWAL_PRICE_INVALID',
+                        severity: 'ERROR',
+                        entity_code: r.orderCode,
+                        detail: `renewal_id: ${r.renewalId || '—'} | payment_status: ${r.paymentStatus || '—'}`,
+                        extra: `price = ${fmt(r.price)}`,
+                    })),
+                },
+                {
+                    id: 'renewal-dates-invalid',
+                    label: 'Gia hạn có ngày không hợp lệ',
+                    description: 'Renewal thiếu ngày hoặc newExpiryDate sớm hơn previousExpiryDate.',
+                    severity: 'WARNING',
+                    count: c7.length,
+                    rows: c7.map((r: any) => ({
+                        check_type: 'RENEWAL_DATES_INVALID',
+                        severity: 'WARNING',
+                        entity_code: r.orderCode,
+                        detail: `renewal_id: ${r.renewalId || '—'}`,
+                        extra: `from ${r.previousExpiryDate || '—'} -> ${r.newExpiryDate || '—'} | createdAt: ${r.createdAt || '—'}`,
+                    })),
+                },
             ];
 
             setChecks(results);
             setRan(true);
-        } catch (err) {
+        } catch {
             setError('Lỗi không xác định. Vui lòng thử lại.');
         } finally {
             setLoading(false);
@@ -229,13 +310,12 @@ const DataAudit: React.FC = () => {
 
     return (
         <div className="data-audit">
-            {/* ── Header ─────────────────────────────────────────────────── */}
             <div className="audit-header">
                 <div className="audit-header-left">
-                    <h2 className="audit-title">Data Audit — Đối soát Dữ liệu</h2>
+                    <h2 className="audit-title">Data Audit - Đối soát dữ liệu</h2>
                     <p className="audit-subtitle">
-                        Kiểm tra tính toàn vẹn giữa bảng <code>orders</code> và{' '}
-                        <code>inventory</code>. Phát hiện các mâu thuẫn ảnh hưởng đến doanh thu &amp; profit.
+                        Kiểm tra tính toàn vẹn giữa <code>orders</code>, <code>renewals</code> và <code>inventory</code>
+                        để đối chiếu doanh thu, backlog và profit.
                     </p>
                 </div>
                 <div className="audit-header-actions">
@@ -256,22 +336,19 @@ const DataAudit: React.FC = () => {
                 </div>
             </div>
 
-            {/* ── Error ──────────────────────────────────────────────────── */}
             {error && (
                 <div className="audit-alert audit-alert--error">
                     <IconAlertTriangle size={16} /> {error}
                 </div>
             )}
 
-            {/* ── All-clean banner ───────────────────────────────────────── */}
             {allClean && (
                 <div className="audit-clean-banner">
                     <IconCheck size={20} />
-                    <span>Tất cả kiểm tra đều OK — Dữ liệu toàn vẹn!</span>
+                    <span>Tất cả kiểm tra đều OK - dữ liệu nhất quán.</span>
                 </div>
             )}
 
-            {/* ── Summary cards ──────────────────────────────────────────── */}
             {ran && !allClean && (
                 <div className="audit-summary-bar">
                     <div className="audit-summary-pill audit-pill--error">
@@ -285,7 +362,6 @@ const DataAudit: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Check cards ────────────────────────────────────────────── */}
             {ran && (
                 <div className="audit-checks">
                     {checks.map(check => {
@@ -296,7 +372,6 @@ const DataAudit: React.FC = () => {
                                 key={check.id}
                                 className={`audit-check-card ${hasIssues ? (check.severity === 'ERROR' ? 'audit-check--error' : 'audit-check--warning') : 'audit-check--ok'}`}
                             >
-                                {/* Card header */}
                                 <button
                                     className="audit-check-header"
                                     onClick={() => setExpanded(isOpen ? null : check.id)}
@@ -322,7 +397,6 @@ const DataAudit: React.FC = () => {
                                     </div>
                                 </button>
 
-                                {/* Detail table */}
                                 {isOpen && hasIssues && (
                                     <div className="audit-table-wrap">
                                         <table className="audit-table">
@@ -351,13 +425,12 @@ const DataAudit: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Empty state ────────────────────────────────────────────── */}
             {!ran && !loading && (
                 <div className="audit-empty">
-                    <div className="audit-empty-icon">🔍</div>
+                    <div className="audit-empty-icon">Kiem tra</div>
                     <p>Nhấn <strong>"Chạy kiểm tra"</strong> để bắt đầu đối soát dữ liệu.</p>
                     <p className="audit-empty-hint">
-                        Hệ thống sẽ kiểm tra <strong>4 loại mâu thuẫn</strong> phổ biến giữa bảng đơn hàng và kho hàng.
+                        Hệ thống sẽ kiểm tra các lỗi phổ biến của order, inventory và renewal ảnh hưởng trực tiếp đến dashboard.
                     </p>
                 </div>
             )}

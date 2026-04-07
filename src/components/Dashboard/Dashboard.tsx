@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Database } from '../../utils/database';
 import {  getSupabase , fetchAll } from "../../utils/supabaseClient";
-import { Product, ProductPackage, Customer, Order, InventoryItem, Expense } from '../../types';
+import { Product, ProductPackage, Customer, Order, InventoryItem, Expense, OrderRenewal, PaymentStatus } from '../../types';
 import { IconBox, IconUsers, IconCart, IconChart, IconTrendingUp, IconTrendingDown, IconDollarSign, IconProfit, IconShield } from '../Icons';
 import TrendsChart, { TrendsPoint, ForecastPoint } from './TrendsChart';
 import TopPackagesTable, { PackageAggRow } from './TopPackagesTable';
@@ -46,6 +46,17 @@ interface DashboardStats {
   retailCount: number;
   expiringSoonCount: number;
   expiringOrders7Count: number;
+}
+
+interface RevenueEvent {
+  kind: 'order' | 'renewal';
+  order: Order;
+  packageId?: string;
+  customerId: string;
+  date: Date;
+  amount: number;
+  paymentStatus: PaymentStatus;
+  cogs: number;
 }
 
 const Dashboard: React.FC = () => {
@@ -186,6 +197,13 @@ const Dashboard: React.FC = () => {
           inventoryProfileIds: r.inventory_profile_ids || undefined,
           cogs: r.cogs,
           salePrice: r.sale_price,
+          originalSalePrice: r.original_sale_price,
+          renewals: Array.isArray(r.renewals) ? r.renewals.map((renewal: any) => ({
+            ...renewal,
+            previousExpiryDate: renewal.previousExpiryDate ? new Date(renewal.previousExpiryDate) : new Date(),
+            newExpiryDate: renewal.newExpiryDate ? new Date(renewal.newExpiryDate) : new Date(),
+            createdAt: renewal.createdAt ? new Date(renewal.createdAt) : new Date()
+          })) : [],
           refundAmount: r.refund_amount || 0,
           refundAt: r.refund_at ? new Date(r.refund_at) : undefined
         })) as any;
@@ -247,6 +265,94 @@ const Dashboard: React.FC = () => {
         inventoryRenewals = Database.getInventoryRenewals();
       }
 
+      const getOrderRenewals = (order: Order): OrderRenewal[] => (
+        Array.isArray((order as any).renewals) ? ((order as any).renewals as OrderRenewal[]) : []
+      );
+
+      const toNonNegativeNumber = (value: unknown): number => {
+        const num = Number(value);
+        return Number.isFinite(num) && num > 0 ? num : 0;
+      };
+
+      const getInitialOrderSnapshotPrice = (order: Order): number => {
+        const originalSalePrice = toNonNegativeNumber((order as any).originalSalePrice);
+        if (originalSalePrice > 0) return originalSalePrice;
+
+        if (getOrderRenewals(order).length === 0) {
+          return toNonNegativeNumber((order as any).salePrice);
+        }
+
+        return 0;
+      };
+
+      const getInitialOrderRevenue = (order: Order): number => {
+        if (order.paymentStatus === 'REFUNDED') return 0;
+        const refundAmount = toNonNegativeNumber((order as any).refundAmount);
+        return Math.max(0, getInitialOrderSnapshotPrice(order) - refundAmount);
+      };
+
+      const getAdjustedOrderCOGS = (order: Order): number => {
+        const cogs = toNonNegativeNumber((order as any).cogs ?? order.cogs);
+        if (cogs === 0) return 0;
+
+        const snapshotPrice = getInitialOrderSnapshotPrice(order);
+        if (snapshotPrice <= 0) return cogs;
+
+        const refundAmount = toNonNegativeNumber((order as any).refundAmount);
+        if (refundAmount <= 0) return cogs;
+
+        const refundRatio = refundAmount / snapshotPrice;
+        return Math.max(0, cogs * (1 - refundRatio));
+      };
+
+      const isRevenueOrderStatus = (order: Order): boolean => (
+        order.status === 'COMPLETED' || order.status === 'EXPIRED'
+      );
+
+      const revenueEvents: RevenueEvent[] = orders.flatMap(order => {
+        const events: RevenueEvent[] = [];
+        const initialRevenue = getInitialOrderRevenue(order);
+
+        if (initialRevenue > 0 || order.paymentStatus === 'PAID') {
+          events.push({
+            kind: 'order',
+            order,
+            packageId: order.packageId,
+            customerId: order.customerId,
+            date: new Date(order.purchaseDate),
+            amount: initialRevenue,
+            paymentStatus: order.paymentStatus,
+            cogs: getAdjustedOrderCOGS(order)
+          });
+        }
+
+        getOrderRenewals(order).forEach((renewal) => {
+          const renewalAmount = renewal.paymentStatus === 'PAID' ? toNonNegativeNumber(renewal.price) : 0;
+          if (renewalAmount > 0 || renewal.paymentStatus === 'PAID') {
+            events.push({
+              kind: 'renewal',
+              order,
+              packageId: renewal.packageId || order.packageId,
+              customerId: order.customerId,
+              date: new Date(renewal.createdAt),
+              amount: renewalAmount,
+              paymentStatus: renewal.paymentStatus,
+              cogs: 0
+            });
+          }
+        });
+
+        return events;
+      });
+
+      const isRevenueEvent = (event: RevenueEvent): boolean => {
+        if (event.paymentStatus !== 'PAID') return false;
+        if (event.order.status === 'CANCELLED') return false;
+        return isRevenueOrderStatus(event.order);
+      };
+
+      const paidRevenueEvents = revenueEvents.filter(isRevenueEvent);
+
       // Calculate stats - chỉ dùng sale_price từ order
       const getOrderSnapshotPrice = (order: Order): number => {
         // Exclude fully refunded orders from revenue
@@ -290,12 +396,11 @@ const Dashboard: React.FC = () => {
         return order.status === 'COMPLETED' || order.status === 'EXPIRED';
       };
 
-      const revenueOrders = orders.filter(isRevenueOrder);
-      const soldOrderCount = orders.length;
+      const revenueOrders = paidRevenueEvents;
+      const soldOrderCount = paidRevenueEvents.length;
 
-      const totalRevenue = orders
-        .filter(order => isRevenueOrder(order))
-        .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
+      const totalRevenue = paidRevenueEvents
+        .reduce((sum, event) => sum + event.amount, 0);
 
       const now = new Date();
       const base = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -303,55 +408,50 @@ const Dashboard: React.FC = () => {
       target.setMonth(target.getMonth() + selectedMonthOffset);
       const targetMonth = target.getMonth();
       const targetYear = target.getFullYear();
-      const monthlyRevenue = orders
-        .filter(order => {
-          const orderDate = new Date(order.purchaseDate);
-          return isRevenueOrder(order) &&
-            orderDate.getMonth() === targetMonth &&
-            orderDate.getFullYear() === targetYear;
+      const monthlyRevenue = paidRevenueEvents
+        .filter(event => {
+          const eventDate = new Date(event.date);
+          return eventDate.getMonth() === targetMonth &&
+            eventDate.getFullYear() === targetYear;
         })
-        .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
+        .reduce((sum, event) => sum + event.amount, 0);
 
       const lastTarget = new Date(targetYear, targetMonth, 1);
       lastTarget.setMonth(lastTarget.getMonth() - 1);
       const lastMonth = lastTarget.getMonth();
       const lastMonthYear = lastTarget.getFullYear();
-      const lastMonthRevenue = orders
-        .filter(order => {
-          const orderDate = new Date(order.purchaseDate);
-          return isRevenueOrder(order) &&
-            orderDate.getMonth() === lastMonth &&
-            orderDate.getFullYear() === lastMonthYear;
+      const lastMonthRevenue = paidRevenueEvents
+        .filter(event => {
+          const eventDate = new Date(event.date);
+          return eventDate.getMonth() === lastMonth &&
+            eventDate.getFullYear() === lastMonthYear;
         })
-        .reduce((sum, order) => sum + getOrderSnapshotPrice(order), 0);
+        .reduce((sum, event) => sum + event.amount, 0);
 
       const revenueGrowth = lastMonthRevenue > 0 ?
         ((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 : 0;
 
       // Calculate total profit using order.cogs (COGS from inventory, adjusted for refunds)
-      const totalProfit = orders
-        .filter(order => isRevenueOrder(order))
-        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
+      const totalProfit = paidRevenueEvents
+        .reduce((sum, event) => sum + (event.amount - event.cogs), 0);
 
       // Calculate monthly profit using order.cogs (adjusted for refunds)
-      const monthlyProfit = orders
-        .filter(order => {
-          const orderDate = new Date(order.purchaseDate);
-          return isRevenueOrder(order) &&
-            orderDate.getMonth() === targetMonth &&
-            orderDate.getFullYear() === targetYear;
+      const monthlyProfit = paidRevenueEvents
+        .filter(event => {
+          const eventDate = new Date(event.date);
+          return eventDate.getMonth() === targetMonth &&
+            eventDate.getFullYear() === targetYear;
         })
-        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
+        .reduce((sum, event) => sum + (event.amount - event.cogs), 0);
 
       // Calculate last month profit using order.cogs (adjusted for refunds)
-      const lastMonthProfit = orders
-        .filter(order => {
-          const orderDate = new Date(order.purchaseDate);
-          return isRevenueOrder(order) &&
-            orderDate.getMonth() === lastMonth &&
-            orderDate.getFullYear() === lastMonthYear;
+      const lastMonthProfit = paidRevenueEvents
+        .filter(event => {
+          const eventDate = new Date(event.date);
+          return eventDate.getMonth() === lastMonth &&
+            eventDate.getFullYear() === lastMonthYear;
         })
-        .reduce((sum, order) => sum + (getOrderSnapshotPrice(order) - getAdjustedCOGS(order)), 0);
+        .reduce((sum, event) => sum + (event.amount - event.cogs), 0);
 
       const profitGrowth = lastMonthProfit > 0 ?
         ((monthlyProfit - lastMonthProfit) / lastMonthProfit) * 100 : 0;
@@ -530,9 +630,24 @@ const Dashboard: React.FC = () => {
 
       // Backlog & customer split
       const unpaidOrders = orders.filter(o => o.status !== 'CANCELLED' && o.paymentStatus === 'UNPAID');
+      const unpaidRenewalEvents = orders.flatMap(order =>
+        getOrderRenewals(order)
+          .filter(renewal =>
+            renewal.paymentStatus === 'UNPAID' &&
+            order.status !== 'CANCELLED' &&
+            isRevenueOrderStatus(order)
+          )
+          .map(renewal => ({
+            orderId: order.id,
+            renewalId: renewal.id,
+            amount: toNonNegativeNumber(renewal.price)
+          }))
+      );
       const processingOrders = orders.filter(o => o.status === 'PROCESSING');
       const cancelledOrders = orders.filter(o => o.status === 'CANCELLED');
-      const expectedRevenue = unpaidOrders.reduce((s, o) => s + getOrderSnapshotPrice(o), 0);
+      const expectedRevenue =
+        unpaidOrders.reduce((s, o) => s + getOrderSnapshotPrice(o), 0) +
+        unpaidRenewalEvents.reduce((s, renewal) => s + renewal.amount, 0);
       const ctvCount = customers.filter(c => c.type === 'CTV').length;
       const retailCount = customers.filter(c => c.type !== 'CTV').length;
 
@@ -550,13 +665,13 @@ const Dashboard: React.FC = () => {
       const idx: Record<string, TrendsPoint> = {};
       const initial: TrendsPoint[] = months.map(m => ({ key: toMonthKey(m), revenue: 0, profit: 0, expenses: 0 }));
       initial.forEach(p => { idx[p.key] = p; });
-      for (const o of revenueOrders) {
-        const k = toMonthKey(new Date(o.purchaseDate.getFullYear(), o.purchaseDate.getMonth(), 1));
+      for (const event of revenueOrders) {
+        const eventDate = new Date(event.date);
+        const k = toMonthKey(new Date(eventDate.getFullYear(), eventDate.getMonth(), 1));
         const b = idx[k];
         if (b) {
-          const p = getOrderSnapshotPrice(o);
-          b.revenue += p;
-          b.profit += (p - getAdjustedCOGS(o));
+          b.revenue += event.amount;
+          b.profit += (event.amount - event.cogs);
         }
       }
       for (const e of expenses) {
@@ -577,10 +692,10 @@ const Dashboard: React.FC = () => {
         d.setDate(d.getDate() + i);
         dailyMap[toDateKey(d)] = 0;
       }
-      for (const o of revenueOrders) {
-        const dk = toDateKey(new Date(o.purchaseDate));
+      for (const event of revenueOrders) {
+        const dk = toDateKey(new Date(event.date));
         if (dk >= toDateKey(cutoff) && dk <= toDateKey(today)) {
-          dailyMap[dk] = (dailyMap[dk] || 0) + getOrderSnapshotPrice(o);
+          dailyMap[dk] = (dailyMap[dk] || 0) + event.amount;
         }
       }
       const sortedDailyHistory: DailyPoint[] = Object.keys(dailyMap)
@@ -692,6 +807,39 @@ const Dashboard: React.FC = () => {
           pkgAggMap[key].profit += profit;
         }
       }
+
+      Object.values(pkgAggMap).forEach(row => {
+        row.revenue = 0;
+        row.profit = 0;
+      });
+      for (const event of paidRevenueEvents) {
+        let pid = event.packageId;
+        let prodId: string | undefined;
+
+        if (!pid && event.order.inventoryItemId) {
+          const invItem = inventoryItemById[event.order.inventoryItemId];
+          if (invItem) {
+            prodId = invItem.productId;
+            if (prodId) {
+              const productPkgs = packages.filter(p => p.productId === prodId);
+              if (productPkgs.length > 0) {
+                pid = productPkgs[0].id;
+              }
+            }
+          }
+        } else if (pid) {
+          const pkg = packages.find(p => p.id === pid);
+          prodId = pkg?.productId;
+        }
+
+        if (!pid && !prodId) continue;
+
+        const key = pid || `product_${prodId}`;
+        if (pkgAggMap[key]) {
+          pkgAggMap[key].revenue += event.amount;
+          pkgAggMap[key].profit += (event.amount - event.cogs);
+        }
+      }
       const pkgAggRows = Object.values(pkgAggMap);
 
       // Top customers - đếm TẤT CẢ orders và tính doanh thu (không filter theo thời gian)
@@ -727,6 +875,17 @@ const Dashboard: React.FC = () => {
           customerAggMap[cid].profit += profit;
         }
       }
+
+      Object.values(customerAggMap).forEach(row => {
+        row.revenue = 0;
+        row.profit = 0;
+      });
+      for (const event of paidRevenueEvents) {
+        const cid = event.customerId;
+        if (!cid || !customerAggMap[cid]) continue;
+        customerAggMap[cid].revenue += event.amount;
+        customerAggMap[cid].profit += (event.amount - event.cogs);
+      }
       const customerAggRows = Object.values(customerAggMap);
 
       setStats({
@@ -756,7 +915,7 @@ const Dashboard: React.FC = () => {
         totalImportCost,
         monthlyPaidImportCost,
         totalPaidImportCost,
-        unpaidCount: unpaidOrders.length,
+        unpaidCount: unpaidOrders.length + unpaidRenewalEvents.length,
         processingCount: processingOrders.length,
         cancelledCount: cancelledOrders.length,
         expectedRevenue,
@@ -890,7 +1049,7 @@ const Dashboard: React.FC = () => {
               <div className="sales-card">
                 <h3>Tổng doanh thu</h3>
                 <div className="sales-amount">{formatCurrency(stats.totalRevenue)}</div>
-                <div className="sales-subtitle">({stats.soldOrderCount} đơn đã bán)</div>
+                <div className="sales-subtitle">({stats.soldOrderCount} giao dịch ghi nhận doanh thu)</div>
               </div>
 
               <div className="sales-card">
