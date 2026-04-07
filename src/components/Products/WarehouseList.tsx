@@ -63,6 +63,7 @@ const WarehouseList: React.FC = () => {
   const [bulkPaymentTarget, setBulkPaymentTarget] = useState<'INITIAL' | 'RENEWAL'>('INITIAL');
   const [selectedRenewalIds, setSelectedRenewalIds] = useState<string[]>([]);
   const [latestRenewalMap, setLatestRenewalMap] = useState<Map<string, InventoryRenewal>>(new Map());
+  const [inventoryRenewalsExpanded, setInventoryRenewalsExpanded] = useState(false);
   const [refundState, setRefundState] = useState<null | {
     item: InventoryItem;
     errorDate: string;
@@ -72,6 +73,7 @@ const WarehouseList: React.FC = () => {
     refundReason: string;
   }>(null);
   const [allFetchedOrders, setAllFetchedOrders] = useState<Order[]>([]);
+  const RENEWALS_PREVIEW_LIMIT = 3;
   const countAssignedSlots = (item?: InventoryItem | null) => {
     if (!item?.isAccountBased || !Array.isArray(item.profiles)) return 0;
     return item.profiles.filter(slot => slot && (slot.isAssigned || !!slot.assignedOrderId)).length;
@@ -85,6 +87,11 @@ const WarehouseList: React.FC = () => {
     return '';
   };
   const canDeleteInventoryItem = (item?: InventoryItem | null) => getDeleteBlockedReason(item) === '';
+
+  useEffect(() => {
+    setInventoryRenewalsExpanded(false);
+  }, [viewingInventory?.id]);
+
   // Load inventory renewals from Supabase for accurate history display
   useEffect(() => {
     (async () => {
@@ -3057,7 +3064,46 @@ const WarehouseList: React.FC = () => {
                       const sortedTimeline = [...renewals].sort(
                         (a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)
                       );
-                      return sortedTimeline.map((r, index) => {
+                      const visibleRenewals = sortedTimeline.length > RENEWALS_PREVIEW_LIMIT && !inventoryRenewalsExpanded
+                        ? sortedTimeline.slice(-RENEWALS_PREVIEW_LIMIT)
+                        : sortedTimeline;
+                      const hiddenRenewalsCount = sortedTimeline.length - visibleRenewals.length;
+                      return (
+                        <>
+                          {sortedTimeline.length > RENEWALS_PREVIEW_LIMIT && (
+                            <div
+                              style={{
+                                marginTop: '10px',
+                                fontSize: '13px',
+                                color: 'var(--text-secondary)',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: '12px',
+                                flexWrap: 'wrap'
+                              }}
+                            >
+                              <span>
+                                {inventoryRenewalsExpanded
+                                  ? `Đang hiển thị toàn bộ ${sortedTimeline.length} lần gia hạn`
+                                  : `Đang hiển thị ${visibleRenewals.length}/${sortedTimeline.length} lần gia hạn gần nhất`}
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-link p-0"
+                                style={{ fontSize: '13px', textDecoration: 'underline' }}
+                                onClick={() => setInventoryRenewalsExpanded(v => !v)}
+                              >
+                                {inventoryRenewalsExpanded
+                                  ? 'Thu gọn'
+                                  : `Xem thêm ${hiddenRenewalsCount} lần gia hạn trước đó`}
+                              </button>
+                            </div>
+                          )}
+                        {visibleRenewals.map((r, visibleIndex) => {
+                        const index = sortedTimeline.length > RENEWALS_PREVIEW_LIMIT && !inventoryRenewalsExpanded
+                          ? sortedTimeline.length - visibleRenewals.length + visibleIndex
+                          : visibleIndex;
                         const paymentStatusLabel = r.paymentStatus
                           ? (INVENTORY_PAYMENT_STATUSES_FULL.find(s => s.value === r.paymentStatus)?.label || 'Chưa thanh toán')
                           : 'Chưa thanh toán';
@@ -3087,7 +3133,9 @@ const WarehouseList: React.FC = () => {
                             </div>
                           </div>
                         );
-                      });
+                      })}
+                        </>
+                      );
                     })()}
 
                     {renewals.length === 0 && (

@@ -52,8 +52,14 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 	// Local warranties state to ensure live updates without hard refresh
 	const [warranties, setWarranties] = useState<any[]>([]);
 	const [notesExpanded, setNotesExpanded] = useState(false);
+	const [renewalsExpanded, setRenewalsExpanded] = useState(false);
 	// Force re-render when warranties for this order change (realtime)
 	const [warrantyTick, setWarrantyTick] = useState(0);
+	const RENEWALS_PREVIEW_LIMIT = 3;
+
+	useEffect(() => {
+		setRenewalsExpanded(false);
+	}, [order.id]);
 	useEffect(() => {
 		const sb = getSupabase();
 		if (!sb) return;
@@ -537,6 +543,11 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 							createdAt: Date;
 							createdBy: string;
 						}>;
+						const shouldCollapseRenewals = renewals.length > RENEWALS_PREVIEW_LIMIT;
+						const visibleRenewals = shouldCollapseRenewals && !renewalsExpanded
+							? renewals.slice(-RENEWALS_PREVIEW_LIMIT)
+							: renewals;
+						const hiddenRenewalsCount = renewals.length - visibleRenewals.length;
 
 						// Hàm tính số tháng giữa 2 ngày
 						const monthsBetween = (date1: Date, date2: Date): number => {
@@ -655,8 +666,41 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 								</div>
 
 								{/* Timeline: Các lần gia hạn */}
-								{renewals.length > 0 && renewals.map((r, index) => {
-									const prevPkgId = inferPreviousPackageId(index);
+								{shouldCollapseRenewals && (
+									<div
+										style={{
+											marginTop: '10px',
+											fontSize: '13px',
+											color: 'var(--text-secondary)',
+											display: 'flex',
+											justifyContent: 'space-between',
+											alignItems: 'center',
+											gap: '12px',
+											flexWrap: 'wrap'
+										}}
+									>
+										<span>
+											{renewalsExpanded
+												? `Đang hiển thị toàn bộ ${renewals.length} lần gia hạn`
+												: `Đang hiển thị ${visibleRenewals.length}/${renewals.length} lần gia hạn gần nhất`}
+										</span>
+										<button
+											type="button"
+											className="btn btn-link p-0"
+											style={{ fontSize: '13px', textDecoration: 'underline' }}
+											onClick={() => setRenewalsExpanded(v => !v)}
+										>
+											{renewalsExpanded
+												? 'Thu gọn'
+												: `Xem thêm ${hiddenRenewalsCount} lần gia hạn trước đó`}
+										</button>
+									</div>
+								)}
+								{visibleRenewals.length > 0 && visibleRenewals.map((r, visibleIndex) => {
+									const actualIndex = shouldCollapseRenewals && !renewalsExpanded
+										? renewals.length - visibleRenewals.length + visibleIndex
+										: visibleIndex;
+									const prevPkgId = inferPreviousPackageId(actualIndex);
 									const prevPkgInfo = getPackageInfo(prevPkgId || order.packageId);
 									const newPkgInfo = getPackageInfo(r.packageId || order.packageId);
 									// Giá gia hạn: luôn dùng r.price đã được lưu tại thời điểm gia hạn
@@ -667,6 +711,7 @@ const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 											? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(renewalPrice)
 											: '-');
 									const paymentStatusLabel = getPaymentLabel ? getPaymentLabel(r.paymentStatus) : (PAYMENT_STATUSES.find(p => p.value === r.paymentStatus)?.label || '');
+									const index = actualIndex;
 
 									return (
 										<div key={r.id} className="card mt-2" style={{ borderLeft: '4px solid #007bff', backgroundColor: 'var(--bg-secondary)' }}>

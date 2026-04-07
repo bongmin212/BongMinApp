@@ -38,12 +38,14 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   const [renewals, setRenewals] = useState<InventoryRenewal[]>([]);
   const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, InventoryPaymentStatus>>({});
   const [renewalAmounts, setRenewalAmounts] = useState<Record<string, number>>({});
+  const [renewalPaymentsExpanded, setRenewalPaymentsExpanded] = useState(false);
   const [loadingRenewals, setLoadingRenewals] = useState(false);
   const isLockedProduct = !!item && ((item.linkedOrderId && String(item.linkedOrderId).length > 0) || item.status === 'SOLD' || item.status === 'RESERVED');
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
   const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const RENEWALS_PREVIEW_LIMIT = 3;
   const typedItem = item as InventoryItem | undefined;
   const countAssignedSlots = (inv?: InventoryItem | null) => {
     if (!inv?.isAccountBased || !Array.isArray(inv.profiles)) return 0;
@@ -58,6 +60,10 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
   };
   const deleteBlockedReason = typedItem ? getDeleteBlockedReason(typedItem) : '';
   const canDeleteInventory = !!typedItem && !deleteBlockedReason;
+
+  useEffect(() => {
+    setRenewalPaymentsExpanded(false);
+  }, [item?.id]);
 
   useEffect(() => {
     (async () => {
@@ -966,19 +972,50 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                 <label className="form-label">Thanh toán các lần gia hạn kho</label>
                 <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
                   <div className="card-body" style={{ padding: '12px' }}>
+                    {(() => {
+                      const visibleRenewals = renewals.length > RENEWALS_PREVIEW_LIMIT && !renewalPaymentsExpanded
+                        ? renewals.slice(-RENEWALS_PREVIEW_LIMIT)
+                        : renewals;
+                      const hiddenRenewalsCount = renewals.length - visibleRenewals.length;
+
+                      return (
+                        <>
                     {loadingRenewals && (
                       <div className="text-muted small">Đang tải lịch sử gia hạn...</div>
                     )}
                     {!loadingRenewals && renewals.length === 0 && (
                       <div className="text-muted small">Chưa có lần gia hạn nào</div>
                     )}
-                    {!loadingRenewals && renewals.length > 0 && renewals.map((renewal, index) => (
+                    {!loadingRenewals && renewals.length > RENEWALS_PREVIEW_LIMIT && (
+                      <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <span>
+                          {renewalPaymentsExpanded
+                            ? `Đang hiển thị toàn bộ ${renewals.length} lần gia hạn`
+                            : `Đang hiển thị ${visibleRenewals.length}/${renewals.length} lần gia hạn gần nhất`}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-link p-0"
+                          style={{ fontSize: '13px', textDecoration: 'underline' }}
+                          onClick={() => setRenewalPaymentsExpanded(v => !v)}
+                        >
+                          {renewalPaymentsExpanded
+                            ? 'Thu gọn'
+                            : `Xem thêm ${hiddenRenewalsCount} lần gia hạn trước đó`}
+                        </button>
+                      </div>
+                    )}
+                    {!loadingRenewals && visibleRenewals.length > 0 && visibleRenewals.map((renewal, visibleIndex) => {
+                      const index = renewals.length > RENEWALS_PREVIEW_LIMIT && !renewalPaymentsExpanded
+                        ? renewals.length - visibleRenewals.length + visibleIndex
+                        : visibleIndex;
+                      return (
                       <div
                         key={renewal.id}
                         style={{
-                          marginBottom: index < renewals.length - 1 ? '12px' : '0',
-                          paddingBottom: index < renewals.length - 1 ? '12px' : '0',
-                          borderBottom: index < renewals.length - 1 ? '1px solid var(--border-color)' : 'none'
+                          marginBottom: visibleIndex < visibleRenewals.length - 1 ? '12px' : '0',
+                          paddingBottom: visibleIndex < visibleRenewals.length - 1 ? '12px' : '0',
+                          borderBottom: visibleIndex < visibleRenewals.length - 1 ? '1px solid var(--border-color)' : 'none'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -1032,7 +1069,11 @@ const WarehouseForm: React.FC<WarehouseFormProps> = ({ item, onClose, onSuccess 
                           <div className="small text-warning mt-1">🔒 Kho đã hoàn tiền - không thể thay đổi</div>
                         )}
                       </div>
-                    ))}
+                    );
+                    })}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

@@ -42,6 +42,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   const [renewalPaymentStatuses, setRenewalPaymentStatuses] = useState<Record<string, string>>({});
   // Giá gia hạn: key = renewal.id, value = price (số tiền)
   const [renewalPrices, setRenewalPrices] = useState<Record<string, number>>({});
+  const [renewalPaymentsExpanded, setRenewalPaymentsExpanded] = useState(false);
   // Search states (debounced)
   const [productSearch, setProductSearch] = useState('');
   const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
@@ -71,6 +72,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
   });
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
   const [confirmState, setConfirmState] = useState<null | { message: string; onConfirm: () => void }>(null);
+  const RENEWALS_PREVIEW_LIMIT = 3;
+
+  useEffect(() => {
+    setRenewalPaymentsExpanded(false);
+  }, [order?.id]);
 
   useEffect(() => {
     loadData();
@@ -2407,19 +2413,48 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
             </div>
 
             {/* Payment status của các lần gia hạn */}
-            {order && Array.isArray((order as any).renewals) && ((order as any).renewals || []).length > 0 && (
+            {order && Array.isArray((order as any).renewals) && ((order as any).renewals || []).length > 0 && (() => {
+              const renewals = ((order as any).renewals || []) as any[];
+              const visibleRenewals = renewals.length > RENEWALS_PREVIEW_LIMIT && !renewalPaymentsExpanded
+                ? renewals.slice(-RENEWALS_PREVIEW_LIMIT)
+                : renewals;
+              const hiddenRenewalsCount = renewals.length - visibleRenewals.length;
+
+              return (
               <div className="form-group">
                 <label className="form-label">Thanh toán các lần gia hạn</label>
                 <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
                   <div className="card-body" style={{ padding: '12px' }}>
-                    {((order as any).renewals || []).map((r: any, index: number) => {
+                    {renewals.length > RENEWALS_PREVIEW_LIMIT && (
+                      <div style={{ marginBottom: '12px', fontSize: '13px', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <span>
+                          {renewalPaymentsExpanded
+                            ? `Đang hiển thị toàn bộ ${renewals.length} lần gia hạn`
+                            : `Đang hiển thị ${visibleRenewals.length}/${renewals.length} lần gia hạn gần nhất`}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-link p-0"
+                          style={{ fontSize: '13px', textDecoration: 'underline' }}
+                          onClick={() => setRenewalPaymentsExpanded(v => !v)}
+                        >
+                          {renewalPaymentsExpanded
+                            ? 'Thu gọn'
+                            : `Xem thêm ${hiddenRenewalsCount} lần gia hạn trước đó`}
+                        </button>
+                      </div>
+                    )}
+                    {visibleRenewals.map((r: any, visibleIndex: number) => {
+                      const index = renewals.length > RENEWALS_PREVIEW_LIMIT && !renewalPaymentsExpanded
+                        ? renewals.length - visibleRenewals.length + visibleIndex
+                        : visibleIndex;
                       const renewalPaymentStatus = renewalPaymentStatuses[r.id] || r.paymentStatus || 'UNPAID';
                       const renewalDate = r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : 'N/A';
                       const renewalMonths = r.months || 0;
                       const renewalPrice = renewalPrices[r.id] !== undefined ? renewalPrices[r.id] : (r.price || 0);
 
                       return (
-                        <div key={r.id} style={{ marginBottom: index < ((order as any).renewals || []).length - 1 ? '12px' : '0', paddingBottom: index < ((order as any).renewals || []).length - 1 ? '12px' : '0', borderBottom: index < ((order as any).renewals || []).length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                        <div key={r.id} style={{ marginBottom: visibleIndex < visibleRenewals.length - 1 ? '12px' : '0', paddingBottom: visibleIndex < visibleRenewals.length - 1 ? '12px' : '0', borderBottom: visibleIndex < visibleRenewals.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                             <div>
                               <strong style={{ fontSize: '13px' }}>Gia hạn lần {index + 1}</strong>
@@ -2473,7 +2508,8 @@ const OrderForm: React.FC<OrderFormProps> = ({ order, onClose, onSuccess }) => {
                   </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* 6. Ghi chú */}
             <div className="form-group">
