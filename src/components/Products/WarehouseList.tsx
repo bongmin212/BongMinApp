@@ -74,6 +74,34 @@ const WarehouseList: React.FC = () => {
   }>(null);
   const [allFetchedOrders, setAllFetchedOrders] = useState<Order[]>([]);
   const RENEWALS_PREVIEW_LIMIT = 3;
+  const mapOrderRecord = (r: any): Order => ({
+    ...r,
+    customerId: r.customer_id || r.customerId,
+    packageId: r.package_id || r.packageId,
+    inventoryItemId: r.inventory_item_id || r.inventoryItemId,
+    inventoryProfileIds: r.inventory_profile_ids || r.inventoryProfileIds,
+    code: r.code || '',
+    notes: r.notes || '',
+    salePrice: typeof r.sale_price === 'number' ? r.sale_price : r.salePrice,
+    originalSalePrice: typeof r.original_sale_price === 'number' ? r.original_sale_price : r.originalSalePrice,
+    useCustomPrice: !!(r.use_custom_price ?? r.useCustomPrice),
+    useCustomExpiry: !!(r.use_custom_expiry ?? r.useCustomExpiry),
+    customPrice: typeof r.custom_price === 'number' ? r.custom_price : r.customPrice,
+    customFieldValues: r.custom_field_values || r.customFieldValues,
+    purchaseDate: r.purchase_date ? new Date(r.purchase_date) : (r.purchaseDate ? new Date(r.purchaseDate) : new Date()),
+    expiryDate: r.expiry_date ? new Date(r.expiry_date) : (r.expiryDate ? new Date(r.expiryDate) : new Date()),
+    renewals: Array.isArray(r.renewals) ? r.renewals.map((renewal: any) => ({
+      ...renewal,
+      previousExpiryDate: renewal.previousExpiryDate ? new Date(renewal.previousExpiryDate) : new Date(),
+      newExpiryDate: renewal.newExpiryDate ? new Date(renewal.newExpiryDate) : new Date(),
+      createdAt: renewal.createdAt ? new Date(renewal.createdAt) : new Date()
+    })) : [],
+    renewalMessageSent: !!(r.renewal_message_sent ?? r.renewalMessageSent),
+    renewalMessageSentAt: r.renewal_message_sent_at ? new Date(r.renewal_message_sent_at) : (r.renewalMessageSentAt ? new Date(r.renewalMessageSentAt) : undefined),
+    renewalMessageSentBy: r.renewal_message_sent_by || r.renewalMessageSentBy,
+    createdAt: r.created_at ? new Date(r.created_at) : (r.createdAt ? new Date(r.createdAt) : new Date()),
+    updatedAt: r.updated_at ? new Date(r.updated_at) : (r.updatedAt ? new Date(r.updatedAt) : new Date()),
+  }) as Order;
   const countAssignedSlots = (item?: InventoryItem | null) => {
     if (!item?.isAccountBased || !Array.isArray(item.profiles)) return 0;
     return item.profiles.filter(slot => slot && (slot.isAssigned || !!slot.assignedOrderId)).length;
@@ -773,6 +801,7 @@ const WarehouseList: React.FC = () => {
             // Try to find linked orders by searching through orders table
             // This is a fallback for display purposes only
             const linkedOrders = allFetchedOrders.filter((order: any) =>
+              order.inventoryItemId === r.id &&
               order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
               order.inventoryProfileIds.some((profileId: string) =>
                 profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= (r.total_slots || 0)
@@ -832,18 +861,7 @@ const WarehouseList: React.FC = () => {
     })) as ProductPackage[];
 
     const custs = (custRes.data || []) as Customer[];
-    const fetchedOrders = (ordersRes.data || []).map((r: any) => ({
-      ...r,
-      customerId: r.customer_id || r.customerId,
-      packageId: r.package_id || r.packageId,
-      inventoryItemId: r.inventory_item_id || r.inventoryItemId,
-      inventoryProfileIds: r.inventory_profile_ids || r.inventoryProfileIds,
-      code: r.code || '',
-      notes: r.notes || '',
-      expiryDate: r.expiry_date ? new Date(r.expiry_date) : (r.expiryDate ? new Date(r.expiryDate) : new Date()),
-      createdAt: r.created_at ? new Date(r.created_at) : new Date(),
-      updatedAt: r.updated_at ? new Date(r.updated_at) : new Date(),
-    })) as Order[];
+    const fetchedOrders = (ordersRes.data || []).map(mapOrderRecord) as Order[];
     setItems(inv);
     setProducts(prods);
     setPackages(pkgs);
@@ -2283,6 +2301,7 @@ const WarehouseList: React.FC = () => {
                         // Fallback: if profiles are empty but we have linked orders, count from orders
                         if (profiles.length === 0 && total > 0) {
                           const linkedOrders = Database.getOrders().filter((order: any) =>
+                            order.inventoryItemId === item.id &&
                             order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
                             order.inventoryProfileIds.some((profileId: string) =>
                               profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= total
@@ -2492,6 +2511,7 @@ const WarehouseList: React.FC = () => {
                   // If profiles are empty but we have totalSlots, generate fallback profiles from orders
                   if (profiles.length === 0 && totalSlots > 0) {
                     const linkedOrders = allFetchedOrders.filter((order: any) =>
+                      order.inventoryItemId === item.id &&
                       order.inventoryProfileIds && Array.isArray(order.inventoryProfileIds) &&
                       order.inventoryProfileIds.some((profileId: string) =>
                         profileId.startsWith('slot-') && parseInt(profileId.split('-')[1]) <= totalSlots
