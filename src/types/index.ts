@@ -402,37 +402,6 @@ export const EMPLOYEE_ROLES: { value: EmployeeRole; label: string }[] = [
   { value: 'EMPLOYEE', label: 'Nhân viên' }
 ];
 
-// Notification types
-export type NotificationType = 'EXPIRY_WARNING' | 'NEW_ORDER' | 'PAYMENT_REMINDER' | 'PROCESSING_DELAY' | 'PROFILE_NEEDS_UPDATE' | 'NEW_WARRANTY';
-
-export interface Notification {
-  id: string;
-  type: NotificationType;
-  title: string;
-  message: string;
-  priority: 'low' | 'medium' | 'high';
-  isRead: boolean;
-  createdAt: Date;
-  relatedId?: string; // ID of related order, product, etc.
-  actionUrl?: string; // URL to navigate when clicked
-  employeeId?: string; // ID of employee who should receive this notification
-  archivedAt?: Date; // When notification was archived
-}
-
-export interface NotificationSettings {
-  expiryWarningDays: number; // Days before expiry to warn
-  enableNewOrderNotifications: boolean;
-  enablePaymentReminders: boolean;
-  enableExpiryWarnings: boolean;
-  // Advanced preferences
-  mutedTypes?: NotificationType[]; // Do not generate/show these types
-  snoozedUntil?: string | null; // ISO string; suppress until this time
-  quietHours?: { start: string; end: string } | null; // e.g., "22:00"-"08:00"
-  rateLimitMinutes?: number; // minimum minutes between same-key notifications
-  desktopEnabled?: boolean; // enable desktop notifications
-  soundEnabled?: boolean; // enable sound
-}
-
 // Expense types
 export type ExpenseType = 'PURCHASE' | 'OPERATIONAL' | 'MARKETING' | 'OTHER';
 

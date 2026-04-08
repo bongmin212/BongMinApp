@@ -13,8 +13,7 @@ const TABLES = [
   'inventory',
   'warranties',
   'activity_logs',
-  'expenses',
-  'notifications'
+  'expenses'
 ];
 
 export function subscribeRealtime(): Unsubscribe {

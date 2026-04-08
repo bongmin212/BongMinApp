@@ -101,13 +101,6 @@ BongMin App is a **production-grade internal tool** designed to replace manual s
 - Detects: price inconsistencies, incorrect COGS, broken order-inventory links, incorrect payment statuses
 - Visual report with severity levels and export
 
-### 🔔 Notification System
-- Real-time in-app notification panel
-- Event types: expiring orders (7-day warning), expiring inventory, unpaid orders, items needing profile update, new warranties
-- **Desktop push notifications** (Web Notifications API)
-- **Audio alerts** with configurable sound
-- Per-type notification toggle settings
-- Unread badge count on notification icon
 
 ### 📈 Activity Logs
 - Immutable log of all staff actions (create, update, delete, login, logout)
@@ -200,14 +193,12 @@ src/
 │   │   ├── CustomerList/Form
 │   │   └── CustomerOrderHistory.tsx
 │   ├── Expenses/
-│   ├── Notifications/
 │   ├── ActivityLogs/
 │   └── Layout/                # App shell, sidebar, header
 ├── contexts/
 │   ├── AuthContext.tsx         # Global auth state
 │   ├── ThemeContext.tsx        # Light/dark mode
 │   ├── ToastContext.tsx        # Toast notification system
-│   └── NotificationContext.tsx
 ├── utils/
 │   ├── forecast.ts            # OLS Linear Regression engine
 │   ├── supabaseClient.ts      # DB connection
@@ -218,8 +209,6 @@ src/
 │   ├── excel.ts               # Excel export helpers
 │   ├── money.ts               # VND currency formatting
 │   ├── date.ts                # Date utilities
-│   ├── desktopNotification.ts # Push notification API
-│   └── notificationSound.ts  # Audio alert system
 └── types/index.ts             # Shared TypeScript interfaces
 ```
 
@@ -280,7 +269,6 @@ This project was built and iterated incrementally to solve real business problem
 - Predictive Analytics with 7-day Linear Regression forecast
 - Paginated warehouse list (newest-first with "load more")
 - Activity Logs with employee attribution
-- Notification system (desktop + audio)
 - Data export to Excel & PDF
 
 ---
