@@ -3963,52 +3963,63 @@ const OrderList: React.FC = () => {
                       </div>
 
                       {/* Account Information Section */}
-                      {invItem.isAccountBased && invItem.accountColumns && invItem.accountColumns.length > 0 && (
-                        <div style={{ marginTop: 12 }}>
-                          <strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
-                          <div style={{ marginTop: 6 }}>
-                            {invItem.accountColumns.map((col: any) => {
-                              const value = (invItem.accountData || {})[col.id] || '';
-                              if (!value) return null;
-                              return (
-                                <div key={col.id} style={{ marginBottom: 8 }}>
-                                  <div><strong>{col.title}:</strong></div>
-                                  <pre
-                                    style={{
-                                      whiteSpace: 'pre-wrap',
-                                      margin: 0,
-                                      padding: '8px',
-                                      backgroundColor: 'var(--bg-tertiary)',
-                                      color: 'var(--text-primary)',
-                                      borderRadius: '4px',
-                                      fontSize: '14px',
-                                      border: '1px solid var(--border-color)',
-                                      cursor: 'pointer',
-                                      transition: 'background-color 0.2s'
-                                    }}
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(value).then(() => {
-                                        notify(`Đã copy ${col.title}`, 'success');
-                                      }).catch(() => {
-                                        notify('Không thể copy', 'error');
-                                      });
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
-                                    }}
-                                    title={`Bấm để copy ${col.title}`}
-                                  >
-                                    {value}
-                                  </pre>
-                                </div>
-                              );
-                            })}
+                      {(() => {
+                        const orderPkgId = returnConfirmState.order?.packageId;
+                        const accountColumns = getOrderAccountColumns(orderPkgId, invItem);
+                        const accountData = invItem.accountData || (invItem as any).account_data || {};
+                        const columnsWithData = accountColumns.filter((col: any) => {
+                          const value = accountData[col.id];
+                          return value !== undefined && value !== null && String(value).trim() !== '';
+                        });
+
+                        if (columnsWithData.length === 0) return null;
+
+                        return (
+                          <div style={{ marginTop: 12 }}>
+                            <strong>Thông tin tài khoản:</strong> <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>(Bấm vào để copy)</span>
+                            <div style={{ marginTop: 6 }}>
+                              {columnsWithData.map((col: any) => {
+                                const value = accountData[col.id] || '';
+                                return (
+                                  <div key={col.id} style={{ marginBottom: 8 }}>
+                                    <div><strong>{col.title}:</strong></div>
+                                    <pre
+                                      style={{
+                                        whiteSpace: 'pre-wrap',
+                                        margin: 0,
+                                        padding: '8px',
+                                        backgroundColor: 'var(--bg-tertiary)',
+                                        color: 'var(--text-primary)',
+                                        borderRadius: '4px',
+                                        fontSize: '14px',
+                                        border: '1px solid var(--border-color)',
+                                        cursor: 'pointer',
+                                        transition: 'background-color 0.2s'
+                                      }}
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(value).then(() => {
+                                          notify(`Đã copy ${col.title}`, 'success');
+                                        }).catch(() => {
+                                          notify('Không thể copy', 'error');
+                                        });
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-hover)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        (e.target as HTMLPreElement).style.backgroundColor = 'var(--bg-tertiary)';
+                                      }}
+                                      title={`Bấm để copy ${col.title}`}
+                                    >
+                                      {value}
+                                    </pre>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Slot totals removed as requested */}
 
